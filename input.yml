@@ -3,7 +3,7 @@
 ##################################
 
 # General input
-reread: False
+reread: True
 
 # Choices
 hist_emission_scen: HISTTP # HISTCR or HISTTP

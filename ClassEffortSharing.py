@@ -18,7 +18,7 @@ import os
 import plotly.express as px
 from Functions import (gdp_future, pop_func, emis_func, determine_coefficient,
                        popshare_func, emisshare_func, emis_total_func, rho, cumpopshare_func,
-                       cumfuturepop_func, emis_f_func, create_groups)
+                       cumfuturepop_func, emis_f_func, create_groups, gdp_future_reread)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -420,6 +420,17 @@ class shareefforts(object):
         df_ghg_p = pd.concat([df_primap3, df_ghg_p_g]).reset_index(drop=True)
         dfdummy = df_ghg_p.set_index(['ISO', 'Time'])
         self.xr_lulucf = xr.Dataset.from_dataframe(dfdummy)
+        
+        # Save the 2021 values
+        df_primap2 = df_primap[(df_primap.Source == "M.0.EL") & (df_primap.ISO.isin(self.countries_iso))]
+        df_primap2 = df_primap2.reset_index(drop=True)
+        df_primap2 = df_primap2[['ISO', '2021']]
+        df_primap2 = df_primap2.melt(id_vars=["ISO"], var_name="Time", value_name="GHG")
+        df_primap2['Time'] = np.array(df_primap2['Time']).astype(int)
+        df_ghg_p_g = create_groups(self, df_primap2, 'GHG', 'sum', 'yes')
+        df_ghg_p = pd.concat([df_primap2, df_ghg_p_g]).reset_index(drop=True)
+        dfdummy = df_ghg_p.set_index(['ISO', 'Time'])
+        self.xr_2021 = xr.Dataset.from_dataframe(dfdummy).sel(Time=2021)
 
     # =========================================================== #
     # =========================================================== #
@@ -713,15 +724,15 @@ class shareefforts(object):
             all_baseline_emissions[np.where(self.all_regions_iso == r)[0][0]] = dict_baselines[r]
 
         # Rest with gdp fraction
-        restemis = all_baseline_emissions[-1] - np.nansum(all_baseline_emissions[:-14], axis=0)
+        restemis = all_baseline_emissions[-1] - np.nansum(all_baseline_emissions[:-12], axis=0)
         occupied = self.all_regions_iso[np.where(~np.isnan(all_baseline_emissions[:, 10]))[0]][:-2]
         total_occupied_gdpshare = np.zeros(len(time_keys))
         for y_i, y in enumerate(time_keys):
-            total_occupied_gdpshare[y_i] = np.nansum([gdp_future(self, int(y), r, 'fraction') for r in occupied])
+            total_occupied_gdpshare[y_i] = np.nansum([gdp_future_reread(self, int(y), r, 'fraction') for r in occupied])
         total_occupied_gdpshare[0] = total_occupied_gdpshare[1]
         for r_i, r in enumerate(self.all_regions_iso):
             if np.isnan(all_baseline_emissions[r_i, 10]):
-                all_baseline_emissions[r_i] = restemis*(gdp_future(self, 2015, r, 'fraction'))/(1-total_occupied_gdpshare)
+                all_baseline_emissions[r_i] = restemis*(gdp_future_reread(self, 2015, r, 'fraction'))/(1-total_occupied_gdpshare)
 
         # Create groups
         d_base = []
@@ -739,7 +750,28 @@ class shareefforts(object):
         xr_base = xr.Dataset.from_dataframe(df_dummy)
         xr_base = xr_base.reindex(Time = np.arange(2020, 2101))
         xr_base = xr_base.interpolate_na(dim="Time", method="linear")
-        self.xr_base = xr_base
+        #self.xr_base = xr_base
+
+        # Match
+        matched_emissions = np.zeros(shape=(len(np.arange(2020, 2101)), len(self.all_regions_iso)))
+        for cty_i, cty in enumerate(self.all_regions_iso):
+            base = xr_base.sel(Time=2021, ISO=cty).Value
+            try:
+                primap = self.xr_2021.sel(ISO=cty).GHG/1e3
+                correction = float(base-primap)
+            except:
+                correction = 0
+            matched_emissions[:, cty_i] = np.array(xr_base.sel(Time=np.arange(2020, 2101), ISO=cty).Value) - correction
+        d_base = []
+        for r_i, r in enumerate(self.all_regions_iso):
+            d_base.append([r]+list(matched_emissions[:, r_i]))
+        df_base = pd.DataFrame(d_base, columns = ['ISO']+list(np.arange(2020, 2101)))
+        df_base = df_base.melt(id_vars = ["ISO"], var_name='Time', value_name='Value')
+        df_dummy = df_base.set_index(['ISO', "Time"])
+        xr_base = xr.Dataset.from_dataframe(df_dummy)
+        xr_base = xr_base.reindex(Time = np.arange(2020, 2101))
+        xr_base = xr_base.interpolate_na(dim="Time", method="linear")
+        self.xr_base_matched = xr_base
 
     # =========================================================== #
     # =========================================================== #
@@ -759,7 +791,7 @@ class shareefforts(object):
         xr_total = xr_total.assign(GHG_f = self.xr_ghg_ar6['Mean']/1e3)
         xr_total = xr_total.assign(GHG_f_incl = self.xr_ghg_ar6_incl['Mean']/1e3)
         xr_total = xr_total.assign(GHG_f_co2 = self.xr_co2_ar6['Mean']/1e3)
-        xr_total = xr_total.assign(GHG_base = self.xr_base['Value']/1e3)
+        xr_total = xr_total.assign(GHG_base = self.xr_base_matched['Value']/1e3)
         xr_total = xr_total.assign(NDC_l = self.xr_ndc_l['Value']/1e3)
         xr_total = xr_total.assign(NDC_h = self.xr_ndc_h['Value']/1e3)
         # xr_total = xr_total.assign(NDCcr_l = self.xr_ndccr_l['Value']/1e3)
@@ -962,8 +994,21 @@ class shareefforts(object):
                 future_pop = np.array(self.xr_total.Population.sel(ISO=cty, Time=np.arange(2020, 2101)))
                 RA[cty_i, :, cat_i] = ((future_gdp/future_pop) / (future_gdp_w/future_pop_w) )**(1/3.)*future_bau*(future_bau_w - future_emis_w)/future_bau_w
 
+        # Now also for groups
+        for g_i, g in enumerate(self.groups_iso):
+            wh = np.where(self.all_regions_iso == g)[0][0]
+            
+            ctys = self.groups_ctys[g_i]
+            ws = []
+            for cty in ctys:
+                ws.append(np.where(self.all_regions_iso == cty)[0][0])
+            ws = np.array(ws)
+            news = np.nansum(RA[ws], axis=0)
+
+            for c_i, c in enumerate(self.all_categories):
+                RA[wh, :, c_i] = news[:, c_i]
+
         self.ap_RA = RA
-        self.ap_corr = (np.nansum(RA, axis=0).T/(future_bau_w - future_emis_w)).T
 
         # Save
         self.app2_gdp_neg_shares = app2_gdp_neg_shares
@@ -995,6 +1040,7 @@ class shareefforts(object):
                                  self.historical_debt[i] for i in range(len(self.all_regions_iso))])
             self.allecpcs_onlyneg = np.copy(allecpcs)
             self.allecpcs_onlyneg[self.allecpcs_onlyneg >= 0] = 0
+            future_emis_w = np.array(self.xr_total.GHG_f.sel(Category=cat, Time = np.arange(2020, 2101)))
 
             for cty_i, cty in enumerate(self.all_regions_iso):
 
@@ -1007,7 +1053,7 @@ class shareefforts(object):
                 if not np.isnan(np.sum(future_bau)):
                     # future_gdp = np.array([gdp_future(self, y, cty, 'abs') for y in np.arange(2020, 2101)])
                     # future_pop = np.array([pop_func(self, y, cty) for y in np.arange(2020, 2101)])
-                    ap = np.sum(future_bau - self.ap_RA[cty_i, :, cat_i]/self.ap_corr[:, cat_i])
+                    ap = np.sum(future_bau) - np.sum(self.ap_RA[cty_i, :, cat_i]/np.nansum(self.ap_RA[:-12, :, cat_i], axis=0)*(future_bau_w - future_emis_w))# - self.ap_RA[cty_i, :, cat_i]/self.ap_corr[:, cat_i])
                     #self.np.sum(future_bau - ((future_gdp/future_pop) / (future_gdp_w/future_pop_w) )**(1/3.)*future_bau*(future_bau_w - np.array(self.xr_total.GHG_f.sel(Category=cat, Time = np.arange(2020, 2101))))/future_bau_w)
                 else:
                     ap = np.nan
@@ -1054,6 +1100,7 @@ class shareefforts(object):
 
     def calc_budgets_dynamic(self):
         print('- Calculating temporal evolution by straight line') # [30 sec]
+        future_bau_w = np.array(self.xr_total.GHG_base.sel(ISO='WORLD', Time=np.arange(2020, 2101)))
         s_c = []
         s_y = []
         s_r = []
@@ -1175,14 +1222,15 @@ class shareefforts(object):
             for y_i, y in enumerate(self.all_future_years):
                 scenbudget = emis_f_func(self, y, cat)
                 scenposbudget = float(scenbudget+xrsub2.sel(Time=y))
+                future_emis_w = float(self.xr_total.GHG_f.sel(Category=cat, Time = y))
 
                 gfs = scenbudget*emis_shares_2020
                 pcs = popshares[:, y_i]*scenbudget
                 brs = [self.br_dict[cty][c][y_i] for cty in self.all_regions_iso]
 
                 future_bau = np.array(self.xr_total.GHG_base.sel(ISO=self.all_regions_iso, Time=y))
-                aps = list(future_bau - self.ap_RA[:, y_i, cat_i]/self.ap_corr[y_i, cat_i])
-
+                aps = list(future_bau - self.ap_RA[:, y_i, cat_i]/np.nansum(self.ap_RA[:-12, y_i, cat_i], axis=0)*(future_bau_w[y_i] - future_emis_w))
+                
                 s_c = s_c + [cat]*len(self.all_regions_iso)
                 s_y = s_y + [y]*len(self.all_regions_iso)
                 s_r = s_r + list(self.all_regions_iso)

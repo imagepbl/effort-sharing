@@ -53,6 +53,15 @@ def cumpopshare_func(self, c):
 #         sh = 0
 #     return sh
 
+def gdp_future_reread(self, y, c, mode):
+    try:
+        if mode == "fraction":
+            return float(self.xr_gdp.sel(ISO=c, Time=y).GDP) / float(self.xr_gdp.sel(ISO="WORLD", Time=y).GDP)
+        if mode == "abs":
+            return float(self.xr_gdp.sel(ISO=c, Time=y).GDP)
+    except:
+        return np.nan
+
 def popshare_func(self, y, c):
     try:
         sh = float(self.xr_total.sel(ISO=c, Time=y).Population) / float(self.xr_total.sel(ISO='WORLD', Time=y).Population)
