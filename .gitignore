@@ -5,6 +5,7 @@ __pycache__/
 
 # Own files
 Dash_CarbonBudget/*
+Data/*
 
 # C extensions
 *.so

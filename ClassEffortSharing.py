@@ -34,13 +34,13 @@ class shareefforts(object):
         print("# Initializing shareefforts class    #")
         print("# ==================================== #")
 
-        self.current_dir = Path("X:/user/dekkerm/Projects/ECEMF/WP5/EffortSharing")#.cwd()
+        self.current_dir = Path("X:/user/dekkerm/Projects/ECEMF_T5.2")#.cwd()
 
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             diction = yaml.load(file, Loader=yaml.FullLoader)
         self.reread = diction['reread']
-        
+
         # Choices
         self.hist_emission_scen = diction['hist_emission_scen']
         self.version_ndcs = diction['version_ndcs']
@@ -78,11 +78,13 @@ class shareefforts(object):
     # =========================================================== #
 
     def define_paths(self):
+        """ Defining the paths used further in the class """
         print('- Defining paths')
+
         self.path_current = Path.cwd()
-        self.path_main = Path("X:/user/dekkerm/Projects/ECEMF/WP5/")
+        self.path_main = Path("X:/user/dekkerm/Projects/ECEMF_T5.2/")
         self.path_data = Path("X:/user/dekkerm/Data/")
-        self.path_repo_data = self.path_main / "Data" / "EffortSharing"
+        self.path_repo_data = self.path_main / "Data"
         self.path_repo_figs = self.path_main / "Figures"
         self.path_ar6_meta_iso3 = self.path_data / "IPCC" / "AR6_ISO3" / "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx"
         self.path_ar6_data_iso3 = self.path_data / "IPCC" / "AR6_ISO3" / "AR6_Scenarios_Database_ISO3_v1.1.csv"
@@ -125,7 +127,8 @@ class shareefforts(object):
         self.group_ldc = countries_iso[np.array(df["LDC"]) == 1]
         self.group_eg = countries_iso[np.array(df["European Group"]) == 1]
         self.group_world = np.copy(self.countries_iso)
-        self.groups_ctys = [self.group_cvf, self.group_g20, self.group_eu, self.group_g7, self.group_na, self.group_au, self.group_af, self.group_sids, self.group_ldc, self.group_um, self.group_eg, self.group_world]
+        self.groups_ctys = [self.group_cvf, self.group_g20, self.group_eu, self.group_g7, self.group_na, self.group_au,
+                            self.group_af, self.group_sids, self.group_ldc, self.group_um, self.group_eg, self.group_world]
         self.groups_iso = ['CVF', 'G20', "EU", "G7", "NA", "AU", "AF", "SIDS", "LDC", "UM", "EG", "WORLD"]
         self.all_regions_iso = np.array(list(self.countries_iso)+['CVF', 'G20', "EU", "G7", "NA", "AU", "AF", "SIDS", "LDC", "UM", "EG", "WORLD"])
         self.all_regions_names = np.array(list(self.countries_name)+['Climate Vulnerable Forum',
@@ -185,7 +188,6 @@ class shareefforts(object):
 
         # Construct new hdi object
         hdi_values = np.zeros(len(self.countries_iso))+np.nan
-        pop_values = np.zeros(len(self.countries_iso))+np.nan
         hdi_sh_values = np.zeros(len(self.countries_iso))+np.nan
         for r_i, r in enumerate(self.countries_iso):
             reg = self.countries_name[r_i]
@@ -281,13 +283,16 @@ class shareefforts(object):
                 hdi_values[r_i] = hdi_values_raw[wh_i]
             else:
                 hdi_values[r_i] = np.nan
-            hdi_sh_values[r_i] = hdi_values[r_i]*pop_values[r_i]
+            try:
+                pop = float(self.xr_unp.sel(ISO=r, Time=2019).Population)
+            except:
+                pop = np.nan
+            hdi_sh_values[r_i] = hdi_values[r_i]*pop
         hdi_sh_values = hdi_sh_values / np.nansum(hdi_sh_values)
         df_hdi = {}
         df_hdi['ISO'] = self.countries_iso
         df_hdi["Name"] = self.countries_name
         df_hdi["HDI"] = hdi_values
-        #df_hdi["HDI_share"] = hdi_sh_values
         df_hdi = pd.DataFrame(df_hdi)
         df_hdi = df_hdi[["ISO", 'HDI']]
 
@@ -300,7 +305,6 @@ class shareefforts(object):
         df_hdi['ISO'] = self.countries_iso
         df_hdi["Name"] = self.countries_name
         df_hdi["HDIsh"] = hdi_sh_values
-        #df_hdi["HDI_share"] = hdi_sh_values
         df_hdi = pd.DataFrame(df_hdi)
         df_hdi = df_hdi[["ISO", 'HDIsh']]
 
@@ -435,7 +439,7 @@ class shareefforts(object):
         scens = np.array(DF_raw.Scenario)
         modscens = np.array([mods[i]+'|'+scens[i] for i in range(len(scens))])
         DF_raw['ModelScenario'] = modscens
-        time_keys = np.array(DF_raw.keys()[5:-1])#np.array(list(np.arange(1995, 2021, 1))+list(np.arange(2025, 2051, 5))+list(np.arange(2060, 2101, 10))).astype(str)
+        time_keys = np.array(list(np.arange(1995, 2021, 1))+list(np.arange(2025, 2051, 5))+list(np.arange(2060, 2101, 10))).astype(str)
         rows = []
         for c in self.all_categories:
             if len(c)>2:
@@ -918,9 +922,10 @@ class shareefforts(object):
             poss = np.nansum(self.app2_poss[:, ws], axis=1)
             negs = np.nansum(self.app2_negs[:, ws], axis=1)
 
-            self.app2_nets[:, wh, :] = nets
-            self.app2_negs[:, wh, :] = negs
-            self.app2_poss[:, wh, :] = poss
+            for c_i, c in enumerate(self.all_categories):
+                self.app2_nets[c_i, wh, :] = nets[c_i]
+                self.app2_negs[c_i, wh, :] = negs[c_i]
+                self.app2_poss[c_i, wh, :] = poss[c_i]
         
         # Calculations for BR
         mFs = []
@@ -1194,8 +1199,8 @@ class shareefforts(object):
                 a1h_pos = posshares_a1h[c]*scenposbudget
                 a1h_neg = hdishares*lineccs[y_i]
 
-                a2g_pos = self.app2_poss[c, :, 1+y_i]#scenposbudget*self.app2_gdp_shares[y_i+1]
-                a2g_neg = self.app2_negs[c, :, 1+y_i]#lineccs[y_i]*self.A2_neg_fraction[c]#(self.historical_debt/np.sum(self.historical_debt[:-2]))
+                a2g_pos = self.app2_poss[cat_i, :, 1+y_i]#scenposbudget*self.app2_gdp_shares[y_i+1]
+                a2g_neg = self.app2_negs[cat_i, :, 1+y_i]#lineccs[y_i]*self.A2_neg_fraction[c]#(self.historical_debt/np.sum(self.historical_debt[:-2]))
 
                 s_a1g_net = s_a1g_net + list(a1g_pos - a1g_neg)
                 s_a1g_neg = s_a1g_neg + list(a1g_neg)
