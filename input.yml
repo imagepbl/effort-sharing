@@ -3,7 +3,7 @@
 ##################################
 
 # General input
-reread: True
+reread: False
 
 # Choices
 hist_emission_scen: HISTTP # HISTCR or HISTTP
@@ -14,6 +14,7 @@ gdp_type_scenarios: GDP|PPP # NOT USED CURRENTLY -> GDP data is obtained from SS
 
 # Parameters
 timescale_of_convergence: 30
+convergence_moment: 2040
 historical_emissions_startyear: 1990
 discount_factor: 0.015 # 0.8-2% (Nicole)
 gwp_ch4: 27.2
