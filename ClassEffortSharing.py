@@ -55,6 +55,7 @@ class shareefforts(object):
         self.timescale_of_convergence = int(diction['timescale_of_convergence'])
         self.historical_emissions_startyear = int(diction['historical_emissions_startyear'])
         self.convergence_moment =int(diction['convergence_moment'])
+        self.convergence_year_gdr = int(diction['convergence_year_gdr'])
 
         # Other stuff
         self.all_categories = ["C1", "C2", "C3", 'C4', 'C5', 'C6', 'C7', 'C8', 'C1+C2', 'C3+C4', 'C5+C6', 'C7+C8']
@@ -100,7 +101,7 @@ class shareefforts(object):
         self.path_oecd_gdp = Path("X:/IMAGE/data/raw/GDP")
         self.path_ssp_update = self.path_data / "SSPs" / "scenarios_for_navigate5.xlsx"
         self.path_hdi = self.path_data / "HDI" / "HDR21-22_Statistical_Annex_HDI_Table.xlsx"
-        self.path_ctygroups = self.path_data / "UNFCCC_Parties_Groups.xlsx"
+        self.path_ctygroups = self.path_data / "UNFCCC_Parties_Groups_noeu.xlsx"
         self.path_ndc_cr = "X:/user/dekkerm/Data/NDC/ClimateResourceCalculations.csv"
 
     # =========================================================== #
@@ -887,7 +888,6 @@ class shareefforts(object):
         for c in self.all_categories:
             cats.append(np.nansum(self.xr_total.sel(ISO = "WORLD", Time=np.arange(2020, 2101), Category=c).GHG_f))
             cats_i.append(c)
-        
         dfsb = pd.DataFrame(np.array([cats, cats_i]).T, columns=["Budget", "Category"])
         dfsb = dfsb.set_index(['Category'])
         dfsb["Budget"] = dfsb["Budget"].astype(float)
@@ -895,13 +895,7 @@ class shareefforts(object):
 
         print('  o Determine global variables')
         self.all_future_years = np.arange(2020, 2101)
-        # self.all_countries_edgar = []
-        # for r in self.all_countries:
-        #     if r in np.array(self.xr_edgar.ISO):
-        #         self.all_countries_edgar.append(r)
-        # self.all_countries_edgar = np.array(self.all_countries_edgar)
-        self.total_world_emissions_2019 = float(self.xr_total.sel(ISO = "WORLD", Time=2019, Category=self.all_categories).GHG_f.mean(dim='Category')) #np.arange(2020, 2101)
-        #float(self.xr_edgar.sel(year=2019, ISO=self.all_countries_edgar).sum(dim=["ISO", "Source"]).GHG)/1e9
+        self.total_world_emissions_2019 = float(self.xr_total.sel(ISO = "WORLD", Time=2019, Category=self.all_categories).GHG_f.mean(dim='Category'))
 
         print('  o Calculate historical cumulative variables') # [1 min]
         historical_debt = np.zeros(shape=(len(self.all_regions_iso)))
@@ -975,8 +969,7 @@ class shareefforts(object):
         self.app2_negs = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(np.arange(2019, 2101))))
         self.app2_poss = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(np.arange(2019, 2101))))
 
-        for c in range(len(self.all_categories)):
-            cat = self.all_categories[c]
+        for cat_i, cat in enumerate(self.all_categories):
             xrsub2 = self.xr_total.sel(Category=cat).NegGHG
             lineccs =[]
             for y_i, y in enumerate(np.arange(2019, 2101)):
@@ -991,15 +984,15 @@ class shareefforts(object):
 
                 for cty_i, cty in enumerate(self.all_regions_iso):
                     app2_gdp_pos = self.app2_gdp_shares[y_i, cty_i]*Y_emis_pos
-                    negfrac = debt[cty_i, y_i, c] / np.nansum(debt[:-12, y_i, c])
+                    negfrac = debt[cty_i, y_i, cat_i] / np.nansum(debt[:-12, y_i, cat_i])
                     app2_gdp_neg = negfrac*Y_emis_neg
-                    app2_gdp_neg_shares[y_i, cty_i, c] = negfrac
+                    app2_gdp_neg_shares[y_i, cty_i, cat_i] = negfrac
                     app2_gdp_net = app2_gdp_pos - app2_gdp_neg
                     if y != 2100:
-                        debt[cty_i, y_i+1, c] = debt[cty_i, y_i, c] + app2_gdp_net
-                    self.app2_nets[c, cty_i, y_i] = app2_gdp_net
-                    self.app2_negs[c, cty_i, y_i] = app2_gdp_neg
-                    self.app2_poss[c, cty_i, y_i] = app2_gdp_pos
+                        debt[cty_i, y_i+1, cat_i] = debt[cty_i, y_i, cat_i] + app2_gdp_net
+                    self.app2_nets[cat_i, cty_i, y_i] = app2_gdp_net
+                    self.app2_negs[cat_i, cty_i, y_i] = app2_gdp_neg
+                    self.app2_poss[cat_i, cty_i, y_i] = app2_gdp_pos
 
         # Shares for groups
         for g_i, g in enumerate(self.groups_iso):
@@ -1082,6 +1075,20 @@ class shareefforts(object):
                     ap[y_i, cty_i, cat_i] = future_bau[y_i] - self.ap_RA[cty_i, y_i, cat_i]/np.nansum(self.ap_RA[:-12, y_i, cat_i], axis=0)*(future_bau_w[y_i] - future_emis_w[y_i])
         self.ap = ap
 
+        # AP for groups
+        for g_i, g in enumerate(self.groups_iso):
+            wh = np.where(self.all_regions_iso == g)[0][0]
+            
+            ctys = self.groups_ctys[g_i]
+            ws = []
+            for cty in ctys:
+                ws.append(np.where(self.all_regions_iso == cty)[0][0])
+            ws = np.array(ws)
+            news_ap = np.nansum(self.ap[:, ws, :], axis=1)
+
+            for c_i, c in enumerate(self.all_categories):
+                self.ap[:, wh, c_i] = news_ap[:, c_i]
+
         # Full calcs on GDR
         gdr = np.zeros(shape=(len(np.arange(2020, 2101)), len(self.all_regions_iso), len(self.all_categories)))
         future_bau_w = self.xr_total.GHG_base.sel(ISO='WORLD', Time=np.arange(2020, 2101))
@@ -1092,13 +1099,18 @@ class shareefforts(object):
             if y <= 2030:
                 gdr[y_i, :, :] = (future_bau.sel(Time=y) - (future_bau_w.sel(Time=y) - future_emis_w.sel(Time=y))*self.xr_total.sel(Time=y).RCI)
             elif y > 2030:
-                fracs_rci = gdr[10, :, :]/gdr[10, -1, :]
-                fracs_ap = ap[y_i, :, :] / ap[y_i, -1, :]
-                yearfrac = (y - 2030) / 70
-                gdr[y_i, :, :] = (fracs_rci*(1-yearfrac) + fracs_ap*yearfrac)*ap[y_i, -1, :]
+                for cat_i, cat in enumerate(self.all_categories):
+                    scenbudget = emis_f_func(self, y, cat)
+                    scenbudget_2030 = emis_f_func(self, 2030, cat)
+                    gdr_new = (future_bau.sel(Time=y) - (future_bau_w.sel(Time=y) - future_emis_w.sel(Time=y, Category=cat))*self.xr_total.sel(Time=2030).RCI)
+                    #fracs_rci = gdr[10, :, cat_i]/scenbudget_2030#scenbudget#gdr[10, -1, :]
+                    #fracs_ap = ap[y_i, :, cat_i] /scenbudget# ap[y_i, -1, :]
+                    yearfrac = (y - 2030) / (self.convergence_year_gdr - 2030)
+                    #gdr[y_i, :, cat_i] = (fracs_rci*(1-yearfrac) + fracs_ap*yearfrac)*scenbudget#ap[y_i, -1, :]
+                    gdr[y_i, :, cat_i] = gdr_new*(1-yearfrac) + yearfrac*ap[y_i, :, cat_i]#ap[y_i, -1, :]
         self.gdr = gdr
 
-        # AP and GDR for groups
+        # GDR for groups
         for g_i, g in enumerate(self.groups_iso):
             wh = np.where(self.all_regions_iso == g)[0][0]
             
@@ -1107,11 +1119,9 @@ class shareefforts(object):
             for cty in ctys:
                 ws.append(np.where(self.all_regions_iso == cty)[0][0])
             ws = np.array(ws)
-            news_ap = np.nansum(self.ap[:, ws, :], axis=1)
             news_gdr = np.nansum(self.gdr[:, ws, :], axis=1)
 
             for c_i, c in enumerate(self.all_categories):
-                self.ap[:, wh, c_i] = news_ap[:, c_i]
                 self.gdr[:, wh, c_i] = news_gdr[:, c_i]
 
         # Transition periods:
@@ -1143,7 +1153,7 @@ class shareefforts(object):
                 scenbudget = emis_f_func(self, y, cat)
                 for cty_i, cty in enumerate(self.all_regions_iso):
                     debtfrac = debt[cty_i, y_i, cat_i] / np.nansum(debt[:-12, y_i, cat_i])
-                    self.budgets_ecpc[y_i, cat_i, cty_i] = np.nan#debtfrac*scenbudget
+                    self.budgets_ecpc[y_i, cat_i, cty_i] = debtfrac*scenbudget
                     if y != 2100:
                         debt[cty_i, y_i+1, cat_i] = debt[cty_i, y_i, cat_i] + self.budgets_ecpc[y_i, cat_i, cty_i]
 
@@ -1159,7 +1169,6 @@ class shareefforts(object):
         print('- Calculating static budgets')
 
         series = []
-        negemissions = self.xr_total.sel(Time=np.arange(2020, 2101)).NegGHG.sum(dim="Time")
         future_bau_w = np.array(self.xr_total.GHG_base.sel(ISO='WORLD', Time=np.arange(2020, 2101)))
         future_gdp_w = np.array([gdp_future(self, y, "WORLD", 'abs') for y in np.arange(2020, 2101)])
         future_pop_w = np.array([pop_func(self, y, "WORLD") for y in np.arange(2020, 2101)])
@@ -1171,13 +1180,13 @@ class shareefforts(object):
                                    )+2019
             rhovec = rho(self, np.arange(2019, linear_netzeroyear))
             rhovec = rhovec/len(rhovec)
-            total_ccs_2100 = float(negemissions[cat_i])
+            total_ccs_2100 = float(self.xr_total.sel(Time=np.arange(2020, 2101), Category=cat).NegGHG.sum(dim="Time"))
 
-            allecpcs = np.array([cumpopshare_func(self, self.all_regions_iso[i])*total_emissions_left +
-                                 self.historical_debt[i] for i in range(len(self.all_regions_iso))])
-            self.allecpcs_onlyneg = np.copy(allecpcs)
-            self.allecpcs_onlyneg[self.allecpcs_onlyneg >= 0] = 0
-            future_emis_w = np.array(self.xr_total.GHG_f.sel(Category=cat, Time = np.arange(2020, 2101)))
+            # allecpcs = np.array([cumpopshare_func(self, self.all_regions_iso[i])*total_emissions_left +
+            #                      self.historical_debt[i] for i in range(len(self.all_regions_iso))])
+            # self.allecpcs_onlyneg = np.copy(allecpcs)
+            # self.allecpcs_onlyneg[self.allecpcs_onlyneg >= 0] = 0
+            # future_emis_w = np.array(self.xr_total.GHG_f.sel(Category=cat, Time = np.arange(2020, 2101)))
 
             for cty_i, cty in enumerate(self.all_regions_iso):
 
@@ -1199,8 +1208,8 @@ class shareefforts(object):
                 gf = emisshare*total_emissions_left
                 pc = float(self.pc_weighted_budget.sel(ISO=cty, Category=cat))
                 pcc = np.nansum(self.budgets_pcc[:, cat_i, cty_i])#np.sum(rhovec)*gf+(1-np.sum(rhovec))*pc
-                ecpc = np.nansum(self.budgets_ecpc[1:, cat_i, cty_i])#
                 ecpc2 = cumpopshare_func(self, cty)*total_emissions_left + self.historical_debt[cty_i]
+                ecpc = ecpc2#np.nansum(self.budgets_ecpc[1:, cat_i, cty_i])#
                 br = np.nansum(self.br_dict[cty][cat_i])
                 ap = np.nansum(self.ap[:, cty_i, cat_i])
                 gdr = np.nansum(self.gdr[:, cty_i, cat_i])
@@ -1329,9 +1338,9 @@ class shareefforts(object):
         for cty_i, cty in enumerate(self.all_regions_iso):
             emis_shares_2020[cty_i] = emisshare_func(self, 2019, cty)
             #gdp_shares_2020[cty_i] = gdpshare_func(self, 2019, cty)
-            for c in range(len(self.all_categories)):
-                posshares_a1g[c, cty_i] = float(self.xr_budgets_static.sel(Region = cty, Ccat = self.all_categories[c], Variable='A1_gdp_pos').Value)/float(self.xr_budgets_static.sel(Region ="WORLD", Ccat = self.all_categories[c], Variable='A1_gdp_pos').Value)
-                posshares_a1h[c, cty_i] = float(self.xr_budgets_static.sel(Region = cty, Ccat = self.all_categories[c], Variable='A1_hdi_pos').Value)/float(self.xr_budgets_static.sel(Region ="WORLD", Ccat = self.all_categories[c], Variable='A1_hdi_pos').Value)
+            for cat_i, cat in enumerate(self.all_categories):
+                posshares_a1g[cat_i, cty_i] = float(self.xr_budgets_static.sel(Region = cty, Ccat = cat, Variable='A1_gdp_pos').Value)/float(self.xr_budgets_static.sel(Region ="WORLD", Ccat = cat, Variable='A1_gdp_pos').Value)
+                posshares_a1h[cat_i, cty_i] = float(self.xr_budgets_static.sel(Region = cty, Ccat = cat, Variable='A1_hdi_pos').Value)/float(self.xr_budgets_static.sel(Region ="WORLD", Ccat = cat, Variable='A1_hdi_pos').Value)
             for y_i, y in enumerate(self.all_future_years):
                 popshares[cty_i, y_i] = popshare_func(self, y, cty)
                 gdpshares[cty_i, y_i] = gdp_future(self, y, cty, "fraction")
@@ -1378,7 +1387,7 @@ class shareefforts(object):
 
                 gfs = scenbudget*emis_shares_2020
                 pcs = popshares[:, y_i]*scenbudget
-                brs = [self.br_dict[cty][c][y_i] for cty in self.all_regions_iso]
+                brs = [self.br_dict[cty][cat_i][y_i] for cty in self.all_regions_iso]
 
                 # future_bau = np.array(self.xr_total.GHG_base.sel(ISO=self.all_regions_iso, Time=y))
                 #aps = #list(future_bau - self.ap_RA[:, y_i, cat_i]/np.nansum(self.ap_RA[:-12, y_i, cat_i], axis=0)*(future_bau_w[y_i] - future_emis_w))
@@ -1393,17 +1402,17 @@ class shareefforts(object):
                 # frac_pc = popshares[:, y_i]
                 # frac = (y-2020)/(self.convergence_moment-2020)
                 s_pcc = s_pcc + list(self.budgets_pcc[y_i, cat_i, :])#(frac_gf*(1-frac) + frac_pc*frac)*scenbudget)
-                s_ecpc = s_ecpc + list(self.budgets_ecpc[1+y_i, cat_i, :])
+                s_ecpc = s_ecpc + list([np.nan]*len(self.all_regions_iso))#list(self.budgets_ecpc[1+y_i, cat_i, :])#
 
                 s_ap = s_ap + list(self.ap[y_i, :, cat_i])
                 s_gdr = s_gdr + list(self.gdr[y_i, :, cat_i])
                 # s_ecpc = s_ecpc + list([np.nan]*len(self.all_regions_iso))
                 s_br = s_br + list(brs)
 
-                a1g_pos = posshares_a1g[c]*scenposbudget
+                a1g_pos = posshares_a1g[cat_i]*scenposbudget
                 a1g_neg = gdpshares[:, y_i]*lineccs[y_i] # CHANGE 0 TO Y_I FOR DYNAMIC GDP
 
-                a1h_pos = posshares_a1h[c]*scenposbudget
+                a1h_pos = posshares_a1h[cat_i]*scenposbudget
                 a1h_neg = hdishares*lineccs[y_i]
 
                 a2g_pos = self.app2_poss[cat_i, :, 1+y_i]#scenposbudget*self.app2_gdp_shares[y_i+1]
