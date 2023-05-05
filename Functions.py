@@ -7,6 +7,24 @@ import numpy as np
 import pandas as pd
 
 # Functions
+def grouping(self, arry):
+    for g_i, g in enumerate(self.groups_iso):
+        wh = np.where(self.all_regions_iso == g)[0][0]
+        ctys = self.groups_ctys[g_i]
+        ws = []
+        for cty in ctys:
+            ws.append(np.where(self.all_regions_iso == cty)[0][0])
+        ws = np.array(ws)
+        groupsums = np.nansum(arry[:, ws], axis=1)
+        for c_i, c in enumerate(self.all_categories):
+            arry[c_i, wh, :] = groupsums[c_i]
+    return arry
+
+def grouping_xarray(self, xarry):
+    for g_i, g in enumerate(self.groups_ctys):
+        xarry = xarry.where(xarry.ISO != self.groups_iso[g_i], xarry.sel(ISO=g).sum(dim='ISO'))
+    return xarry
+
 def rho(self, t):
     try:
         rho = 1-(1/self.timescale_of_convergence)*(t-2019)
