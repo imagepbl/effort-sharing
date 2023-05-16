@@ -71,6 +71,8 @@ class shareefforts(object):
                                  "Emissions|N2O|AFOLU|Land",
                                  'Carbon Sequestration|CCS',
                                  'Carbon Sequestration|Direct Air Capture',
+                                 'Emissions|CO2|Energy|Demand|Transportation|Aviation',
+                                 'Emissions|CO2|Energy|Demand|Transportation|Maritime',
                                  'Population',
                                  self.gdp_type_scenarios]
         self.ndc_var = "Emissions|Total GHG excl. LULUCF"
@@ -496,7 +498,9 @@ class shareefforts(object):
                             land_ch4 = np.nanmean(np.array(df_i[df_i.Variable == "Emissions|CH4|AFOLU|Land"][t])*self.gwp_ch4)
                             land_co2 = np.nanmean(np.array(df_i[df_i.Variable == "Emissions|CO2|AFOLU|Land"][t])*1.)
                             land_n2o = np.nanmean(np.array(df_i[df_i.Variable == "Emissions|N2O|AFOLU|Land"][t])*self.gwp_n2o)/1000
-                            dat = kyoto_tot - land_ch4 - land_co2 - land_n2o
+                            bunk_co2_av = np.nanmean(np.array(df_i[df_i.Variable == "Emissions|CO2|Energy|Demand|Transportation|Aviation"][t])*1.)
+                            bunk_co2_mar = np.nanmean(np.array(df_i[df_i.Variable == "Emissions|CO2|Energy|Demand|Transportation|Maritime"][t])*1.)
+                            dat = kyoto_tot - land_ch4 - land_co2 - land_n2o - bunk_co2_av - bunk_co2_mar
                         else:
                             df_i0 = DF_raw[DF_raw.ModelScenario.isin(modcat[0][modcat[1] == "C3"])]
                             df_i1 = DF_raw[DF_raw.ModelScenario.isin(modcat[0][modcat[1] == "C5"])]
@@ -504,12 +508,17 @@ class shareefforts(object):
                             land_ch4 = np.nanmean(np.array(df_i0[df_i0.Variable == "Emissions|CH4|AFOLU|Land"][t])*self.gwp_ch4)
                             land_co2 = np.nanmean(np.array(df_i0[df_i0.Variable == "Emissions|CO2|AFOLU|Land"][t])*1.)
                             land_n2o = np.nanmean(np.array(df_i0[df_i0.Variable == "Emissions|N2O|AFOLU|Land"][t])*self.gwp_n2o)/1000
-                            dat_0 = kyoto_tot - land_ch4 - land_co2 - land_n2o
+                            bunk_co2_av = np.nanmean(np.array(df_i0[df_i0.Variable == "Emissions|CO2|Energy|Demand|Transportation|Aviation"][t])*1.)
+                            bunk_co2_mar = np.nanmean(np.array(df_i0[df_i0.Variable == "Emissions|CO2|Energy|Demand|Transportation|Maritime"][t])*1.)
+                            dat_0 = kyoto_tot - land_ch4 - land_co2 - land_n2o - bunk_co2_av - bunk_co2_mar
+
                             kyoto_tot = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|Kyoto Gases"][t]))
                             land_ch4 = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|CH4|AFOLU|Land"][t])*self.gwp_ch4)
                             land_co2 = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|CO2|AFOLU|Land"][t])*1.)
                             land_n2o = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|N2O|AFOLU|Land"][t])*self.gwp_n2o)/1000
-                            dat_1 = kyoto_tot - land_ch4 - land_co2 - land_n2o
+                            bunk_co2_av = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|CO2|Energy|Demand|Transportation|Aviation"][t])*1.)
+                            bunk_co2_mar = np.nanmean(np.array(df_i1[df_i1.Variable == "Emissions|CO2|Energy|Demand|Transportation|Maritime"][t])*1.)
+                            dat_1 = kyoto_tot - land_ch4 - land_co2 - land_n2o - bunk_co2_av - bunk_co2_mar
                             dat = np.nanmean([dat_0, dat_1])
                         rows.append([c, v, int(t), dat])
                 else:
@@ -861,6 +870,8 @@ class shareefforts(object):
         # xr_total = xr_total.assign(NDCcr_l_c = self.xr_ndccr_l_c['Value']/1e3)
         # xr_total = xr_total.assign(NDCcr_h_c = self.xr_ndccr_h_c['Value']/1e3)
         xr_total = xr_total.interpolate_na(dim="Time", method="linear")
+        xr_total = xr_total.reindex(ISO = self.all_regions_iso)
+        xr_total = xr_total.reindex(Category = self.all_categories)
         self.xr_total = xr_total
 
     # =========================================================== #
@@ -886,30 +897,47 @@ class shareefforts(object):
         self.xr_sbudgets = self.xr_total.GHG_f.sel(Category=self.all_categories, Time=self.all_future_years)
         #self.total_world_emissions_start = float(self.xr_total.sel(ISO = "WORLD", Time=self.start_year-1, Category=self.all_categories).GHG_f.mean(dim='Category'))
         self.pc_weighted_budget = (self.xr_total.sel(ISO = self.all_regions_iso, Time = self.all_future_years).Population/self.xr_total.sel(ISO = "WORLD", Time = self.all_future_years).Population * self.xr_total.sel(ISO = "WORLD", Time = self.all_future_years).GHG_f).sum(dim="Time")
+        self.discounts = (1.+self.discount_factor)**(np.array(list(np.arange(self.historical_emissions_startyear, self.start_year)-self.start_year+1)+[0]*len(np.arange(self.start_year, 2101))))
         self.historical_debt = ((self.xr_total.Population.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year)) /
                                 self.xr_total.Population.sel(ISO="WORLD", Time=np.arange(self.historical_emissions_startyear, self.start_year)) *
                                 self.xr_total.GHG_p.sel(ISO='WORLD', Time=np.arange(self.historical_emissions_startyear, self.start_year)) -
-                                self.xr_total.GHG_p.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year)))*(1.+self.discount_factor)**(np.arange(self.historical_emissions_startyear, self.start_year)-(self.start_year-1))).sum(dim = 'Time')
-        self.historical_emissions_discounted = (self.xr_total.GHG_p.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year))*(1.+self.discount_factor)**(np.arange(self.historical_emissions_startyear, self.start_year)-(self.start_year-1))).sum(dim='Time')
+                                self.xr_total.GHG_p.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year)))*(1.+self.discount_factor)**(np.arange(self.historical_emissions_startyear, self.start_year)-(self.start_year+1))).sum(dim = 'Time')
+        self.historical_emissions_discounted = (self.xr_total.GHG_p.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year))*(1.+self.discount_factor)**(np.arange(self.historical_emissions_startyear, self.start_year)-(self.start_year+1))).sum(dim='Time')
         yearly_netto_budgets = self.xr_total.sel(Category=self.all_categories, Time=self.all_future_years).GHG_f
         cumulative_future_ecpc = (yearly_netto_budgets*self.xr_total.Population.sel(ISO=self.all_regions_iso, Time=self.all_future_years)/self.xr_total.Population.sel(ISO="WORLD", Time=self.all_future_years)).sum(dim='Time')
         yearly_negative_budgets = self.xr_total.sel(Category=self.all_categories, Time=self.all_future_years).NegGHG
         yearly_positive_budgets = yearly_negative_budgets+yearly_netto_budgets
+        self.yearly_positive_budgets = yearly_positive_budgets
 
         # ECPC
-        self.ecpc_total = self.historical_debt + cumulative_future_ecpc
+        self.historical_emissions_discounted_peryear = self.xr_total.GHG_p.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year))*(1.+self.discount_factor)**(np.arange(self.historical_emissions_startyear, self.start_year)-(self.start_year+1))
+        self.historical_percapitafractions = self.xr_total.Population.sel(ISO=self.all_regions_iso, Time=np.arange(self.historical_emissions_startyear, self.start_year)) / self.xr_total.Population.sel(ISO="WORLD", Time=np.arange(self.historical_emissions_startyear, self.start_year))
+        self.future_percapitafractions = self.xr_total.Population.sel(ISO=self.all_regions_iso, Time=np.arange(self.start_year, 2101)) / self.xr_total.Population.sel(ISO="WORLD", Time=np.arange(self.start_year, 2101))
+        self.ecpc_allowed = (self.historical_emissions_discounted_peryear.sel(ISO='WORLD') * self.historical_percapitafractions).sum(dim='Time') + (self.future_percapitafractions * yearly_netto_budgets).sum(dim='Time')
+        self.ecpc_spent = self.historical_emissions_discounted_peryear.sum(dim='Time')
+        self.ecpc_total = self.ecpc_allowed-self.ecpc_spent
+        # self.ecpc_total = self.historical_debt + cumulative_future_ecpc
         ecpc_fractions = (self.ecpc_total) / (self.ecpc_total.sel(ISO='WORLD'))
         self.ecpc = ecpc_fractions * yearly_netto_budgets
 
+        # ECPC - average version
+        cumulative_population_fraction = self.xr_total.Population.sel(Time=np.arange(self.historical_emissions_startyear, 2101)).sum(dim='Time') / self.xr_total.Population.sel(ISO="WORLD", Time=np.arange(self.historical_emissions_startyear, 2101)).sum(dim='Time')
+        total_emissions_possible = self.historical_emissions_discounted.sel(ISO='WORLD') + yearly_netto_budgets.sum(dim='Time')
+        total_emissions_allowance = total_emissions_possible * cumulative_population_fraction
+        total_emissions_spent = self.historical_emissions_discounted
+        self.ecpc_average = total_emissions_allowance - total_emissions_spent
+        ecpc_av_fractions = (self.ecpc_average) / (self.ecpc_average.sel(ISO='WORLD'))
+        self.ecpc_average_time = ecpc_av_fractions * yearly_netto_budgets
+
         # Approach 1 (GDP)
         self.app1_gdp_neg = self.xr_total.sel(ISO = self.all_regions_iso, Time = self.all_future_years).GDP/self.xr_total.sel(ISO = "WORLD", Time = self.all_future_years).GDP * yearly_negative_budgets
-        self.app1_gdp_pos_total = self.ecpc_total + self.app1_gdp_neg.sum(dim='Time')
+        self.app1_gdp_pos_total = self.ecpc + self.app1_gdp_neg.sum(dim='Time')
         self.app1_gdp_pos = self.app1_gdp_pos_total / self.app1_gdp_pos_total.sel(ISO='WORLD') * yearly_positive_budgets
         self.app1_gdp_net = self.app1_gdp_pos - self.app1_gdp_neg
 
         # Approach 1 (HDI)
         self.app1_hdi_neg = self.xr_total.HDIsh * yearly_negative_budgets
-        self.app1_hdi_pos_total = self.ecpc_total + self.app1_hdi_neg.sum(dim='Time')
+        self.app1_hdi_pos_total = self.ecpc + self.app1_hdi_neg.sum(dim='Time')
         self.app1_hdi_pos = self.app1_hdi_pos_total / self.app1_hdi_pos_total.sel(ISO='WORLD') * yearly_positive_budgets
         self.app1_hdi_net = self.app1_hdi_pos - self.app1_hdi_neg
 
@@ -969,8 +997,11 @@ class shareefforts(object):
                                     "AP": (['ISO', 'Time', 'Category'], self.ap.data),
                                     "GDR": (['ISO', 'Time', 'Category'], self.gdr.Value.data),
                                     "ECPC": (['ISO', 'Category', 'Time'], self.ecpc.data),
-                                    "F1g": (['ISO', 'Category', 'Time'], self.app1_gdp_net.data),
-                                    "F1h": (['ISO', 'Category', 'Time'], self.app1_hdi_net.data),
+                                    "ECPCav": (['Category', 'ISO', 'Time'], self.ecpc_average_time.data),
+                                    # "F1g": (['ISO', 'Category', 'Time'], self.app1_gdp_net.data),
+                                    # "F1h": (['ISO', 'Category', 'Time'], self.app1_hdi_net.data),
+                                    "F1g": (['Category', 'ISO', 'Time'], self.app1_gdp_net.data),
+                                    "F1h": (['Category', 'ISO', 'Time'], self.app1_hdi_net.data),
                                     "F2": (['Category', 'ISO', 'Time'], self.f2.Value.data),
                                     "F2C": (['Category', 'ISO', 'Time'], self.f2c.Value.data)},
                     coords={'Category': self.all_categories, "ISO": self.all_regions_iso, "Time": self.all_future_years})
