@@ -203,9 +203,9 @@ class shareefforts(object):
                 wh_i = wh[0]
                 hdi_values[r_i] = hdi_values_raw[wh_i]
             elif r in ['ALA', 'ASM', "AIA", "ABW", "BMU", "ANT", "SCG", "BES", "BVT", "IOT", "VGB", "CYM", "CXR", "CCK", "COK",
-                    'CUW', 'FLK', 'FRO', 'GUF', 'PYF', 'ATF', 'GMB', 'GIB', 'GRL', "GLP", 'GUM', "GGY", "HMD", "VAT", "IMN",
-                    'JEY', "MAC", "MTQ", "MYT", "MSR", "NCL", "NIU", "NFK", "MNP", "PCN", "PRI", "REU", "BLM", "SHN", "SPM",
-                    'SXM', 'SGS', "MAF", "SJM", "TKL", "TCA", "UMI", "VIR", "WLF", "ESH"]:
+                       'CUW', 'FLK', 'FRO', 'GUF', 'PYF', 'ATF', 'GMB', 'GIB', 'GRL', "GLP", 'GUM', "GGY", "HMD", "VAT", "IMN",
+                       'JEY', "MAC", "MTQ", "MYT", "MSR", "NCL", "NIU", "NFK", "MNP", "PCN", "PRI", "REU", "BLM", "SHN", "SPM",
+                       'SXM', 'SGS', "MAF", "SJM", "TKL", "TCA", "UMI", "VIR", "WLF", "ESH"]:
                 hdi_values[r_i] = np.nan
             elif r == "USA":
                 wh = np.where(hdi_countries_raw == "United States")[0][0]
@@ -930,23 +930,27 @@ class shareefforts(object):
         self.ecpc_average_time = ecpc_av_fractions * yearly_netto_budgets
 
         # Approach 1 (GDP)
-        self.app1_gdp_neg = self.xr_total.sel(ISO = self.all_regions_iso, Time = self.all_future_years).GDP/self.xr_total.sel(ISO = "WORLD", Time = self.all_future_years).GDP * yearly_negative_budgets
-        self.app1_gdp_pos_total = self.ecpc + self.app1_gdp_neg.sum(dim='Time')
+        self.app1_gdp = self.xr_total.sel(ISO = self.all_regions_iso, Time = self.all_future_years).GDP
+        self.app1_gdp = self.app1_gdp.where(~self.app1_gdp.ISO.isin(["COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE", "MCO", "NRU"]), np.nan)
+        self.app1_gdp_neg = self.app1_gdp/self.app1_gdp.sel(ISO = "WORLD", Time = self.all_future_years) * yearly_negative_budgets
+        self.app1_gdp_pos_total = self.ecpc_total + self.app1_gdp_neg.sum(dim='Time')
         self.app1_gdp_pos = self.app1_gdp_pos_total / self.app1_gdp_pos_total.sel(ISO='WORLD') * yearly_positive_budgets
         self.app1_gdp_net = self.app1_gdp_pos - self.app1_gdp_neg
 
         # Approach 1 (HDI)
-        self.app1_hdi_neg = self.xr_total.HDIsh * yearly_negative_budgets
-        self.app1_hdi_pos_total = self.ecpc + self.app1_hdi_neg.sum(dim='Time')
+        self.app1_hdi = self.xr_total.sel(ISO = self.all_regions_iso).HDIsh
+        self.app1_hdi = self.app1_hdi.where(~self.app1_hdi.ISO.isin(["COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE", "MCO", "NRU"]), np.nan)
+        self.app1_hdi_neg = self.app1_hdi * yearly_negative_budgets
+        self.app1_hdi_pos_total = self.ecpc_total + self.app1_hdi_neg.sum(dim='Time')
         self.app1_hdi_pos = self.app1_hdi_pos_total / self.app1_hdi_pos_total.sel(ISO='WORLD') * yearly_positive_budgets
         self.app1_hdi_net = self.app1_hdi_pos - self.app1_hdi_neg
 
         # Approach 2
         self.app2_pos_shares = (self.xr_total.Population**2 / self.xr_total.GDP).sel(ISO=self.all_regions_iso, Time=self.all_future_years)
-        self.app2_pos_shares = self.app2_pos_shares.where(~self.app2_pos_shares.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV"]), np.nan)
+        self.app2_pos_shares = self.app2_pos_shares.where(~self.app2_pos_shares.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV",    "COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE"]), np.nan)
         self.app2_pos_shares = self.app2_pos_shares / self.app2_pos_shares.sel(ISO=self.countries_iso, Time=self.all_future_years).sum(dim='ISO')
         app2_current_debt = self.historical_emissions_discounted.copy()
-        app2_current_debt = app2_current_debt.where(~app2_current_debt.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV"]), np.nan)
+        app2_current_debt = app2_current_debt.where(~app2_current_debt.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV",    "COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE"]), np.nan)
         self.app2_nets = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
         self.app2_negs = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
         self.app2_poss = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
@@ -998,10 +1002,10 @@ class shareefforts(object):
                                     "GDR": (['ISO', 'Time', 'Category'], self.gdr.Value.data),
                                     "ECPC": (['ISO', 'Category', 'Time'], self.ecpc.data),
                                     "ECPCav": (['Category', 'ISO', 'Time'], self.ecpc_average_time.data),
-                                    # "F1g": (['ISO', 'Category', 'Time'], self.app1_gdp_net.data),
-                                    # "F1h": (['ISO', 'Category', 'Time'], self.app1_hdi_net.data),
-                                    "F1g": (['Category', 'ISO', 'Time'], self.app1_gdp_net.data),
-                                    "F1h": (['Category', 'ISO', 'Time'], self.app1_hdi_net.data),
+                                    "F1g": (['ISO', 'Category', 'Time'], self.app1_gdp_net.data),
+                                    "F1h": (['ISO', 'Category', 'Time'], self.app1_hdi_net.data),
+                                    # "F1g": (['Category', 'ISO', 'Time'], self.app1_gdp_net.data),
+                                    # "F1h": (['Category', 'ISO', 'Time'], self.app1_hdi_net.data),
                                     "F2": (['Category', 'ISO', 'Time'], self.f2.Value.data),
                                     "F2C": (['Category', 'ISO', 'Time'], self.f2c.Value.data)},
                     coords={'Category': self.all_categories, "ISO": self.all_regions_iso, "Time": self.all_future_years})
