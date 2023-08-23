@@ -52,7 +52,6 @@ class shareefforts(object):
         self.gwp_ch4 = int(diction['gwp_ch4'])
         self.gwp_n2o = int(diction['gwp_n2o'])
         self.discount_factor = float(diction['discount_factor'])
-        self.timescale_of_convergence = int(diction['timescale_of_convergence'])
         self.historical_emissions_startyear = int(diction['historical_emissions_startyear'])
         self.convergence_moment =int(diction['convergence_moment'])
         self.convergence_year_gdr = int(diction['convergence_year_gdr'])

@@ -13,7 +13,6 @@ hotair_ndcs: include # include or exclude
 gdp_type_scenarios: GDP|PPP # NOT USED CURRENTLY -> GDP data is obtained from SSP projections, not from IAM output
 
 # Parameters
-timescale_of_convergence: 30
 convergence_year_gdr: 2150
 convergence_moment: 2040
 start_year: 2020
