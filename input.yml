@@ -1,22 +1,42 @@
-##################################
-# Input for Effort Sharing Class
-##################################
+# ============================================== #
+# PATHS
+# ============================================== #
+paths:
+  data:
+    external: X:/user/dekkerm/Data/
+    baseline: X:/user/heerdenvr/Downscaling/Mark/14_09_2023/
+    internal: Data/
+    datadrive: K:/ECEMF/T5.2/
+  task: X:/user/dekkerm/Projects/ECEMF_T5.2/
 
-# General input
-reread: False
+# ============================================== #
+# PARAMS
+# ============================================== #
+params:
+  pcc_conv_start: 2040
+  pcc_conv_end: 2150
+  convergence_year_gdr: 2150
+  convergence_year_base: 2150
+  historical_emissions_startyear: 1990
+  discount_factor: 0.015
+  version_ndcs: 13Mar2023a
+  gwp_ch4: 27.2
+  gwp_n2o: 273
+  gwp_ch4_ar4: 25
+  gwp_n2o_ar4: 298
+  start_year_analysis: 2021 # 1 Jan of this year
+  # global_carbon_budget_2022_15: 420 # https://essd.copernicus.org/articles/14/1917/2021/, in Gt CO2
+  # global_carbon_budget_2022_17: 770
+  # global_carbon_budget_2022_20: 1270
+  # global_carbon_budget_2022_25: 2270
+  # global_carbon_budget_2022_30: 3270
+  polynomial_fit_2030relation: 5
 
-# Choices
-hist_emission_scen: HISTTP # HISTCR or HISTTP
-version_ndcs: 5Nov2022a # 14Feb2022b
-conditionality_ndcs: unconditional # conditional or range or unconditional (= may be higher); 
-hotair_ndcs: include # include or exclude
-gdp_type_scenarios: GDP|PPP # NOT USED CURRENTLY -> GDP data is obtained from SSP projections, not from IAM output
+# ============================================== #
+# LISTS OF SCENARIOS, REGIONS AND MODELS
+# ============================================== #
+standard_settings:
+  Risk_of_exceedance: 0.4 # Probability of exceeding temp level
+  Negative_emissions: 0.2 # Quantile of C1-C3 CDR below which the average CO2 trajectory remains
+  Non_CO2_mitigation_potential: 0.4 # Quantile of C1-C3 CH4 emissions below which the average CO2 trajectory remains
 
-# Parameters
-convergence_year_gdr: 2150
-convergence_moment: 2040
-start_year: 2020
-historical_emissions_startyear: 1990
-discount_factor: 0.015 # 0.8-2% (Nicole)
-gwp_ch4: 27.2
-gwp_n2o: 273
