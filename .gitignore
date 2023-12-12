@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Own files
+Dash_CarbonBudget/*
+Data/*
+Figures/*
+Old/*
+
 # C extensions
 *.so
 
