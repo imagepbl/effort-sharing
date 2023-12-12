@@ -17,7 +17,7 @@ params:
   pcc_conv_end: 2150
   convergence_year_gdr: 2150
   convergence_year_base: 2150
-  historical_emissions_startyear: 1990
+  historical_emissions_startyear: 1950
   discount_factor: 0.015
   version_ndcs: 13Mar2023a
   gwp_ch4: 27.2

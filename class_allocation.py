@@ -93,12 +93,12 @@ class allocation(object):
         total_emissions_w = hist_emissions_w+future_emissions_w
         hist_emissions_r = float(hist_emissions.sel(Region=self.FocusRegion))
         cum_pop = self.xr_total.Population.sel(Time=np.arange(self.settings['params']['historical_emissions_startyear'], 2101)).sum(dim='Time')
-        share_cum_pop = cum_pop.sel(Region=self.FocusRegion) / cum_pop.sum(dim='Region')
+        share_cum_pop = cum_pop.sel(Region=self.FocusRegion) / cum_pop.sel(Region=self.countries_iso).sum(dim='Region')
         budget_rightful = total_emissions_w*share_cum_pop
         budget_left = budget_rightful - hist_emissions_r
 
         # Now temporal allocation
-        globalbudget = self.xr_total.GHG_globe.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
+        #globalbudget = self.xr_total.GHG_globe.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
         globalpath = self.xr_total.GHG_globe
 
         emis_2021_i = self.xr_total.GHG_hist.sel(Time=self.settings['params']['start_year_analysis'], Region=self.FocusRegion)
@@ -108,7 +108,8 @@ class allocation(object):
         budget_surplus = budget_left - budget_without_assumptions
 
         compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2040))))+[1]*len(np.arange(2040, 2101)))
-        compensation_form = savgol_filter(compensation_form, 50, 1)
+        compensation_form2 = np.convolve(compensation_form, np.ones(3)/3, mode='valid')
+        compensation_form[1:-1] = compensation_form2
         compensation_form = compensation_form - compensation_form[0]
         compensation_form = compensation_form / np.sum(compensation_form)
         xr_comp = xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
@@ -152,7 +153,7 @@ class allocation(object):
             df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
             countries_iso = np.array(df["Country ISO Code"])
             group_eu = countries_iso[np.array(df["EU"]) == 1]
-            rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim='Region')
+            rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim='Region') # TODO check if this should be a mean instead of a sum
 
         # Compute GDR
         gdr = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - (self.xr_total.GHG_base.sel(Region=self.countries_iso).sum(dim='Region') - self.xr_total.GHG_globe)*rci_reg
@@ -168,7 +169,7 @@ class allocation(object):
 
     def save(self):
         #print('- Save')
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Region', 'Budget']).sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
+        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "CO2_globe", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', "CH4_globe", "N2O_globe", "GHG_hist_all", 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Region', 'Budget']).sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+self.FocusRegion+'.nc',         
             # encoding={
             #     "Scenario": {"dtype": "str"},

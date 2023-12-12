@@ -23,7 +23,7 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, xrtot, cty):
+    def __init__(self, xrtot):
         print("# ==================================== #")
         print("# Initializing policyscenadding class        #")
         print("# ==================================== #")
@@ -34,7 +34,6 @@ class policyscenadding(object):
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.xr_total = xrtot
-        self.countries_iso = cty
 
     # =========================================================== #
     # =========================================================== #
@@ -64,7 +63,8 @@ class policyscenadding(object):
         regions_df[regions_df == "United States of America"] = 'USA'
         regions_df[regions_df == "Viet Nam "] = 'VNM'
         df_eng.Region = regions_df
-        self.df_eng = df_eng
+        df_new = df_eng[~df_eng.index.isin(np.where((df_eng.Scenario == "GP_CurPol_T45") & (df_eng.Model == "COFFEE 1.5"))[0])]
+        self.df_eng = df_new
 
     # =========================================================== #
     # =========================================================== #
@@ -101,5 +101,5 @@ class policyscenadding(object):
         xr_total = xr_total.assign(NetZero = self.xr_eng['Value'].sel(Scenario='NetZero'))
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'GHG_globe', 'GHG_base', 'GHG_ndc', 'N2O_hist', 'CH4_hist', 'Budget'])
+        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'GHG_globe', 'GHG_base', 'GHG_ndc', 'N2O_hist', 'CH4_hist', 'Budget', "CH4_globe", "N2O_globe", "GHG_hist_all"])
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_policyscen.nc')
