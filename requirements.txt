@@ -8,3 +8,4 @@ numpy==1.25.2
 netCDF4==1.6.2
 libnetcdf==4.8.1
 h5netcdf==1.2.0
+openpyxl==3.0.10
