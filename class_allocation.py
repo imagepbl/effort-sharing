@@ -169,7 +169,7 @@ class allocation(object):
 
     def save(self):
         #print('- Save')
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "CO2_globe", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', "CH4_globe", "N2O_globe", "GHG_hist_all", 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Region', 'Budget']).sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
+        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "CO2_globe", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', "NonCO2_globe", "GHG_hist_all", 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Budget']).sel(Region=self.FocusRegion, Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+self.FocusRegion+'.nc',         
             # encoding={
             #     "Scenario": {"dtype": "str"},
