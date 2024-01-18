@@ -30,7 +30,7 @@ params:
   # global_carbon_budget_2022_20: 1270
   # global_carbon_budget_2022_25: 2270
   # global_carbon_budget_2022_30: 3270
-  polynomial_fit_2030relation: 5
+  polynomial_fit_2030relation: 5  
 
 # ============================================== #
 # LISTS OF SCENARIOS, REGIONS AND MODELS
