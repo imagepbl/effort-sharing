@@ -15,7 +15,7 @@ import xarray as xr
 import json
 from scipy.signal import savgol_filter
 
-import ipdb
+# import ipdb
 # =========================================================== #
 # CLASS OBJECT
 # =========================================================== #
@@ -209,7 +209,7 @@ class allocation(object):
 
         ecpc = ecpc_factor(budget_surplus)
         self.xr_total = self.xr_total.assign(ECPC = ecpc)
-        ipdb.set_trace()
+        # ipdb.set_trace()
     # =========================================================== #
     # =========================================================== #
 
@@ -231,7 +231,7 @@ class allocation(object):
         ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/self.xr_rbw.__xarray_dataarray_variable__*(base_worldsum - self.xr_total.GHG_globe)
         ap = ap.sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(AP = ap)
-        ipdb.set_trace()
+        # ipdb.set_trace()
     # =========================================================== #
     # =========================================================== #
 
@@ -270,7 +270,7 @@ class allocation(object):
         gdr_total = xr.merge([gdr, gdr_post2030])
         gdr_total = gdr_total.rename({'Value': 'GDR'})
         self.xr_total = self.xr_total.assign(GDR = gdr_total.GDR)
-        ipdb.set_trace()
+        # ipdb.set_trace()
     # =========================================================== #
     # =========================================================== #
 
@@ -306,7 +306,7 @@ class allocation(object):
             format='NETCDF4'
         )
         self.xr_alloc = xr_total_onlyalloc
-        ipdb.set_trace()
+        # ipdb.set_trace()
         
 if __name__ == "__main__":
     allocator = allocation('EU')
