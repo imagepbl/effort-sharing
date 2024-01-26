@@ -37,11 +37,11 @@ class datareading(object):
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         
         # Lists of variable settings
-        self.Tlist = np.arange(1.4, 2.4+1e-9, 0.1).astype(float).round(2)           # At least between 1.3 and 2.4
+        self.Tlist = np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)           # At least between 1.3 and 2.4
         self.Plist = np.array([.17, 0.33, 0.50, 0.67, 0.83]).round(2)               # At least between 0.17 and 0.83
         #self.NClist = np.arange(0.05, 0.95+1e-9, 0.15).astype(float).round(2)
         self.Neglist = np.array([0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]).round(2) 
-        self.NonCO2list = np.arange(0, 0.81, 0.1).round(2) # These are reductions in 2040 tov 2020
+        self.NonCO2list = np.array([0.1, 0.33, 0.5, 0.67, 0.9]).round(2)#np.arange(0.2, 0.71, 0.1).round(2) # These are reductions in 2040 tov 2020
         #self.PathUnclist = np.array([0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80])
         self.Timinglist = ['Immediate', 'Delayed']
 
@@ -201,35 +201,113 @@ class datareading(object):
         dummy = dummy.rename(columns={'Reduction': "NonCO2red"})
         dummy = dummy.set_index(['Temperature', 'NonCO2red'])
         xr_nonco2effects = xr.Dataset.from_dataframe(dummy)
-        xr_nonco2effects = xr_nonco2effects.reindex(NonCO2red = self.NonCO2list)
+        xr_nonco2effects = xr_nonco2effects.reindex(NonCO2red = np.arange(0, 0.8001, 0.01).round(2))
         xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="NonCO2red", method="linear")
         xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.Tlist)+[2.5])
         xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="Temperature", method="linear")
         xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.Tlist))
         self.xr_nonco2effects = xr_nonco2effects
-        # nonco2 = self.xr_ar6.sel(Variable='Emissions|N2O').Value*self.settings['params']['gwp_n2o']/1e6 + self.xr_ar6.sel(Variable='Emissions|CH4').Value*self.settings['params']['gwp_ch4']/1e3
-        # nonco2_2020 = nonco2.sel(Time=2020).mean()
-        # def ms_temp(T, dT, R):
-        #     return self.xr_ar6.ModelScenario[np.where((self.xr_ar6.sel(Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|'+str(int(R*100))+'.0th Percentile', Time=2100).Value < T+dT
-        #     ) & (self.xr_ar6.sel(Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|'+str(int(R*100))+'.0th Percentile', Time=2100).Value > T-dT))[0]]
 
-        # # Fit linear relation between CH4 reduction and CO2 budget
-        # def func(x, a, b):
-        #     return a * x + b
-        # a_list = []
-        # b_list = []
-        # for T_i, T in enumerate(self.Tlist):
-        #     x = self.xr_ar6.sel(Variable='Emissions|CO2', Time=np.arange(2021, 2101), ModelScenario=ms_temp(T, 0.1, 0.50)).Value.sum(dim='Time')/1e3
-        #     y = nonco2.sel(Time=2050, ModelScenario=ms_temp(T, 0.1, 0.50))/nonco2_2020
-        #     y = y[~np.isnan(x)]
-        #     x = x[~np.isnan(x)]
-        #     x = x[~np.isnan(y)]
-        #     y = y[~np.isnan(y)]
-        #     popt, pcov = curve_fit(func, x, y)
-        #     a_list.append(popt[0])
-        #     b_list.append(popt[1])
+    # =========================================================== #
+    # =========================================================== #
 
-        # self.nonCO2slope = np.nanmean(a_list)#*2 # FOR TESTING -> CHECK THIS! COEFFICIENT SEEMS TO BE RATHER LOW
+    def determine_global_nonco2_trajectories(self):
+        print('- Computing global nonco2 trajectories')
+        # Non-CO2 trajectories
+        xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2020, 2101))*self.settings['params']['gwp_ch4']/1e3
+        xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O', Time=np.arange(2020, 2101))*self.settings['params']['gwp_n2o']/1e6
+        n2o_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).N2O_hist*self.settings['params']['gwp_n2o']/1e3
+        ch4_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).CH4_hist*self.settings['params']['gwp_ch4']/1e3
+        n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
+        ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
+        tot_2020 = n2o_2020+ch4_2020
+        tot_2021 = n2o_2021+ch4_2021
+
+        # Rescale CH4 and N2O trajectories
+        compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2040))))+[1]*len(np.arange(2040, 2101)))
+        xr_comp =  xr.DataArray(1-compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+        # offset = xr_ch4_raw.sel(Time = 2021) - ch4_2021
+        # xr_ch4 = (-xr_comp*offset+xr_ch4_raw)
+        # offset = xr_n2o_raw.sel(Time = 2021) - n2o_2021
+        # xr_n2o = (-xr_comp*offset+xr_n2o_raw)
+        # xr_nonco2 = xr_ch4 + xr_n2o
+        xr_nonco2_raw = xr_ch4_raw + xr_n2o_raw
+        xr_nonco2_raw_2020 = xr_nonco2_raw.sel(Time=2021)
+        xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(2021, 2101))
+        #xr_nonco2 = xr_nonco2.sel(Time = np.arange(2021, 2101))
+
+        # For each level of nonCO2 dimension, grab the trajectories
+        #reduction_2040_2020 = -(xr_nonco2.sel(Time=2040) - tot_2020) / tot_2020
+
+        def ms_temp(T):
+            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
+            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.15) & (peaktemp > T-0.15))[0]]
+
+        def check_monotomy(traj):
+            vec = [traj[0]]
+            for i in range(1, len(traj)):
+                if traj[i]<=vec[i-1]:
+                    vec.append(traj[i])
+                else:
+                    vec.append(vec[i-1])
+            return np.array(vec)
+
+        def rescale(traj):
+            offset = traj.sel(Time = 2021) - tot_2021
+            traj_scaled = (-xr_comp*offset+traj)
+            return traj_scaled
+
+
+        temps = []
+        times = []
+        nonco2 = []
+        vals = []
+        timings = []
+        for temp_i, temp in enumerate(self.Tlist):
+            ms_t = ms_temp(temp)
+            reductions = (xr_nonco2_raw.sel(ModelScenario=ms_t, Time=2040)-xr_nonco2_raw_2020) / xr_nonco2_raw_2020
+            reds = reductions.Value.quantile(self.NonCO2list[::-1])
+            for n_i, n in enumerate(self.NonCO2list):
+                red = reds[n_i]
+                ms_2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
+                for timing_i, timing in enumerate(self.Timinglist):
+                    mslist = [self.ms_immediate, self.ms_delayed][timing_i]
+                    ms = np.intersect1d(ms_2, mslist)
+                    if len(ms) == 0: print(temp, n, timing)
+                    trajs = xr_nonco2_raw.sel(ModelScenario = ms, Time=np.arange(2021, 2101))
+                    trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
+
+                    # Harmonize reduction
+                    red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
+                    traj2 = -(1-xr_comp)*(red_traj-red*1.5)*xr_nonco2_raw_2020.mean().Value+trajectory_mean
+                    # if n == 0.5 and timing == 'Immediate':
+                    #     trajectory_mean_imm = check_monotomy(trajectory_mean)
+                    # if n == 0.5 and timing == 'Delayed':
+                    #     trajectory_mean_del = check_monotomy(trajectory_mean)
+                    # if n == 0.7 or n == 0.8:
+                    #     dif = (trajectory_mean_del - trajectory_mean_imm)
+                    #     trajectory_mean2 = trajectory_mean2 + [dif, 0][timing_i]
+                    trajectory_mean2 = check_monotomy(np.array(traj2))
+                    times = times + list(np.arange(2021, 2101))
+                    timings = timings+[timing]*len(list(np.arange(2021, 2101)))
+                    vals = vals+list(trajectory_mean2)
+                    nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
+                    temps = temps + [temp]*len(list(np.arange(2021, 2101)))
+
+        dict_nonco2 = {}
+        dict_nonco2['Time'] = times
+        dict_nonco2['NonCO2red'] = nonco2
+        dict_nonco2['NonCO2_globe'] = vals
+        dict_nonco2['Timing'] = timings
+        dict_nonco2['Temperature'] = temps
+        df_nonco2 = pd.DataFrame(dict_nonco2)
+        dummy = df_nonco2.set_index(["NonCO2red", "Time", "Timing", 'Temperature'])
+        self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
+
+        # Post-processing: making temperature dependence smooth
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 2.4]})
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
 
     # =========================================================== #
     # =========================================================== #
@@ -268,7 +346,12 @@ class datareading(object):
                 median_budget = a*t+b
                 #implied_leftover_median = f_a*t+f_b
                 for n_i, n in enumerate(self.NonCO2list):
-                        Blist[t_i, p_i, n_i] = median_budget+self.xr_nonco2effects.sel(NonCO2red = n, Temperature=t).EffectOnRCB#*(n-implied_leftover_median)
+                        ar = np.array((((self.xr_traj_nonco2.sel(NonCO2red=n, Time=2040, Temperature=t).mean(dim='Timing')-tot_2020) / tot_2020).round(2)).NonCO2_globe)
+                        ar = ar[~np.isnan(ar)]
+                        ar[ar > 0] =0
+                        ar[ar < -0.8] = -0.8
+                        nonco2effect = self.xr_nonco2effects.sel(Temperature=1.5, NonCO2red=-ar.round(2)).EffectOnRCB
+                        Blist[t_i, p_i, n_i] = median_budget+nonco2effect#*(n-implied_leftover_median)
         data2 = xr.DataArray(Blist,
                             coords={'Temperature': self.Tlist,
                                     'Risk': (1-self.Plist).astype(float).round(2),
@@ -279,75 +362,6 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
-    def determine_global_nonco2_trajectories(self):
-        print('- Computing global nonco2 trajectories')
-        # Non-CO2 trajectories
-        xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2021, 2101))*self.settings['params']['gwp_ch4']/1e3
-        xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O', Time=np.arange(2021, 2101))*self.settings['params']['gwp_n2o']/1e6
-        n2o_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        ch4_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).CH4_hist*self.settings['params']['gwp_ch4']/1e3
-        n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
-        tot_2020 = n2o_2020+ch4_2020
-
-        # Rescale CH4 and N2O trajectories
-        compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2050))))+[1]*len(np.arange(2050, 2101)))
-        xr_comp =  xr.DataArray(1-compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-        offset = xr_ch4_raw.sel(Time = 2021) - ch4_2021
-        xr_ch4 = (-xr_comp*offset+xr_ch4_raw)
-        offset = xr_n2o_raw.sel(Time = 2021) - n2o_2021
-        xr_n2o = (-xr_comp*offset+xr_n2o_raw)
-        xr_nonco2 = xr_ch4 + xr_n2o
-
-        # For each level of nonCO2 dimension, grab the trajectories
-        reduction_2040_2020 = -(xr_nonco2.sel(Time=2040) - tot_2020) / tot_2020
-
-        def check_monotomy(traj):
-            vec = [traj[0]]
-            for i in range(1, len(traj)):
-                if traj[i]<=vec[i-1]:
-                    vec.append(traj[i])
-                else:
-                    vec.append(vec[i-1])
-            return np.array(vec)
-
-        times = []
-        nonco2 = []
-        vals = []
-        timings = []
-        for n_i, n in enumerate(self.NonCO2list):
-            wh = np.where(((reduction_2040_2020.Value > n-0.05) & (reduction_2040_2020.Value < n+0.05)))[0]
-            for timing_i, timing in enumerate(self.Timinglist):
-                mslist = [self.ms_immediate, self.ms_delayed][timing_i]
-                ms = np.intersect1d(reduction_2040_2020.ModelScenario[wh], mslist)
-                if n == 0.7 or n == 0.8:
-                    ms = reduction_2040_2020.ModelScenario[wh]
-                trajs = xr_nonco2.sel(ModelScenario = ms, Time=np.arange(2021, 2101))
-                trajectory_mean = np.array(trajs.Value.mean(dim='ModelScenario'))
-                trajectory_mean2 = check_monotomy(trajectory_mean)
-                if n == 0.5 and timing == 'Immediate':
-                    trajectory_mean_imm = check_monotomy(trajectory_mean)
-                if n == 0.5 and timing == 'Delayed':
-                    trajectory_mean_del = check_monotomy(trajectory_mean)
-                if n == 0.7 or n == 0.8:
-                    dif = (trajectory_mean_del - trajectory_mean_imm)
-                    trajectory_mean2 = trajectory_mean2 + [dif, 0][timing_i]
-                times = times + list(np.arange(2021, 2101))
-                timings = timings+[timing]*len(list(np.arange(2021, 2101)))
-                vals = vals+list(trajectory_mean2)
-                nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
-
-        dict_nonco2 = {}
-        dict_nonco2['Time'] = times
-        dict_nonco2['NonCO2red'] = nonco2
-        dict_nonco2['NonCO2_globe'] = vals
-        dict_nonco2['Timing'] = timings
-        df_nonco2 = pd.DataFrame(dict_nonco2)
-        dummy = df_nonco2.set_index(["NonCO2red", "Time", "Timing"])
-        self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
-
-    # =========================================================== #
-    # =========================================================== #
 
     def determine_global_co2_trajectories(self):
         print('- Computing global co2 trajectories')
@@ -382,60 +396,88 @@ class datareading(object):
         xr_scen2_use = xr_scen2_use.interpolate_na(dim="Time", method="linear")
         xr_scen2_use = xr_scen2_use.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
 
-        totalnet = xr_scen2_use.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')/1e3
         co2_start = xr_scen2_use.sel(Time=self.settings['params']['start_year_analysis'])/1e3
         offsets = (startpoint/1e3-co2_start)
         emis_all = xr_scen2_use.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))/1e3 + offsets*(1-xr_comp)
-        totalnets_corr = emis_all.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
         emis2100 = emis_all.sel(Time=2100)
+
+        # Peak budgets -> #TODO can go?
+        mss = np.array(emis_all.ModelScenario)
+        dict_peaks = {}
+        peaks = np.zeros(shape=(2, len(mss))).astype(str)
+        for ms_i, ms in enumerate(mss):
+            wh = np.where(emis_all.sel(ModelScenario=ms).Value < 0)[0]
+            if len(wh) > 0:
+                times = np.arange(self.settings['params']['start_year_analysis'], emis_all.Time[wh[0]])
+            else:
+                times = np.arange(self.settings['params']['start_year_analysis'], 2101)
+            peakbudget = float(np.sum(emis_all.sel(ModelScenario=ms).Value.sel(Time=times)))
+            peaks[0, ms_i] = ms
+            peaks[1, ms_i] = peakbudget
+        df_peaks = pd.DataFrame(peaks.T, columns=['ModelScenario', 'Peakbudget'])
+        df_peaks = df_peaks.set_index(['ModelScenario'])
+        ar = np.array(df_peaks.Peakbudget)
+        ar = ar.astype(float)
+        df_peaks['Peakbudget'] = ar
+        xr_peaks = xr.Dataset.from_dataframe(df_peaks)
+
+        def ms_temp(T):
+            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
+            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.1) & (peaktemp > T-0.1))[0]]
 
         for temp_i, temp in enumerate(self.Tlist):
             for risk_i, risk in enumerate(self.Plist):
                 for nonco2_i, nonco2 in enumerate(self.NonCO2list):
                     # Shape impacted by budget
-                    temp_bud = temp
-                    if temp_bud == 1.4: # For the purpose of the shape of 1.4 deg pathways, the database is too sparse. Scaling the 1.5 deg pathways to fit 1.4 budgets is fine.
-                        temp_bud = 1.5
-                    budget = self.xr_co2_budgets.Budget.sel(Temperature=temp_bud, Risk=risk, NonCO2red=0.5) # Functional shape is based on NonCO2red=0.5 to prevent noisy relation (budget is adherred to later below)
-                    if budget > 50:
-                        ms1 = self.xr_ar6.ModelScenario[np.where(np.abs(totalnets_corr.Value - budget) < budget*0.2)[0]]
-                    else:
-                        ms1 = self.xr_ar6.ModelScenario[np.where((totalnets_corr.Value > budget*0.2) & (totalnets_corr.Value < 50))[0]]
+                    # temp_bud = temp
+                    # if temp_bud == 1.4: # For the purpose of the shape of 1.4 deg pathways, the database is too sparse. Scaling the 1.5 deg pathways to fit 1.4 budgets is fine.
+                    #     temp_bud = 1.5
+                    # budget = self.xr_co2_budgets.Budget.sel(Temperature=temp_bud, Risk=risk, NonCO2red=0.5) # Functional shape is based on NonCO2red=0.5 to prevent noisy relation (budget is adherred to later below)
+                    # if budget > 50:
+                    #     ms1 = self.xr_ar6.ModelScenario[np.where(np.abs(xr_peaks.Peakbudget - budget) < budget*0.2)[0]]
+                    # else:
+                    #     ms1 = self.xr_ar6.ModelScenario[np.where((xr_peaks.Peakbudget > budget*0.2) & (xr_peaks.Peakbudget < 50))[0]]
+                    ms1 = ms_temp(temp)
 
                     # Shape impacted by timing of action
                     for timing_i, timing in enumerate(self.Timinglist):
                         mslist = [self.ms_immediate, self.ms_delayed][timing_i]
                         ms2 = np.intersect1d(ms1, mslist)
                         emis2100_i = emis2100.sel(ModelScenario=ms2)
-                    
-                        # The 90-percentile of 2100 emissions
-                        ms_90 = self.xr_ar6.sel(ModelScenario=ms2).ModelScenario[(emis2100_i >= emis2100_i.quantile(0.9-0.1)
-                                                    ).Value & (emis2100_i <= emis2100_i.quantile(0.9+0.1)).Value]
-                    
-                        # The 10-percentile of 2100 emissions
-                        ms_10 = self.xr_ar6.sel(ModelScenario=ms2).ModelScenario[(emis2100_i >= emis2100_i.quantile(0.1-0.1)
-                                                    ).Value & (emis2100_i <= emis2100_i.quantile(0.1+0.1)).Value]
+                        if len(ms2) == 0: # TODO have a look at this, the 1.5 scenarios do not have delayed action
+                            3
+                        else:
+                            # The 90-percentile of 2100 emissions
+                            ms_90 = self.xr_ar6.sel(ModelScenario=ms2).ModelScenario[(emis2100_i >= emis2100_i.quantile(0.9-0.1)
+                                                        ).Value & (emis2100_i <= emis2100_i.quantile(0.9+0.1)).Value]
+                        
+                            # The 10-percentile of 2100 emissions
+                            ms_10 = self.xr_ar6.sel(ModelScenario=ms2).ModelScenario[(emis2100_i >= emis2100_i.quantile(0.1-0.1)
+                                                        ).Value & (emis2100_i <= emis2100_i.quantile(0.1+0.1)).Value]
 
-                        # Difference and smoothen this
-                        surplus_factor = emis_all.sel(ModelScenario = np.intersect1d(ms_90, ms2)).mean(dim='ModelScenario').Value - emis_all.sel(ModelScenario = np.intersect1d(ms_10, ms2)).mean(dim='ModelScenario').Value
-                        surplus_factor2 = np.convolve(surplus_factor, np.ones(3)/3, mode='valid')
-                        surplus_factor[1:-1] = surplus_factor2
+                            # Difference and smoothen this
+                            surplus_factor = emis_all.sel(ModelScenario = np.intersect1d(ms_90, ms2)).mean(dim='ModelScenario').Value - emis_all.sel(ModelScenario = np.intersect1d(ms_10, ms2)).mean(dim='ModelScenario').Value
+                            surplus_factor2 = np.convolve(surplus_factor, np.ones(3)/3, mode='valid')
+                            surplus_factor[1:-1] = surplus_factor2
 
-                        for neg_i, neg in enumerate(self.Neglist):
-                            xset = emis_all.sel(ModelScenario=ms2)-surplus_factor*(neg-0.5)/0.9
-                            factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2) - xset.sum(dim='Time')) / np.sum(compensation_form)
-                            all_pathways = (1e3*(xset+factor*xr_comp)).Value/1e3
-                            if len(all_pathways)>0:
-                                pathway = all_pathways.mean(dim='ModelScenario')
-                                pathway_sep = np.convolve(pathway, np.ones(3)/3, mode='valid') 
-                                pathway[1:-1] = pathway_sep
-                                offset = float(startpoint)/1e3 - pathway[0]
-                                pathway_final = (pathway.T+offset)*1e3
+                            for neg_i, neg in enumerate(self.Neglist):
+                                xset = emis_all.sel(ModelScenario=ms2)-surplus_factor*(neg-0.5)/0.9
+                                factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2) - xset.where(xset.Value > 0).sum(dim='Time')) / np.sum(compensation_form)
+                                all_pathways = (1e3*(xset+factor*xr_comp)).Value/1e3
+                                if len(all_pathways)>0:
+                                    pathway = all_pathways.mean(dim='ModelScenario')
+                                    pathway_sep = np.convolve(pathway, np.ones(3)/3, mode='valid') 
+                                    pathway[1:-1] = pathway_sep
+                                    offset = float(startpoint)/1e3 - pathway[0]
+                                    pathway_final = (pathway.T+offset)*1e3
 
-                                # Harmonize by budget (iteration 3)
-                                factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)*1e3 - pathway_final.sum(dim='Time')) / np.sum(compensation_form)
-                                pathway_final2 = (1e3*(pathway_final+factor*xr_comp))/1e3
-                                pathways_data['CO2_globe'][neg_i, nonco2_i, temp_i, risk_i, timing_i, :] = pathway_final2
+                                    # Harmonize by budget (iteration 3)
+                                    factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)*1e3 - pathway_final.where(pathway_final > 0).sum()) / np.sum(compensation_form)
+                                    pathway_final2 = (1e3*(pathway_final+factor*xr_comp))/1e3
+                                    # if neg == 0.2: pathway_final2_02 = (1e3*(pathway_final+factor*xr_comp))/1e3
+                                    # if neg == 0.5: pathway_final2_05 = (1e3*(pathway_final+factor*xr_comp))/1e3
+                                    # if neg == 0.8: pathway_final2_08 = (1e3*(pathway_final+factor*xr_comp))/1e3
+                                    pathways_data['CO2_globe'][neg_i, nonco2_i, temp_i, risk_i, timing_i, :] = pathway_final2
         self.xr_traj_co2 = xr_traj_co2.update(pathways_data)
         self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe*1e3)
         self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_nonco2.NonCO2_globe*1e3])
