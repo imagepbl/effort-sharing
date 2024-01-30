@@ -35,7 +35,7 @@ class vardecomposing(object):
         print("# ==================================== #")
         print("# Initializing vardecomposing class    #")
         print("# ==================================== #")
-
+ 
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
