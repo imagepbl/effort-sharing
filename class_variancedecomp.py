@@ -12,9 +12,15 @@ import yaml
 import numpy as np
 import pandas as pd
 import xarray as xr
+from tqdm import tqdm
+
+# Sobol analysis
 from SALib.sample import saltelli
 from SALib.analyze import sobol
-from tqdm import tqdm
+from SALib.test_functions import Ishigami
+
+import warnings
+warnings.simplefilter(action='ignore')
 
 # =========================================================== #
 # CLASS OBJECT
@@ -25,9 +31,9 @@ class vardecomposing(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, xrtot, cty):
+    def __init__(self):
         print("# ==================================== #")
-        print("# Initializing vardecomposing class        #")
+        print("# Initializing vardecomposing class    #")
         print("# ==================================== #")
 
         self.current_dir = Path.cwd()
@@ -35,111 +41,115 @@ class vardecomposing(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xrtot
-        self.countries_iso = cty
-        self.xr_unc = xr.open_dataset("K:/ECEMF/T5.2/xr_uncbudget_15.nc")
-        self.all_regions_iso = np.load(self.settings['paths']['data']['internal'] + "all_regions.npy")
-        self.all_regions_names = np.load(self.settings['paths']['data']['internal'] + "all_regions_names.npy")
-        self.all_countries_iso = np.load(self.settings['paths']['data']['internal'] + "all_countries.npy", allow_pickle=True)
-        self.all_countries_names = np.load(self.settings['paths']['data']['internal'] + "all_countries_names.npy", allow_pickle=True)
-
-        # Define dimensions
-        uni_es = np.array(['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR'])
-        uni_scen = np.array(self.xr_unc.Scenario)
-        uni_nonco2 = np.array(self.xr_unc.NonCO2)
-        uni_conv = np.array(self.xr_unc.Convergence_year)
-        uni_risk = np.array(self.xr_unc.Risk)
-        unis = [uni_es, uni_scen, uni_nonco2, uni_conv, uni_risk]
-
-        # Set a few core parameters
-        self.K = len(unis) # Total number of dimensions
-        self.N = 1 # Redraws
-        self.ss = 1 # Sample size per unique parameter setting
-        self.total_ss = self.ss*len(uni_es)*len(uni_scen)*len(uni_nonco2)*len(uni_conv)*len(uni_risk) # Total sample size
+        self.xr_total = xr.open_dataset("K:/ECEMF/T5.2/xr_dataread.nc")
+        self.all_regions_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_regions.npy")
+        self.all_regions_names = np.load(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy")
+        self.all_countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
+        self.all_countries_names = np.load(self.settings['paths']['data']['datadrive'] + "all_countries_names.npy", allow_pickle=True)
 
     # =========================================================== #
     # =========================================================== #
 
-    def construct_samples(self):
-        print("- Create samples")
-
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def apply_decomposition(self):
-        print("- Create samples")
+    def prepare_global_sobol(self, year):
+        #print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
+        self.xr_year= xr.open_dataset("K:/ECEMF/T5.2/xr_alloc_"+str(year)+".nc")
+        xr_globe = self.xr_year.bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        array_dims = np.array(xr_globe.sel(Region = 'USA').to_array().dims)
+        array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        for dim_i, dim in enumerate(array_dims[1:]):
+            array_inputs.append(list(np.array(xr_globe[dim])))
         problem = {
-            'num_vars': 4,
-            'names': ['Temperature',
-                      'Convergence_year',
-                      'Scenario',
-                      'EffortSharing',
-                      'Risk_of_exceedance',
-                      'Negative_emissions',
-                      'Non_CO2_mitigation_potential'],
-            'bounds': [[1.5, 3.0],
-                        [np.min(self.xr_total.Convergence_year), np.max(self.xr_total.Convergence_year)],
-                        [0, 1],
-                        [0, 6],
-                        [np.min(self.xr_total.Risk_of_exceedance), np.max(self.xr_total.Risk_of_exceedance)],
-                        [np.min(self.xr_total.Negative_emissions), np.max(self.xr_total.Negative_emissions)],
-                        [np.min(self.xr_total.Non_CO2_mitigation_potential), np.max(self.xr_total.Non_CO2_mitigation_potential)],
-                        ]
+            'num_vars': len(array_dims),
+            'names': array_dims,
+            'bounds': [[0, len(ly)] for ly in array_inputs],
         }
-        param_values = saltelli.sample(problem, 64)
-        
-        def refine_sample(pars):
-            v1 = pars.copy()[:, 0]
-            v1s = v1.astype(str)
-            v1s[v1 < 1.75] = '1.5 deg'
-            v1s[(v1 < 2.25) & (v1 >= 1.85)] = '2.0 deg'
-            v1s[(v1 < 2.75) & (v1 >= 2.25)] = '2.5 deg'
-            v1s[(v1 >= 2.75)] = '3.0 deg'
-            
-            v2 = pars.copy()[:, 1]
-            v2s = (np.round(v2 / 5) * 5).astype(int)
-            
-            v3 = pars.copy()[:, 2]
-            v3s = v3.astype(str)
-            v3s[v3 < 0.2] = 'SSP1'
-            v3s[(v3 >= 0.2) & (v3 < 0.4)] = 'SSP2'
-            v3s[(v3 >= 0.4) & (v3 < 0.6)] = 'SSP3'
-            v3s[(v3 >= 0.6) & (v3 < 0.8)] = 'SSP4'
-            v3s[(v3 >= 0.8) & (v3 < 1.0)] = 'SSP5'
-            
-            v4 = pars.copy()[:, 3]
-            v4s = v4.astype(str)
-            v4s[v4 < 1] = 'GF'
-            v4s[(v4 >= 1) & (v4 < 2)] = 'PC'
-            v4s[(v4 >= 2) & (v4 < 3)] = 'PCC'
-            v4s[(v4 >= 3) & (v4 < 4)] = 'AP'
-            v4s[(v4 >= 4) & (v4 < 5)] = 'GDR'
-            v4s[(v4 >= 5) & (v4 < 6)] = 'ECPC'
-            return np.array([v1s, v2s, v3s, v4s]).T
+        samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
+        return xr_globe, np.array(xr_globe.Region), array_dims, array_inputs, problem, samples
 
-        def func(pars, reg, xrt):
-            xrt2 = xrt.sel(Region=reg)
+    # =========================================================== #
+    # =========================================================== #
+
+    def prepare_temporal_sobols(self, cty):
+        #print("- Prepare Sobol decomposition and draw samples for different moments in time per country")
+        xr_cty = xr.open_dataset(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+cty+'.nc').bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        array_dims = np.array(xr_cty.sel(Time = 2030).to_array().dims)
+        array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        for dim_i, dim in enumerate(array_dims[1:]):
+            array_inputs.append(list(np.array(xr_cty[dim])))
+        problem = {
+            'num_vars': len(array_dims),
+            'names': array_dims,
+            'bounds': [[0, len(ly)] for ly in array_inputs],
+        }
+        samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
+        return xr_cty, np.array(xr_cty.Time), array_dims, array_inputs, problem, samples
+
+    # =========================================================== #
+    # =========================================================== #
+
+    def apply_decomposition(self, xdataset_, maindim_, dims_, inputs_, problem_, samples_):
+        #print("- Read functions and apply actual decomposition")
+        def refine_sample(pars):
+            new_pars = pars.astype(str)
+            actual_values = []
+            for var_i, var in enumerate(dims_):
+                actual_val = np.array(inputs_[var_i])[pars[:, var_i]]
+                actual_values.append(actual_val)
+            actual_values = np.array(actual_values).T
+            return actual_values
+
+        def refine_sample_int(pars):    
+            return np.floor(pars).astype(int)
+        
+        def func2(pars, ar):
             vec = np.zeros(len(pars))
             for i in range(len(pars)):
-                vec[i] = float(xrt2.sel(Temperature=pars[i, 0],
-                                    Convergence_year=np.array(pars[i, 1]).astype(int),
-                                    Scenario=pars[i, 2])[pars[i, 3]])
+                f = ar[pars[i, 0], pars[i, 1], pars[i, 2], pars[i,3], pars[i,4], pars[i, 5], pars[i, 6], pars[i, 7]]
+                vec[i] = f
             return vec
-        
-        xrt = self.xr_total.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
-
-        print("- Apply decomposition")
-        Sis = np.zeros(shape=(len(self.countries_iso), 4))
-        for reg_i, reg in tqdm(enumerate(self.countries_iso)):
-            Y = func(refine_sample(param_values), reg, xrt)
-            Si = sobol.analyze(problem, Y)
+    
+        Sis = np.zeros(shape=(len(maindim_), problem_['num_vars']))
+        ar_xrt = np.array(xdataset_.to_array())
+        for reg_i, reg in tqdm(enumerate(maindim_)):
+            xr_touse = ar_xrt[:, reg_i]
+            Y = func2(refine_sample_int(samples_), xr_touse)
+            Si = sobol.analyze(problem_, Y)
             Sis[reg_i, :] = Si['ST']
-        self.Si_norm = (Sis.T / Sis.sum(axis=1)).T
+        Si_norm = (Sis.T / Sis.sum(axis=1)).T
+        for i in range(len(Si_norm)):
+            m_i = np.nanmin(Si_norm[i])
+            if m_i < 0:
+                Si_norm[i] = (Si_norm[i]-m_i) / np.sum((Si_norm[i]-m_i))
+        Si_norm[np.unique(np.where(np.isnan(Si_norm))[0])] = np.nan
+        return Si_norm
 
     # =========================================================== #
     # =========================================================== #
 
-    def save(self):
-        print("- Save results")
-        self.Si_norm
+    def save(self, dims_, times_):
+        print("- Save global results")
+        d = {}
+        d['Time'] = times_
+        d['Factor'] = dims_
+        d['Region'] = np.array(self.xr_total.Region)
+
+        xr_sobol = xr.Dataset(
+            coords=d
+        )
+
+        sobol_data = {
+            'Sobol_index': xr.DataArray(
+                data=np.nan,
+                coords=xr_sobol.coords,
+                dims=xr_sobol.dims,
+                attrs={'description': 'Sobol indices'}
+            )
+        }
+
+        for Time_i, Time in enumerate(times_):
+            sobol_data['Sobol_index'][:, :, Time_i] = self.sobolindices[Time].T
+        self.xr_sobol = xr_sobol.update(sobol_data)
+        self.xr_sobol.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_sobol.nc',
+                                            format="NETCDF4",
+                                            engine="netcdf4",
+        )
