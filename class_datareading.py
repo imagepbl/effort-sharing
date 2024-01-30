@@ -77,6 +77,91 @@ class datareading(object):
         df_ssp = df_ssp.rename(columns={'SCENARIO': "Scenario", 'REGION': 'Region', 'VARIABLE': 'Variable'})
         dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
         dummy['Time'] = np.array(dummy['Time'].astype(int))
+        self.xr_ssp_old = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value'))
+
+        df_ssp = pd.read_excel(self.settings['paths']['data']['external']+"SSPs/SSPs_v2023.xlsx", sheet_name='data')
+        df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023', 'IIASA-WiC POP 2023'])) & (df_ssp.Scenario.isin(['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']))]
+        region_full = np.array(df_ssp.Region)
+        region_iso = []
+        for r_i, r in enumerate(region_full):
+            wh = np.where(self.regions_name == r)[0]
+            if len(wh) > 0:
+                iso = self.countries_iso[wh[0]]
+            elif r == 'Aruba':
+                iso = 'ABW'
+            elif r == 'Bahamas':
+                iso = 'BHS'
+            elif r == 'Democratic Republic of the Congo':
+                iso = 'COD'
+            elif r == 'Cabo Verde':
+                iso = 'CPV'
+            elif r == "C?te d'Ivoire":
+                iso = 'CIV'
+            elif r == 'Western Sahara':
+                iso = 'ESH'
+            elif r == 'Gambia':
+                iso = 'GMB'
+            elif r == 'Czechia':
+                iso = 'CZE'
+            elif r == 'French Guiana':
+                iso = 'GUF'
+            elif r == 'Guam':
+                iso = 'GUM'
+            elif r == 'Hong Kong':
+                iso = 'HKG'
+            elif r == 'Iran':
+                iso = 'IRN'
+            elif r == 'Macao':
+                iso = 'MAC'
+            elif r == 'Moldova':
+                iso = 'MDA'
+            elif r == 'Mayotte':
+                iso = 'MYT'
+            elif r == 'New Caledonia':
+                iso = 'NCL'
+            elif r == 'Puerto Rico':
+                iso = 'PRI'
+            elif r == 'French Polynesia':
+                iso = 'PYF'
+            elif r == 'Turkey':
+                iso = 'TUR'
+            elif r == 'Taiwan':
+                iso = 'TWN'
+            elif r == 'Tanzania':
+                iso = 'TZA'
+            elif r == 'United States':
+                iso = 'USA'
+            elif r == 'United States Virgin Islands':
+                iso = 'VIR'
+            elif r == 'Viet Nam':
+                iso = 'VNM'
+            elif r == 'Cura?ao':
+                iso = 'CUW'
+            elif r == 'Guadeloupe':
+                iso = 'GLP'
+            elif r == 'Martinique':
+                iso = 'MTQ'
+            elif r == 'Palestine':
+                iso = 'PSE'
+            elif r == 'R?union':
+                iso = 'REU'
+            elif r == 'Syria':
+                iso = 'SYR'
+            elif r == 'Venezuela':
+                iso = 'VEN'
+            elif r == 'World':
+                iso = 'EARTH'
+            else:
+                print(r)
+                iso = 'oeps'
+            region_iso.append(iso)
+        df_ssp['Region'] = region_iso
+        Variable = np.array(df_ssp['Variable'])
+        Variable[Variable == 'GDP|PPP'] = 'GDP'
+        df_ssp['Variable'] = Variable
+        df_ssp = df_ssp.drop(['Model', 'Unit'], axis=1)
+        dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
+        dummy['Time'] = np.array(dummy['Time'].astype(int))
         self.xr_ssp = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value'))
 
     # =========================================================== #
