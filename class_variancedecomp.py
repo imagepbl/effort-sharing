@@ -53,7 +53,7 @@ class vardecomposing(object):
     def prepare_global_sobol(self, year):
         #print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
         self.xr_year= xr.open_dataset("K:/ECEMF/T5.2/xr_alloc_"+str(year)+".nc")
-        xr_globe = self.xr_year.bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        xr_globe = self.xr_year.bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']].sel(Temperature=[1.5, 1.6, 1.7, 1.8, 1.9, 2.0])
         array_dims = np.array(xr_globe.sel(Region = 'USA').to_array().dims)
         array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
         for dim_i, dim in enumerate(array_dims[1:]):
@@ -131,7 +131,7 @@ class vardecomposing(object):
         d = {}
         d['Time'] = times_
         d['Factor'] = dims_
-        d['Region'] = np.array(self.xr_total.Region)
+        d['Region'] = np.array(xr.open_dataset("K:/ECEMF/T5.2/xr_alloc_2030.nc").Region)
 
         xr_sobol = xr.Dataset(
             coords=d
