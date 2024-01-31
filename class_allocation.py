@@ -35,7 +35,7 @@ class allocation(object):
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").sel()
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc")
         self.xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc")
         
         # Region and Time variables
