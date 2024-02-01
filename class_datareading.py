@@ -578,7 +578,7 @@ class datareading(object):
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
-            df_base = df_base.append(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2016, 2101)]+['SSP'+str(i+1)]), index = df_base.keys()), ignore_index=True)
+            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2016, 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
             df_ssps.append(df_base)
         df_base_all = pd.concat(df_ssps)
         df_base_all = df_base_all.reset_index(drop=True)
