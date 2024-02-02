@@ -578,6 +578,7 @@ class datareading(object):
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
+            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2016, 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
             df_ssps.append(df_base)
         df_base_all = pd.concat(df_ssps)
         df_base_all = df_base_all.reset_index(drop=True)
@@ -586,6 +587,7 @@ class datareading(object):
         dummy = dummy.set_index(["Region", "Scenario", "Time"])
         xr_base = xr.Dataset.from_dataframe(dummy)
         xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        xr_base = xr_base.astype(float)
 
         # Using an offset, get total CO2 emissions
         offset = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist - xr_base.sel(Time=self.settings['params']['start_year_analysis']).CO2_base
@@ -733,8 +735,8 @@ class datareading(object):
 
         print('- Some pre-calculations for the AP allocation rule')
         xrt = self.xr_total.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-        r1_nom = (xrt.GDP.sel(Region=self.countries_iso).sum(dim='Region') / xrt.Population.sel(Region=self.countries_iso).sum(dim='Region'))
-        base_worldsum = xrt.GHG_base.sel(Region=self.countries_iso).sum(dim='Region')
+        r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+        base_worldsum = xrt.GHG_base.sel(Region='EARTH')
         a=0
         for reg_i, reg in enumerate(self.countries_iso):
             rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)

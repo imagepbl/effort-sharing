@@ -25,10 +25,6 @@ class allocation(object):
     # =========================================================== #
 
     def __init__(self, reg):
-        #print("# ==================================== #")
-        #print("# Initializing allocation class        #")
-        #print("# ==================================== #")
-
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
@@ -36,7 +32,6 @@ class allocation(object):
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
         self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").sel()
-        self.xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc")
         
         # Region and Time variables
         self.FocusRegion = reg
@@ -50,7 +45,6 @@ class allocation(object):
         Grandfathering: Divide the global budget over the regions based on 
         their historical emissions
         '''
-        #print('- Allocate by grandfathering')
         # Calculating the current GHG fraction for region and world based on start_year_analysis
         current_GHG_region = self.xr_total.sel(Region=self.FocusRegion,
                                                  Time=self.start_year_analysis).GHG_hist
@@ -73,7 +67,6 @@ class allocation(object):
         '''
         Per Capita: Divide the global budget equally per capita
         '''
-        #print('- Allocate by per capita')
         
         pop_region = self.xr_total.sel(Region=self.FocusRegion, 
                                        Time=self.start_year_analysis).Population
@@ -93,7 +86,6 @@ class allocation(object):
         '''
         Per Capita Convergence: Grandfathering converging into per capita
         '''
-        #print('- Allocate by per capita convergence')
         # Define function to transform fractions until 2150
         # def transform_time(time, convyear):
         #     fractions = []
@@ -155,7 +147,6 @@ class allocation(object):
         Equal Cumulative per Capita: Uses historical emissions, discount factors and 
         population shares to allocate the global budget
         '''
-        #print('- Allocate by equal cumulative per capita')
         
         # Defining the timeframes for historical and future emissions
         hist_emissions_startyear = self.settings['params']['historical_emissions_startyear']
@@ -175,7 +166,7 @@ class allocation(object):
         # Calculating the cumulative population shares for region and world
         cum_pop = self.xr_total.Population.sel(Time = np.arange(hist_emissions_startyear, 2101)).sum(dim='Time')
         cum_pop_r = cum_pop.sel(Region=self.FocusRegion)
-        cum_pop_w = cum_pop.sel(Region=self.countries_iso).sum(dim='Region')
+        cum_pop_w = cum_pop.sel(Region='EARTH')
         share_cum_pop = cum_pop_r / cum_pop_w
         budget_rightful = total_emissions_w * share_cum_pop
         budget_left = budget_rightful - hist_emissions_r
@@ -215,25 +206,26 @@ class allocation(object):
         '''
         Ability to Pay: Uses GDP per capita to allocate the global budget
         '''
-        #print('- Allocate by ability to pay')
+        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc")
         xrt = self.xr_total.sel(Time=self.analysis_timeframe)
-        GDP_sum_w = xrt.GDP.sel(Region=self.countries_iso).sum(dim='Region')
-        pop_sum_w = xrt.Population.sel(Region=self.countries_iso).sum(dim='Region')
+        GDP_sum_w = xrt.GDP.sel(Region='EARTH')
+        pop_sum_w = xrt.Population.sel(Region='EARTH')
         r1_nom = GDP_sum_w / pop_sum_w
         
-        base_worldsum = xrt.GHG_base.sel(Region=self.countries_iso).sum(dim='Region')
+        base_worldsum = xrt.GHG_base.sel(Region='EARTH')
         rb_part1 = (xrt.GDP.sel(Region=self.FocusRegion) / xrt.Population.sel(Region=self.FocusRegion) / r1_nom)**(1/3.)
         rb_part2 = xrt.GHG_base.sel(Region=self.FocusRegion)*(base_worldsum - xrt.GHG_globe)/base_worldsum
         rb = rb_part1*rb_part2
         
-        ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/self.xr_rbw.__xarray_dataarray_variable__*(base_worldsum - self.xr_total.GHG_globe)
+        ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/(1e-9+xr_rbw.__xarray_dataarray_variable__)*(base_worldsum - self.xr_total.GHG_globe)
         ap = ap.sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(AP = ap)
+        xr_rbw.close()
+
     # =========================================================== #
     # =========================================================== #
 
     def gdr(self):
-        #print('- Allocate by greenhouse development rights')
         # Read RCI
         df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/RCI.xls", 
                              delimiter='\t', 
@@ -253,7 +245,7 @@ class allocation(object):
 
         # Compute GDR
         gdr = self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
-            - (self.xr_total.GHG_base.sel(Region=self.countries_iso).sum(dim='Region') \
+            - (self.xr_total.GHG_base.sel(Region='EARTH') \
                 - self.xr_total.GHG_globe)*rci_reg
         yearfracs = xr.Dataset(data_vars={"Value": (['Time'], 
                                                     (self.analysis_timeframe - 2030) \
@@ -261,7 +253,7 @@ class allocation(object):
                                coords={"Time": self.analysis_timeframe})
         gdr = gdr.rename('Value')
         gdr_post2030 = ((self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
-            - (self.xr_total.GHG_base.sel(Region=self.countries_iso, Time=self.analysis_timeframe).sum(dim='Region') \
+            - (self.xr_total.GHG_base.sel(Region='EARTH', Time=self.analysis_timeframe) \
                 - self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe))*rci_reg.sel(Time=2030))*(1-yearfracs) \
                     + yearfracs*self.xr_total.AP.sel(Time=self.analysis_timeframe)).sel(Time=np.arange(2031, 2101))
         gdr_total = xr.merge([gdr, gdr_post2030])
@@ -271,7 +263,6 @@ class allocation(object):
     # =========================================================== #
 
     def save(self):
-        #print('- Save')
         xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "CO2_globe", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', "NonCO2_globe", "GHG_hist_all", 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Budget']).sel(Region=self.FocusRegion, Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
 
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+self.FocusRegion+'.nc',         
@@ -296,6 +287,7 @@ class allocation(object):
             format='NETCDF4'
         )
         self.xr_alloc = xr_total_onlyalloc
+        self.xr_total.close()
         
 if __name__ == "__main__":
     region = input("Choose a focus country or region: ")
