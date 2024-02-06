@@ -31,7 +31,7 @@ class allocation(object):
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").sel()
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
         
         # Region and Time variables
         self.FocusRegion = reg
@@ -215,7 +215,7 @@ class allocation(object):
         '''
         Ability to Pay: Uses GDP per capita to allocate the global budget
         '''
-        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc")
+        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc").load()
         xrt = self.xr_total.sel(Time=self.analysis_timeframe)
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
         pop_sum_w = xrt.Population.sel(Region='EARTH')
