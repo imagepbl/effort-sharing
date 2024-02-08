@@ -204,6 +204,20 @@ class datareading(object):
         xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
         xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
         self.xr_primap = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1), provenance='measured')
+
+        factor_nld = self.xr_primap.sel(Region='NLD', Time=2021).GHG_hist_all/172.0 # From the KEV -> harmonization just for the NLD
+        region_factor = np.ones(len(self.xr_primap.Region))
+        region_factor[self.xr_primap.Region == 'NLD'] = float(factor_nld)
+        xr_comp = xr.DataArray(region_factor, dims=['Region'], 
+                                coords={'Region': self.xr_primap.Region})
+        self.xr_primap = self.xr_primap/xr_comp
+
+        factor_nld = self.xr_primap.sel(Region='NLD', Time=2021).GHG_hist/172.0 # From the KEV -> harmonization just for the NLD
+        region_factor = np.ones(len(self.xr_primap.Region))
+        region_factor[self.xr_primap.Region == 'NLD'] = float(factor_nld)
+        xr_comp = xr.DataArray(region_factor, dims=['Region'], 
+                                coords={'Region': self.xr_primap.Region})
+        self.xr_primap = self.xr_primap/xr_comp
         
         xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
         xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')

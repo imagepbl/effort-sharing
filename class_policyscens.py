@@ -23,9 +23,9 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, xrtot):
+    def __init__(self):
         print("# ==================================== #")
-        print("# Initializing policyscenadding class        #")
+        print("# Initializing policyscenadding class  #")
         print("# ==================================== #")
 
         self.current_dir = Path.cwd()
@@ -33,7 +33,7 @@ class policyscenadding(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xrtot
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc")
 
     # =========================================================== #
     # =========================================================== #
@@ -101,5 +101,6 @@ class policyscenadding(object):
         xr_total = xr_total.assign(NetZero = self.xr_eng['Value'].sel(Scenario='NetZero'))
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'GHG_globe', 'GHG_base', 'GHG_ndc', 'N2O_hist', 'CH4_hist', 'Budget', "CH4_globe", "N2O_globe", "GHG_hist_all"])
+        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'N2O_hist', 'CH4_hist', 'GHG_hist_all', 'GHG_hist_ndc_corr', 'GHG_hist_excl', 'Budget', 'GHG_globe', 'CO2_globe', 'NonCO2_globe', 'GHG_base', 'GHG_ndc'])
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_policyscen.nc')
+        self.xr_total.close()
