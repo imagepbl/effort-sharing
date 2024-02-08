@@ -189,7 +189,7 @@ class allocation(object):
         compensation_form_sqrt = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis'])) #make sqrt curve
         compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt) #sum of values has to be 1
 
-        xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+        xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': self.analysis_timeframe})
 
         def ecpc_factor(f):
             return path_scaled_0+xr_comp*f
