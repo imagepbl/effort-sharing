@@ -148,13 +148,10 @@ class allocation(object):
         Equal Cumulative per Capita: Uses historical emissions, discount factors and 
         population shares to allocate the global budget
         '''
-        compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.start_year_analysis, 2040))))+[1]*len(np.arange(2040, 2101)))
-        compensation_form2 = np.convolve(compensation_form, np.ones(3)/3, mode='valid')
-        compensation_form[1:-1] = compensation_form2
-        compensation_form = compensation_form - compensation_form[0]
-        compensation_form = compensation_form / np.sum(compensation_form)
-        xr_comp = xr.DataArray(compensation_form, dims=['Time'], 
-                                coords={'Time': self.analysis_timeframe})
+        compensation_form_sqrt = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis'])) #make sqrt curve
+        compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt) #sum of values has to be 1
+
+        xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': self.analysis_timeframe})
 
         # Defining the timeframes for historical and future emissions
         xrs = []
