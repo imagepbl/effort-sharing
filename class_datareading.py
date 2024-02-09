@@ -599,22 +599,23 @@ class datareading(object):
         dummy = df_base_all.melt(id_vars=["Region", "Scenario"], var_name="Time", value_name="CO2_base")
         dummy['Time'] = np.array(dummy['Time'].astype(int))
         dummy = dummy.set_index(["Region", "Scenario", "Time"])
-        xr_base = xr.Dataset.from_dataframe(dummy)
-        xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
-        xr_base = xr_base.astype(float)
+        xr_base_raw = xr.Dataset.from_dataframe(dummy)
+        xr_base_raw = xr_base_raw.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        xr_base_raw = xr_base_raw.astype(float)
 
-        # Using an offset, get total CO2 emissions
-        offset = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist - xr_base.sel(Time=self.settings['params']['start_year_analysis']).CO2_base
-        total_co2_base = xr_base + offset
+        # # Using a fraction, get total CO2 emissions
+        fraction = (xr_base_raw.sel(Time=self.settings['params']['start_year_analysis']).CO2_base / self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist).mean(dim=['Scenario'])
+        xr_base_harm_co2 = xr_base_raw / fraction
 
-        # Get offset of CO2 vs GHG emissions by country
-        #fraction_ghg_co2_startyear = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist / self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
-        offset_ghg_co2_startyear =  self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        # Assume nonCO2 following similar evolution as CO2 
+        nonco2_2021 = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        nonco2_base = (nonco2_2021*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
 
         # Convert baseline emissions into GHG using this fraction (or offset)
-        total_ghg_base = total_co2_base+offset_ghg_co2_startyear#*fraction_ghg_co2_startyear
-        total_ghg_base = total_ghg_base.rename({'CO2_base': "GHG_base"})
-        self.xr_base = total_ghg_base
+        ghg_base = xr_base_harm_co2+nonco2_base
+        ghg_base = ghg_base.rename({'CO2_base': "GHG_base"})
+        ghg_base = ghg_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        self.xr_base = ghg_base
 
     # =========================================================== #
     # =========================================================== #
