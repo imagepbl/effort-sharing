@@ -766,3 +766,31 @@ class datareading(object):
                     rbw += r
                     a += 1
         rbw.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_rbw.nc')
+
+        print('- Some pre-calculations for the GDR allocation rule')
+        r=0
+        hist_emissions_startyears = [1850, 1950, 1990]
+        capability_thresholds = ['No', 'Th', 'PrTh']
+        rci_weights = ['Resp', 'Half', 'Cap']
+        for startyear_i, startyear in enumerate(hist_emissions_startyears):
+            for th_i, th in enumerate(capability_thresholds):
+                for weight_i, weight in enumerate(rci_weights):
+                    # Read RCI
+                    df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/GDR_15_"+str(startyear)+"_"+th+"_"+weight+".xls", 
+                                            delimiter='\t', 
+                                            skiprows=30)[:-2]
+                    df_rci = df_rci[['iso3', 'year', 'rci']]
+                    df_rci['year'] = df_rci['year'].astype(int)
+                    df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
+                    df_rci['Historical_startyear'] = startyear
+                    df_rci['Capability_threshold'] = th
+                    df_rci['RCI_weight'] = weight
+                    if r==0:
+                        fulldf = df_rci
+                        r+=1
+                    else:
+                        fulldf = pd.concat([fulldf, df_rci])
+        dfdummy = fulldf.set_index(['Region', 'Time', 'Historical_startyear', 'Capability_threshold', 'RCI_weight'])
+        xr_rci = xr.Dataset.from_dataframe(dfdummy)
+        xr_rci = xr_rci.reindex({"Region": self.xr_total.Region})
+        xr_rci.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_rci.nc')

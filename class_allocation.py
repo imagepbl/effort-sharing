@@ -232,16 +232,11 @@ class allocation(object):
     # =========================================================== #
 
     def gdr(self):
-        # Read RCI
-        df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/RCI.xls", 
-                             delimiter='\t', 
-                             skiprows=30)[:-2]
-        df_rci = df_rci[['iso3', 'year', 'rci']]
-        df_rci['year'] = df_rci['year'].astype(int)
-        df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
-        dfdummy = df_rci.set_index(['Region', 'Time'])
-        xr_rci = xr.Dataset.from_dataframe(dfdummy)
-        xr_rci = xr_rci.reindex({"Region": self.xr_total.Region})
+        xr_rci = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rci.nc").load()
+        yearfracs = xr.Dataset(data_vars={"Value": (['Time'], 
+                                                    (self.analysis_timeframe - 2030) \
+                                                        / (self.settings['params']['convergence_year_gdr'] - 2030))}, 
+                                coords={"Time": self.analysis_timeframe})
         if self.FocusRegion != 'EU': rci_reg = xr_rci.rci.sel(Region=self.FocusRegion)
         else:
             df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
@@ -253,10 +248,6 @@ class allocation(object):
         gdr = self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
             - (self.xr_total.GHG_base.sel(Region='EARTH') \
                 - self.xr_total.GHG_globe)*rci_reg
-        yearfracs = xr.Dataset(data_vars={"Value": (['Time'], 
-                                                    (self.analysis_timeframe - 2030) \
-                                                        / (self.settings['params']['convergence_year_gdr'] - 2030))}, 
-                               coords={"Time": self.analysis_timeframe})
         gdr = gdr.rename('Value')
         gdr_post2030 = ((self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
             - (self.xr_total.GHG_base.sel(Region='EARTH', Time=self.analysis_timeframe) \
@@ -265,6 +256,7 @@ class allocation(object):
         gdr_total = xr.merge([gdr, gdr_post2030])
         gdr_total = gdr_total.rename({'Value': 'GDR'})
         self.xr_total = self.xr_total.assign(GDR = gdr_total.GDR)
+
     # =========================================================== #
     # =========================================================== #
 
