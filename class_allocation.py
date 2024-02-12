@@ -256,6 +256,7 @@ class allocation(object):
         gdr_total = xr.merge([gdr, gdr_post2030])
         gdr_total = gdr_total.rename({'Value': 'GDR'})
         self.xr_total = self.xr_total.assign(GDR = gdr_total.GDR)
+        xr_rci.close()
 
     # =========================================================== #
     # =========================================================== #
