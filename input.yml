@@ -16,7 +16,7 @@ paths:
 params:
   pcc_conv_start: 2040
   pcc_conv_end: 2100
-  convergence_year_gdr: 2150
+  convergence_year_gdr: 2100
   convergence_year_base: 2150
   discount_factor: 0.015
   version_ndcs: 13Mar2023a
