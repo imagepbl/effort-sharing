@@ -211,7 +211,9 @@ class allocation(object):
     def ap(self):
         '''
         Ability to Pay: Uses GDP per capita to allocate the global budget
+        Equation from van den Berg et al. (2020)
         '''
+        # Step 1: Reductions before correction factor
         xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc").load()
         xrt = self.xr_total.sel(Time=self.analysis_timeframe)
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
@@ -221,9 +223,14 @@ class allocation(object):
         base_worldsum = xrt.GHG_base.sel(Region='EARTH')
         rb_part1 = (xrt.GDP.sel(Region=self.FocusRegion) / xrt.Population.sel(Region=self.FocusRegion) / r1_nom)**(1/3.)
         rb_part2 = xrt.GHG_base.sel(Region=self.FocusRegion)*(base_worldsum - xrt.GHG_globe)/base_worldsum
-        rb = rb_part1*rb_part2
+        rb = rb_part1 * rb_part2
+
+        # Step 2: Correction factor
+        corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)*(base_worldsum - xrt.GHG_globe)
         
-        ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/(1e-9+xr_rbw.__xarray_dataarray_variable__)*(base_worldsum - self.xr_total.GHG_globe)
+        # Step 3: Budget after correction factor
+        ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/corr_factor
+        
         ap = ap.sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(AP = ap)
         xr_rbw.close()
@@ -232,27 +239,39 @@ class allocation(object):
     # =========================================================== #
 
     def gdr(self):
+        '''
+        Greenhouse Development Rights: Uses the Responsibility-Capability Index
+        (RCI) weighed at 50/50 to allocate the global budget
+        Calculations from van den Berg et al. (2020)
+        '''
         xr_rci = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rci.nc").load()
-        yearfracs = xr.Dataset(data_vars={"Value": (['Time'], 
+        yearfracs = xr.Dataset(data_vars={"Value": (['Time'],
                                                     (self.analysis_timeframe - 2030) \
-                                                        / (self.settings['params']['convergence_year_gdr'] - 2030))}, 
+                                                        / (self.settings['params']['convergence_year_gdr'] - 2030))},
                                 coords={"Time": self.analysis_timeframe})
-        if self.FocusRegion != 'EU': rci_reg = xr_rci.rci.sel(Region=self.FocusRegion)
+        
+        # Get the regional RCI values
+        # If region is EU, we have to sum over the EU countries
+        if self.FocusRegion != 'EU':
+            rci_reg = xr_rci.rci.sel(Region=self.FocusRegion)
         else:
             df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
             countries_iso = np.array(df["Country ISO Code"])
             group_eu = countries_iso[np.array(df["EU"]) == 1]
-            rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim='Region') # TODO check if this should be a mean instead of a sum
+            rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim='Region')
 
-        # Compute GDR
-        gdr = self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
-            - (self.xr_total.GHG_base.sel(Region='EARTH') \
-                - self.xr_total.GHG_globe)*rci_reg
+        # Compute GDR until 2030
+        baseline = self.xr_total.GHG_base
+        global_traject = self.xr_total.GHG_globe
+
+        gdr = baseline.sel(Region=self.FocusRegion) - (baseline.sel(Region='EARTH') - global_traject) * rci_reg
         gdr = gdr.rename('Value')
-        gdr_post2030 = ((self.xr_total.GHG_base.sel(Region=self.FocusRegion) \
-            - (self.xr_total.GHG_base.sel(Region='EARTH', Time=self.analysis_timeframe) \
-                - self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe))*rci_reg.sel(Time=2030))*(1-yearfracs) \
-                    + yearfracs*self.xr_total.AP.sel(Time=self.analysis_timeframe)).sel(Time=np.arange(2031, 2101))
+        
+        # GDR Post 2030
+        gdr_post2030 = ((1-yearfracs) * (baseline.sel(Region=self.FocusRegion) - (baseline.sel(Region='EARTH', Time=self.analysis_timeframe) \
+                - global_traject.sel(Time=self.analysis_timeframe)) * rci_reg.sel(Time=2030))  \
+                    + yearfracs * self.xr_total.AP.sel(Time=self.analysis_timeframe)).sel(Time=np.arange(2031, 2101))
+        
         gdr_total = xr.merge([gdr, gdr_post2030])
         gdr_total = gdr_total.rename({'Value': 'GDR'})
         self.xr_total = self.xr_total.assign(GDR = gdr_total.GDR)
@@ -262,8 +281,30 @@ class allocation(object):
     # =========================================================== #
 
     def save(self):
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', "CO2_hist", "CO2_globe", "N2O_hist", "CH4_hist", 'GDP', 'GHG_hist', 'GHG_globe', "NonCO2_globe", "GHG_hist_all", 'GHG_base', 'GHG_ndc', 'Hot_air', 'Conditionality', 'Ambition', 'Budget']).sel(Region=self.FocusRegion, Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).astype("float32")
-
+        xr_total_onlyalloc = (self.xr_total.drop_vars([
+                'Population', 
+                "CO2_hist", 
+                "CO2_globe", 
+                "N2O_hist", 
+                "CH4_hist", 
+                'GDP', 
+                'GHG_hist', 
+                'GHG_globe', 
+                "NonCO2_globe", 
+                "GHG_hist_all", 
+                'GHG_base', 
+                'GHG_ndc', 
+                'Hot_air', 
+                'Conditionality', 
+                'Ambition', 
+                'Budget'
+            ])
+            .sel(
+                Region=self.FocusRegion, 
+                Time=np.arange(self.settings['params']['start_year_analysis'], 2101)
+            )
+            .astype("float32")
+        )
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+self.FocusRegion+'.nc',         
             # encoding={
             #     "Scenario": {"dtype": "str"},
@@ -287,16 +328,14 @@ class allocation(object):
         )
         self.xr_alloc = xr_total_onlyalloc
         self.xr_total.close()
-        
+
 if __name__ == "__main__":
     region = input("Choose a focus country or region: ")
     allocator = allocation(region)
-    allocator.gf()  
+    allocator.gf()
     allocator.pc()
     allocator.pcc()
     allocator.ecpc()
     allocator.ap()
     allocator.gdr()
     allocator.save()
-    # print("allocator")
-        
