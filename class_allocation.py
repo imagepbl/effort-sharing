@@ -298,6 +298,8 @@ class allocation(object):
                 'Conditionality', 
                 'Ambition', 
                 'Budget'
+                'GHG_hist_excl',
+                'GHG_hist_ndc_corr'
             ])
             .sel(
                 Region=self.FocusRegion, 
