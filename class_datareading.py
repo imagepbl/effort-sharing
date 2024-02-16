@@ -780,6 +780,9 @@ class datareading(object):
                                             delimiter='\t', 
                                             skiprows=30)[:-2]
                     df_rci = df_rci[['iso3', 'year', 'rci']]
+                    iso3 = np.array(df_rci.iso3)
+                    iso3[iso3 == 'CHK'] = 'CHN'
+                    df_rci['iso3'] = iso3
                     df_rci['year'] = df_rci['year'].astype(int)
                     df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
                     df_rci['Historical_startyear'] = startyear

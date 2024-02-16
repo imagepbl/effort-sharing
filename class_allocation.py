@@ -297,7 +297,7 @@ class allocation(object):
                 'Hot_air', 
                 'Conditionality', 
                 'Ambition', 
-                'Budget'
+                'Budget',
                 'GHG_hist_excl',
                 'GHG_hist_ndc_corr'
             ])

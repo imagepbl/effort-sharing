@@ -14,7 +14,7 @@ One final important notebook is `Aggregator.ipynb`. This script aggregates the c
 Please feel free to add and/or fix any of the issues on the Github issue list if you have time to contribute. But if you adjust code, please create your own branch or work in one of the existing ones - and use pull requests to merge them into the `main` branch. Ask someone (for now Chantal or me) to review it before merging, there is a button for that.
 
 ## Data exports for PBL plots
-I (Mark) will be working on the data exports for the figures in the PBL reports shortly. Will give a description here in due time.
+I (Mark) will be working on the data exports for the figures in the PBL reports shortly. Will give a description here in due time. UPDATE: a first script for data exports is now under review in branch `data-exports`, called `DataExports.ipynb`.
 
 ## Releases
 No release of this code has been done yet. First is planned in March/April, together with the PBL report, the launch of the carbon budget explorer (CABE) version 1.0 and the preprint of this research. We should appropriately clean up the repo, this ReadMe in particular, and then release the code via a button within Github towards Zenodo.
