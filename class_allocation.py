@@ -31,7 +31,8 @@ class allocation(object):
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
+        if self.settings['params']['toggle_overshoot_dataread'] == 'no': self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
+        if self.settings['params']['toggle_overshoot_dataread'] == 'yes': self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread_pbl.nc").load()
         
         # Region and Time variables
         self.FocusRegion = reg
@@ -164,7 +165,7 @@ class allocation(object):
             hist_emissions = self.xr_total.GHG_hist.sel(Time = hist_emissions_timeframe)
 
             # Discounting -> We only do past discounting here
-            for discount_i, discount in enumerate([1.6, 2.0, 2.8]):
+            for discount_i, discount in enumerate([0, 1.6, 2.0, 2.8]):
                 past_timeline = np.arange(startyear, self.start_year_analysis+1)
                 xr_dc = xr.DataArray((1-discount/100)**(self.start_year_analysis-past_timeline), dims=['Time'], 
                                         coords={'Time': past_timeline})
@@ -226,7 +227,7 @@ class allocation(object):
         rb = rb_part1 * rb_part2
 
         # Step 2: Correction factor
-        corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)*(base_worldsum - xrt.GHG_globe)
+        corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - xrt.GHG_globe)
         
         # Step 3: Budget after correction factor
         ap = self.xr_total.GHG_base.sel(Region=self.FocusRegion) - rb/corr_factor
@@ -281,6 +282,9 @@ class allocation(object):
     # =========================================================== #
 
     def save(self):
+        if self.settings['params']['toggle_overshoot_dataread'] == 'yes': savename = 'xr_alloc_'+self.FocusRegion+'_pbl.nc'
+        if self.settings['params']['toggle_overshoot_dataread'] == 'no': savename = 'xr_alloc_'+self.FocusRegion+'.nc'
+
         xr_total_onlyalloc = (self.xr_total.drop_vars([
                 'Population', 
                 "CO2_hist", 
@@ -307,7 +311,7 @@ class allocation(object):
             )
             .astype("float32")
         )
-        xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+self.FocusRegion+'.nc',         
+        xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/'+savename,         
             # encoding={
             #     "Scenario": {"dtype": "str"},
             #     "Time": {"dtype": "int"},

@@ -442,6 +442,16 @@ class datareading(object):
         # forster_red = tot_2050/np.array(tot_2020)
         # f_a, f_b = np.polyfit(np.array([1.5, 1.7, 2.0]), forster_red, 1)
 
+        def ms_temp(T):
+            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
+            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.1) & (peaktemp > T-0.1))[0]]
+            
+        # Determine bunker emissions to subtract from global budget
+        bunker_subtraction = []
+        for t_i, t in enumerate(self.Tlist):
+            ms = ms_temp(t)
+            bunker_subtraction += [3.3/100] # Assuming bunker emissions keep constant (3.3% of global emissions) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
+
         # Interpolate
         n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
         ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
@@ -450,14 +460,19 @@ class datareading(object):
         for p_i, p in enumerate(self.Plist):
             a, b = np.polyfit(xr_bud_co2.Temperature, xr_bud_co2.sel(Probability = np.round(p, 2)).Budget, 1)
             for t_i, t in enumerate(self.Tlist):
-                median_budget = a*t+b
+                median_budget = (a*t+b)*(1-bunker_subtraction[t_i])
                 #implied_leftover_median = f_a*t+f_b
+                ar_50 = np.array((((self.xr_traj_nonco2.sel(NonCO2red=0.5, Time=2040, Temperature=t).mean(dim='Timing')-tot_2020) / tot_2020).round(2)).NonCO2_globe)
+                ar_50 = ar_50[~np.isnan(ar_50)]
+                ar_50[ar_50 > 0] =0
+                ar_50[ar_50 < -0.8] = -0.8
                 for n_i, n in enumerate(self.NonCO2list):
                         ar = np.array((((self.xr_traj_nonco2.sel(NonCO2red=n, Time=2040, Temperature=t).mean(dim='Timing')-tot_2020) / tot_2020).round(2)).NonCO2_globe)
                         ar = ar[~np.isnan(ar)]
                         ar[ar > 0] =0
                         ar[ar < -0.8] = -0.8
-                        nonco2effect = self.xr_nonco2effects.sel(Temperature=1.5, NonCO2red=-ar.round(2)).EffectOnRCB
+                        if self.settings['params']['toggle_co2_budgets']=='Forster': nonco2effect = self.xr_nonco2effects.sel(Temperature=t, NonCO2red=-ar.round(2)).EffectOnRCB 
+                        else: nonco2effect = float(self.xr_nonco2effects.sel(Temperature=t, NonCO2red=-ar.round(2)).EffectOnRCB) - float(self.xr_nonco2effects.sel(Temperature=t, NonCO2red=-ar_50.round(2)).EffectOnRCB) # Recalibration if WG1 instead of Forster
                         Blist[t_i, p_i, n_i] = median_budget+nonco2effect#*(n-implied_leftover_median)
         data2 = xr.DataArray(Blist,
                             coords={'Temperature': self.Tlist,
@@ -465,7 +480,7 @@ class datareading(object):
                                     'NonCO2red': self.NonCO2list},
                             dims=['Temperature', 'Risk', 'NonCO2red'])
         self.xr_co2_budgets = xr.Dataset({'Budget': data2})
-
+        
     # =========================================================== #
     # =========================================================== #
 
