@@ -197,28 +197,34 @@ class datareading(object):
         xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL", "M.LULUCF"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
         xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
         xr_primap.coords['Time'] = np.array([str(i)[:4] for i in np.array(xr_primap.Time)]).astype(int)
-        xr_primap = xr_primap.drop_vars(['source', 'Version'])
+        xr_primap = xr_primap.drop_vars(['source', 'Version']).sel(provenance='measured').drop_vars(['provenance'])
         xr_primap['CO2_hist'] = xr_primap['CO2_hist']/1e3
         xr_primap['GHG_hist_all'] = xr_primap['GHG_hist']/1e3
         xr_primap['GHG_hist'] = (xr_primap['CO2_hist']+xr_primap['CH4_hist']*self.settings['params']['gwp_ch4']/1e3+xr_primap['N2O_hist']*self.settings['params']['gwp_n2o']/1e3)
         xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
         xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
-        self.xr_primap = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1), provenance='measured')
+        xr_primap = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1))
 
-        factor_nld = self.xr_primap.sel(Region='NLD', Time=2021).GHG_hist_all/172.0 # From the KEV -> harmonization just for the NLD
-        region_factor = np.ones(len(self.xr_primap.Region))
-        region_factor[self.xr_primap.Region == 'NLD'] = float(factor_nld)
-        xr_comp = xr.DataArray(region_factor, dims=['Region'], 
-                                coords={'Region': self.xr_primap.Region})
-        self.xr_primap = self.xr_primap/xr_comp
+        # Dutch emissions - harmonized with the KEV
+        dutch_time = np.array([1990, 1995, 2000, 2005, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021])
+        dutch_ghg = np.array([228.9, 238.0, 225.7, 220.9, 219.8, 206, 202, 201.2, 192.9, 199.8, 200.2, 196.5, 191.4, 185.6, 168.9, 172.0])
+        dutch_time_interp = np.arange(1990, 2021+1)
+        dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
+        fraction_1990 = dutch_ghg[0] / xr_primap['GHG_hist'].sel(Region='NLD', Time=1990)
+        pre_1990_raw = np.array(xr_primap['GHG_hist'].sel(Region='NLD', Time=np.arange(1750, 1990)))*float(fraction_1990)
+        total_time = np.arange(1750, 2021+1)
+        total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
+        fractions = np.array(xr_primap.GHG_hist.sel(Region='NLD') / total_ghg_nld)
+        for t_i, t in enumerate(total_time):
+            xr_primap.GHG_hist_all.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+            xr_primap.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+        xr_primap.CO2_hist.loc[dict(Region='NLD')] = xr_primap.CO2_hist.sel(Region='NLD')/fractions
+        xr_primap.CH4_hist.loc[dict(Region='NLD')] = xr_primap.CH4_hist.sel(Region='NLD')/fractions
+        xr_primap.N2O_hist.loc[dict(Region='NLD')] = xr_primap.N2O_hist.sel(Region='NLD')/fractions
 
-        factor_nld = self.xr_primap.sel(Region='NLD', Time=2021).GHG_hist/172.0 # From the KEV -> harmonization just for the NLD
-        region_factor = np.ones(len(self.xr_primap.Region))
-        region_factor[self.xr_primap.Region == 'NLD'] = float(factor_nld)
-        xr_comp = xr.DataArray(region_factor, dims=['Region'], 
-                                coords={'Region': self.xr_primap.Region})
-        self.xr_primap = self.xr_primap/xr_comp
-        
+        self.xr_primap = xr_primap
+
+        # TODO Excluding LULUCF is not harmonized with KEV !!
         xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
         xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
         xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
