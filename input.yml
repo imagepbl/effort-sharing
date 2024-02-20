@@ -14,6 +14,7 @@ paths:
 # ============================================== #
 
 params:
+  toggle_co2_budgets: 'WG1' # Forster or WG1
   pcc_conv_start: 2040
   pcc_conv_end: 2100
   convergence_year_gdr: 2100
