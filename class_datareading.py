@@ -61,23 +61,23 @@ class datareading(object):
 
     def read_ssps(self):
         print('- Reading GDP and population data from SSPs')
-        df_ssp = pd.read_csv(self.settings['paths']['data']['external']+"SSPs/SspDb_country_data_2013-06-12.csv")
-        df_ssp = df_ssp[(df_ssp.MODEL == 'OECD Env-Growth') & (df_ssp.SCENARIO.isin(['SSP1_v9_130325', 'SSP2_v9_130325', 'SSP3_v9_130325', 'SSP4_v9_130325', 'SSP5_v9_130325']))]
-        Scenario = np.array(df_ssp['SCENARIO'])
-        Scenario[Scenario == 'SSP1_v9_130325'] = 'SSP1'
-        Scenario[Scenario == 'SSP2_v9_130325'] = 'SSP2'
-        Scenario[Scenario == 'SSP3_v9_130325'] = 'SSP3'
-        Scenario[Scenario == 'SSP4_v9_130325'] = 'SSP4'
-        Scenario[Scenario == 'SSP5_v9_130325'] = 'SSP5'
-        df_ssp['SCENARIO'] = Scenario
-        Variable = np.array(df_ssp['VARIABLE'])
-        Variable[Variable == 'GDP|PPP'] = 'GDP'
-        df_ssp['VARIABLE'] = Variable
-        df_ssp = df_ssp.drop(['MODEL', 'UNIT'], axis=1)
-        df_ssp = df_ssp.rename(columns={'SCENARIO': "Scenario", 'REGION': 'Region', 'VARIABLE': 'Variable'})
-        dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
-        dummy['Time'] = np.array(dummy['Time'].astype(int))
-        self.xr_ssp_old = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value'))
+        # df_ssp = pd.read_csv(self.settings['paths']['data']['external']+"SSPs/SspDb_country_data_2013-06-12.csv")
+        # df_ssp = df_ssp[(df_ssp.MODEL == 'OECD Env-Growth') & (df_ssp.SCENARIO.isin(['SSP1_v9_130325', 'SSP2_v9_130325', 'SSP3_v9_130325', 'SSP4_v9_130325', 'SSP5_v9_130325']))]
+        # Scenario = np.array(df_ssp['SCENARIO'])
+        # Scenario[Scenario == 'SSP1_v9_130325'] = 'SSP1'
+        # Scenario[Scenario == 'SSP2_v9_130325'] = 'SSP2'
+        # Scenario[Scenario == 'SSP3_v9_130325'] = 'SSP3'
+        # Scenario[Scenario == 'SSP4_v9_130325'] = 'SSP4'
+        # Scenario[Scenario == 'SSP5_v9_130325'] = 'SSP5'
+        # df_ssp['SCENARIO'] = Scenario
+        # Variable = np.array(df_ssp['VARIABLE'])
+        # Variable[Variable == 'GDP|PPP'] = 'GDP'
+        # df_ssp['VARIABLE'] = Variable
+        # df_ssp = df_ssp.drop(['MODEL', 'UNIT'], axis=1)
+        # df_ssp = df_ssp.rename(columns={'SCENARIO': "Scenario", 'REGION': 'Region', 'VARIABLE': 'Variable'})
+        # dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
+        # dummy['Time'] = np.array(dummy['Time'].astype(int))
+        # self.xr_ssp_old = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value'))
 
         df_ssp = pd.read_excel(self.settings['paths']['data']['external']+"SSPs/SSPs_v2023.xlsx", sheet_name='data')
         df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023', 'IIASA-WiC POP 2023'])) & (df_ssp.Scenario.isin(['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']))]
@@ -710,34 +710,36 @@ class datareading(object):
     def read_baseline(self):
         print('- Reading baseline emissions')
         df_ssps = []
-        for i in range(5):
+        for i in range(3): # In the up-to-date baselines, only SSP1, 2 and 3 are included. Will be updated at some point.
             df_base = pd.read_excel(self.settings['paths']['data']['baseline']+"SSP"+str(i+1)+".xlsx", sheet_name = 'Sheet1')
+            df_base = df_base[df_base['Unnamed: 1'] == 'Emissions|CO2|Energy']
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
-            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2016, 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
+            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2021, 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
             df_ssps.append(df_base)
         df_base_all = pd.concat(df_ssps)
         df_base_all = df_base_all.reset_index(drop=True)
         dummy = df_base_all.melt(id_vars=["Region", "Scenario"], var_name="Time", value_name="CO2_base")
         dummy['Time'] = np.array(dummy['Time'].astype(int))
         dummy = dummy.set_index(["Region", "Scenario", "Time"])
-        xr_base = xr.Dataset.from_dataframe(dummy)
-        xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
-        xr_base = xr_base.astype(float)
+        xr_base_raw = xr.Dataset.from_dataframe(dummy)
+        xr_base_raw = xr_base_raw.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        xr_base_raw = xr_base_raw.astype(float)
 
-        # Using an offset, get total CO2 emissions
-        offset = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist - xr_base.sel(Time=self.settings['params']['start_year_analysis']).CO2_base
-        total_co2_base = xr_base + offset
+        # # Using a fraction, get total CO2 emissions
+        fraction = (xr_base_raw.sel(Time=self.settings['params']['start_year_analysis']).CO2_base / self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist).mean(dim=['Scenario'])
+        xr_base_harm_co2 = xr_base_raw / fraction
 
-        # Get offset of CO2 vs GHG emissions by country
-        #fraction_ghg_co2_startyear = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist / self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
-        offset_ghg_co2_startyear =  self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        # Assume nonCO2 following similar evolution as CO2 
+        nonco2_2021 = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        nonco2_base = (nonco2_2021*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
 
         # Convert baseline emissions into GHG using this fraction (or offset)
-        total_ghg_base = total_co2_base+offset_ghg_co2_startyear#*fraction_ghg_co2_startyear
-        total_ghg_base = total_ghg_base.rename({'CO2_base': "GHG_base"})
-        self.xr_base = total_ghg_base
+        ghg_base = xr_base_harm_co2+nonco2_base
+        ghg_base = ghg_base.rename({'CO2_base': "GHG_base"})
+        ghg_base = ghg_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        self.xr_base = ghg_base
 
     # =========================================================== #
     # =========================================================== #

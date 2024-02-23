@@ -4,7 +4,7 @@
 paths:
   data:
     external: X:/user/dekkerm/Data/
-    baseline: X:/user/heerdenvr/Downscaling/Mark/14_09_2023/
+    baseline: X:/user/heerdenvr/Downscaling/Mark/23_02_2024/
     internal: Data/
     datadrive: K:/ECEMF/T5.2/
   task: X:/user/dekkerm/Projects/ECEMF_T5.2/
