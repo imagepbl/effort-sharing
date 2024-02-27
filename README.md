@@ -1,5 +1,37 @@
 ## Installation
-The required packages are in the `requirements.txt` file (mostly standard stuff like `xarray`, `numpy` and `tqdm`. It is recommended to install both your Conda environment as the repository clone on the K:/ drive, because it is approximately 10x faster than the X:/ drive (Martijn found this). You will need to make a folder+subfolder in the K:/ drive as follows: K:/ECEMF/T5.2/Allocations/. There (and in K:/ECEMF/T5.2) all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
+
+It is recommended to clone the code to the `K:\` directory for best performance. 
+```shell
+git clone https://github.com/imagepbl/EffortSharing
+```
+
+### Setting up the environment
+
+#### conda
+We recommend to install the Conda environment also on the `K:\` drive to increase performance. Create folders `environments\effortsharing_env` on `K:\`.
+Create a new conda environment with a `--prefix` in that folder. Activate it and update it the content based on the file `environment.yml`. 
+
+```shell
+cd .\environments\effortsharing_env\
+conda create --prefix .
+conda activate K:\environments\effortsharing_env
+conda env update --name K:\environments\effortsharing_env --file K:\<FILEPATH>\environment.yml
+```
+
+#### pip
+
+```shell
+pip install -r /path/to/requirements_pip.txt
+```
+
+### Setting up required folder structure
+
+You will need to make a folder+subfolder in the K:/ drive as follows: `K:/ECEMF/T5.2/Allocations/`. There (and in K:/ECEMF/T5.2) all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
+
+```shell
+cd K:
+mkdir ECEMF\T5.2\Allocations
+```
 
 ## Main features
 The main notebook you will be using is `Main.ipynb` in the main directory. Each cell in that notebook loads in a particular class and then goes through all of its methods. The first one being called is the class in the file `class_datareading.py`. This class gathers all data from external sources, such as population, GDP, historical emissions, etc. on a country level, but also computes global pathways into the future. It does not do any effort sharing. The output is a file called `xr_dataread.nc`, which is your friend in case you need any country-specific data for debugging, for example. The main uncertainties / work from our side is around generating those future pathways under various circumstances (peak temperature, risk, non-CO2 assumptions, etc.).
@@ -9,6 +41,8 @@ The second class being called is the one from `class_allocation.py`. That one do
 The third and fourth classes called in `Main.ipynb` are associated with loading in ENGAGE scenarios and evaluating NDCs. Not relevant right now and mostly used in the paper.
 
 One final important notebook is `Aggregator.ipynb`. This script aggregates the country-individual files `xr_alloc_XYZ.nc`. One output is the aggregation of those files into a single file for a single year, for example `xr_alloc_2030.nc`. Useful for analysis purposes.
+
+Input variables can be changed in `input.yml`.
 
 ## Workflow
 Please feel free to add and/or fix any of the issues on the Github issue list if you have time to contribute. But if you adjust code, please create your own branch or work in one of the existing ones - and use pull requests to merge them into the `main` branch. Ask someone (for now Chantal or me) to review it before merging, there is a button for that.
