@@ -15,7 +15,7 @@ paths:
 
 params:
   toggle_co2_budgets: 'Forster' # Forster or WG1
-  toggle_overshoot_dataread: 'yes' # If yes, then the xr_dataread file with T=1.56 in it, "allowing for overshoot in the peak temperature" (this is for the PBL report)
+  # toggle_overshoot_dataread: 'yes' # If yes, then the xr_dataread file with T=1.56 in it, "allowing for overshoot in the peak temperature" (this is for the PBL report)
   pcc_conv_start: 2040
   pcc_conv_end: 2100
   convergence_year_gdr: 2100

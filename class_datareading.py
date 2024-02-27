@@ -840,112 +840,92 @@ class datareading(object):
 
     def save(self): 
         print('- Save important files')
-        np.save(self.settings['paths']['data']['datadrive'] + "all_regions.npy", self.regions_iso)
-        np.save(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy", self.regions_name)
-        np.save(self.settings['paths']['data']['datadrive'] + "all_countries.npy", self.countries_iso)
-        np.save(self.settings['paths']['data']['datadrive'] + "all_countries_names.npy", self.countries_name)
-        self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread.nc',
-            encoding={
-                "Region": {"dtype": "str"},
-                "Scenario": {"dtype": "str"},
-                "Time": {"dtype": "int"},
 
-                "Temperature": {"dtype": "float"},
-                "NonCO2red": {"dtype": "float"},
-                "NegEmis": {"dtype": "float"},
-                "Risk": {"dtype": "float"},
-                "Timing": {"dtype": "str"},
+        xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2))
+        xr_pbl = self.xr_total
 
-                "Conditionality": {"dtype": "str"},
-                "Hot_air": {"dtype": "str"},
-                "Ambition": {"dtype": "str"},
+        for version_i, xr_version in enumerate([xr_normal, xr_pbl]):
+            if version_i == 0: ext = ''
+            else: ext = 'PBL/'
 
-                "GDP": {"zlib": True, "complevel": 9},
-                "Population": {"zlib": True, "complevel": 9},
-                "GHG_hist": {"zlib": True, "complevel": 9},
-                "GHG_globe": {"zlib": True, "complevel": 9},
-                "GHG_base": {"zlib": True, "complevel": 9},
-                "GHG_ndc": {"zlib": True, "complevel": 9},
-                "GHG_hist_ndc_corr": {"zlib": True, "complevel": 9},
-            },
-            format="NETCDF4",
-            engine="netcdf4",
-        )
+            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions.npy", self.regions_iso)
+            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions_names.npy", self.regions_name)
+            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_countries.npy", self.countries_iso)
+            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_countries_names.npy", self.countries_name)
 
-        self.xr_total.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_pbl.nc',
-            encoding={
-                "Region": {"dtype": "str"},
-                "Scenario": {"dtype": "str"},
-                "Time": {"dtype": "int"},
+            xr_version.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_dataread.nc',
+                encoding={
+                    "Region": {"dtype": "str"},
+                    "Scenario": {"dtype": "str"},
+                    "Time": {"dtype": "int"},
 
-                "Temperature": {"dtype": "float"},
-                "NonCO2red": {"dtype": "float"},
-                "NegEmis": {"dtype": "float"},
-                "Risk": {"dtype": "float"},
+                    "Temperature": {"dtype": "float"},
+                    "NonCO2red": {"dtype": "float"},
+                    "NegEmis": {"dtype": "float"},
+                    "Risk": {"dtype": "float"},
+                    "Timing": {"dtype": "str"},
 
-                "Conditionality": {"dtype": "str"},
-                "Hot_air": {"dtype": "str"},
-                "Ambition": {"dtype": "str"},
+                    "Conditionality": {"dtype": "str"},
+                    "Hot_air": {"dtype": "str"},
+                    "Ambition": {"dtype": "str"},
 
-                "GDP": {"zlib": True, "complevel": 9},
-                "Population": {"zlib": True, "complevel": 9},
-                "GHG_hist": {"zlib": True, "complevel": 9},
-                "GHG_globe": {"zlib": True, "complevel": 9},
-                "GHG_base": {"zlib": True, "complevel": 9},
-                "GHG_ndc": {"zlib": True, "complevel": 9},
-                "GHG_hist_ndc_corr": {"zlib": True, "complevel": 9},
-            },
-            format="NETCDF4",
-            engine="netcdf4",
-        )
+                    "GDP": {"zlib": True, "complevel": 9},
+                    "Population": {"zlib": True, "complevel": 9},
+                    "GHG_hist": {"zlib": True, "complevel": 9},
+                    "GHG_globe": {"zlib": True, "complevel": 9},
+                    "GHG_base": {"zlib": True, "complevel": 9},
+                    "GHG_ndc": {"zlib": True, "complevel": 9},
+                    "GHG_hist_ndc_corr": {"zlib": True, "complevel": 9},
+                },
+                format="NETCDF4",
+                engine="netcdf4",
+            )
 
-        print('- Some pre-calculations for the AP allocation rule')
-        xrt = self.xr_total.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-        r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
-        base_worldsum = xrt.GHG_base.sel(Region='EARTH')
-        a=0
-        for reg_i, reg in enumerate(self.countries_iso):
-            rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
-            rb_part2 = xrt.GHG_base.sel(Region=reg)*(base_worldsum - xrt.GHG_globe)/base_worldsum
-            if a == 0:
-                r = rb_part1*rb_part2
-                if not np.isnan(np.max(r)):
-                    rbw = r
-                    a += 1
-            else:
-                r = rb_part1*rb_part2
-                if not np.isnan(np.max(r)):
-                    rbw += r
-                    a += 1
-        rbw.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_rbw.nc')
+            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+            base_worldsum = xrt.GHG_base.sel(Region='EARTH')
+            a=0
+            for reg_i, reg in enumerate(self.countries_iso):
+                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
+                rb_part2 = xrt.GHG_base.sel(Region=reg)*(base_worldsum - xrt.GHG_globe)/base_worldsum
+                if a == 0:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw = r
+                        a += 1
+                else:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw += r
+                        a += 1
+            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw.nc')
 
-        print('- Some pre-calculations for the GDR allocation rule')
-        r=0
-        hist_emissions_startyears = [1850, 1950, 1990]
-        capability_thresholds = ['No', 'Th', 'PrTh']
-        rci_weights = ['Resp', 'Half', 'Cap']
-        for startyear_i, startyear in enumerate(hist_emissions_startyears):
-            for th_i, th in enumerate(capability_thresholds):
-                for weight_i, weight in enumerate(rci_weights):
-                    # Read RCI
-                    df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/GDR_15_"+str(startyear)+"_"+th+"_"+weight+".xls", 
-                                            delimiter='\t', 
-                                            skiprows=30)[:-2]
-                    df_rci = df_rci[['iso3', 'year', 'rci']]
-                    iso3 = np.array(df_rci.iso3)
-                    iso3[iso3 == 'CHK'] = 'CHN'
-                    df_rci['iso3'] = iso3
-                    df_rci['year'] = df_rci['year'].astype(int)
-                    df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
-                    df_rci['Historical_startyear'] = startyear
-                    df_rci['Capability_threshold'] = th
-                    df_rci['RCI_weight'] = weight
-                    if r==0:
-                        fulldf = df_rci
-                        r+=1
-                    else:
-                        fulldf = pd.concat([fulldf, df_rci])
-        dfdummy = fulldf.set_index(['Region', 'Time', 'Historical_startyear', 'Capability_threshold', 'RCI_weight'])
-        xr_rci = xr.Dataset.from_dataframe(dfdummy)
-        xr_rci = xr_rci.reindex({"Region": self.xr_total.Region})
-        xr_rci.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_rci.nc')
+            r=0
+            hist_emissions_startyears = [1850, 1950, 1990]
+            capability_thresholds = ['No', 'Th', 'PrTh']
+            rci_weights = ['Resp', 'Half', 'Cap']
+            for startyear_i, startyear in enumerate(hist_emissions_startyears):
+                for th_i, th in enumerate(capability_thresholds):
+                    for weight_i, weight in enumerate(rci_weights):
+                        # Read RCI
+                        df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/GDR_15_"+str(startyear)+"_"+th+"_"+weight+".xls", 
+                                                delimiter='\t', 
+                                                skiprows=30)[:-2]
+                        df_rci = df_rci[['iso3', 'year', 'rci']]
+                        iso3 = np.array(df_rci.iso3)
+                        iso3[iso3 == 'CHK'] = 'CHN'
+                        df_rci['iso3'] = iso3
+                        df_rci['year'] = df_rci['year'].astype(int)
+                        df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
+                        df_rci['Historical_startyear'] = startyear
+                        df_rci['Capability_threshold'] = th
+                        df_rci['RCI_weight'] = weight
+                        if r==0:
+                            fulldf = df_rci
+                            r+=1
+                        else:
+                            fulldf = pd.concat([fulldf, df_rci])
+            dfdummy = fulldf.set_index(['Region', 'Time', 'Historical_startyear', 'Capability_threshold', 'RCI_weight'])
+            xr_rci = xr.Dataset.from_dataframe(dfdummy)
+            xr_rci = xr_rci.reindex({"Region": xr_version.Region})
+            xr_rci.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rci.nc')
