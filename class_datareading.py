@@ -871,34 +871,6 @@ class datareading(object):
             format="NETCDF4",
             engine="netcdf4",
         )
-        xr_revised = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2))
-        xr_revised = xr_revised.assign_coords({"Timing": ("Timing", [0, 1])})
-        xr_revised.drop_vars( ['source', 'Version']).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_cabe.nc',
-            encoding={
-                "Region": {"dtype": "str"},
-                "Scenario": {"dtype": "str"},
-                "Time": {"dtype": "int"},
-
-                "Temperature": {"dtype": "float"},
-                "NonCO2red": {"dtype": "float"},
-                "NegEmis": {"dtype": "float"},
-                "Risk": {"dtype": "float"},
-
-                "Conditionality": {"dtype": "str"},
-                "Hot_air": {"dtype": "str"},
-                "Ambition": {"dtype": "str"},
-
-                "GDP": {"zlib": True, "complevel": 9},
-                "Population": {"zlib": True, "complevel": 9},
-                "GHG_hist": {"zlib": True, "complevel": 9},
-                "GHG_globe": {"zlib": True, "complevel": 9},
-                "GHG_base": {"zlib": True, "complevel": 9},
-                "GHG_ndc": {"zlib": True, "complevel": 9},
-                "GHG_hist_ndc_corr": {"zlib": True, "complevel": 9},
-            },
-            format="NETCDF4",
-            engine="netcdf4",
-        )
 
         self.xr_total.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_pbl.nc',
             encoding={
