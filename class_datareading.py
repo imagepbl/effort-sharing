@@ -360,6 +360,8 @@ class datareading(object):
         for timing_i, timing in enumerate(self.Timinglist):
             mslist = [self.ms_immediate, self.ms_delayed][timing_i]
             for temp_i, temp in enumerate(self.Tlist):
+                if np.abs(temp-1.5) < 0.01 and timing == 'Delayed': # Otherwise Delayed is empty and that breaks the CABE
+                    mslist = self.ms_immediate
                 ms_t = ms_temp(temp)
                 ms = np.intersect1d(mslist, ms_t)
                 if len(ms) == 0:
@@ -375,8 +377,6 @@ class datareading(object):
                     for n_i, n in enumerate(self.NonCO2list):
                         red = reds[n_i]
                         ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
-                        if len(ms2) == 0:
-                            print(temp, n)
                         trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(2021, 2101))
                         trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
 
@@ -401,15 +401,15 @@ class datareading(object):
         self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
 
         # Post-processing: making temperature dependence smooth
-        self.xr_traj_nonco2_imm = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 2.4]})
-        self.xr_traj_nonco2_imm = self.xr_traj_nonco2_imm.reindex({'Temperature': self.Tlist})
-        self.xr_traj_nonco2_imm = self.xr_traj_nonco2_imm.interpolate_na(dim='Temperature').sel(Timing='Immediate').expand_dims(Timing=["Immediate"])
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 2.4]})
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
 
-        self.xr_traj_nonco2_del = self.xr_traj_nonco2.reindex({'Temperature': [1.56, 2.4]}) # Because 1.5 is empty for delayed
-        self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.reindex({'Temperature': self.Tlist})
-        self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.interpolate_na(dim='Temperature').sel(Timing='Delayed').expand_dims(Timing=["Delayed"])
+        # self.xr_traj_nonco2_del = self.xr_traj_nonco2.reindex({'Temperature': [1.56, 2.4]}) # Because 1.5 is empty for delayed
+        # self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.reindex({'Temperature': self.Tlist})
+        # self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.interpolate_na(dim='Temperature').sel(Timing='Delayed').expand_dims(Timing=["Delayed"])
 
-        self.xr_traj_nonco2 = xr.merge([self.xr_traj_nonco2_imm, self.xr_traj_nonco2_del])
+        #self.xr_traj_nonco2 = xr.merge([self.xr_traj_nonco2_imm, self.xr_traj_nonco2_del])
 
         # # Non-CO2 trajectories
         # xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2020, 2101))*self.settings['params']['gwp_ch4']/1e3
@@ -597,7 +597,7 @@ class datareading(object):
         def budget_harm(nz):
             compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], self.settings['params']['harmonization_year']))))+[1]*len(np.arange(self.settings['params']['harmonization_year'], 2101)))
             xr_comp2 =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-            return xr_comp2 / np.sum(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], nz))))
+            return xr_comp2 / np.sum(xr_comp2.sel(Time=np.arange(self.settings['params']['start_year_analysis'], nz)))
 
         xr_traj_co2 = xr.Dataset(
             coords={
@@ -650,10 +650,12 @@ class datareading(object):
             for timing_i, timing in enumerate(self.Timinglist):
                 if timing == 'Immediate': mslist = self.ms_immediate
                 if timing == 'Delayed': mslist = self.ms_delayed
+                if temp == 1.5 and timing == 'Delayed': # TODO Otherwise Delayed is empty and that breaks the CABE
+                    mslist = self.ms_immediate
                 ms2 = np.intersect1d(ms1, mslist)
                 emis2100_i = emis2100.sel(ModelScenario=ms2)
-                if len(ms2) == 0: # TODO have a look at this, the 1.5 scenarios do not have delayed action
-                    3
+                if len(ms2) == 0:
+                    print('oops')
                 else:
                     # The 90-percentile of 2100 emissions
                     ms_90 = self.xr_ar6.sel(ModelScenario=ms2).ModelScenario[(emis2100_i >= emis2100_i.quantile(0.9-0.1)
@@ -691,6 +693,13 @@ class datareading(object):
                                         nz = 2100
                                     factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)*1e3 - pathway_final[pathway_final > 0].sum())
                                     pathway_final2 = np.array((1e3*(pathway_final+factor*budget_harm(nz)))/1e3)
+
+                                    try:
+                                        nz = self.settings['params']['start_year_analysis']+np.where(pathway_final2 <= 0)[0][0]
+                                    except:
+                                        nz = 2100
+                                    factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)*1e3 - pathway_final2[pathway_final2 > 0].sum())
+                                    pathway_final2 = (1e3*(pathway_final2+factor*budget_harm(nz)))/1e3
 
                                     try:
                                         nz = self.settings['params']['start_year_analysis']+np.where(pathway_final2 <= 0)[0][0]

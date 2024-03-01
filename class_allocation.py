@@ -143,6 +143,80 @@ class allocation(object):
         # with existing GF and PC allocations
         xr_new = (gfdeel_single*self.xr_total.GF + pcdeel_single*self.xr_total.PC)['PCC']
         self.xr_total = self.xr_total.assign(PCC = xr_new)
+
+    # =========================================================== #
+    # =========================================================== #
+
+    def pcb(self):
+        '''
+        Per capita on a budget basis
+        '''
+        # co2 part
+        def budget_harm(nz):
+            compensation_form = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis']))
+            xr_comp2 =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+            return xr_comp2 / ((nz-2021)**(3/2)*0.5)
+        def pcb_new_factor(path, f):
+            netzeros = 2021+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
+            netzeros = netzeros.where(netzeros < 2100, 2100)
+            return path+budget_harm(netzeros)*f
+
+        pop_region = self.xr_total.sel(Time=self.start_year_analysis).Population
+        pop_earth = self.xr_total.sel(Region=self.countries_iso, 
+                                    Time=self.start_year_analysis).Population.sum(dim=['Region'])
+        pop_fraction =  (pop_region / pop_earth).mean(dim='Scenario')
+        globalpath = self.xr_total.CO2_globe
+
+        emis_2021_i = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
+        emis_2021_w = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis, 
+                                                    Region='EARTH')
+        path_scaled_0 = (emis_2021_i/emis_2021_w*globalpath).sel(Time=np.arange(self.start_year_analysis, 2101)).sel(Region=self.FocusRegion)
+        budget_left = (self.xr_total.CO2_globe.where(self.xr_total.CO2_globe > 0, 0).sel(Time=np.arange(self.start_year_analysis, 2101)).sum(dim='Time')*pop_fraction).sel(Region=self.FocusRegion)
+
+        budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(dim='Time')
+        budget_surplus = (budget_left - budget_without_assumptions_prepeak)/10
+        pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name='PCB')
+
+        # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
+        it=0
+        while it < 9:
+            pcb_pos = pcb.where(pcb > 0, 0).sum(dim='Time')
+            budget_surplus = (budget_left - pcb_pos).PCB/10
+            pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name='PCB')
+            it+=1
+            
+        # Non-co2 part
+        nonco2_current = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis) - self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
+        nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
+        nonco2_part_gf = nonco2_fraction*self.xr_total.NonCO2_globe
+
+        pc_fraction = self.xr_total.Population.sel(Time=self.start_year_analysis) / self.xr_total.Population.sel(Time=self.start_year_analysis, Region='EARTH')
+        nonco2_part_pc = pc_fraction*self.xr_total.NonCO2_globe
+
+        compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2040))))+[1]*len(np.arange(2040, 2101)))
+        xr_comp =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+
+        nonco2_part = nonco2_part_gf*(1-xr_comp) + nonco2_part_pc*(xr_comp)
+
+        # together:
+        self.ghg_pcb = pcb + nonco2_part
+        self.xr_total = self.xr_total.assign(PCB = self.ghg_pcb.PCB).sel(Region=self.FocusRegion)
+
+        # Linear pathway down code (for now not used)
+        # xr_comp =  xr.DataArray(np.arange(0, 2101-self.settings['params']['start_year_analysis']), dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+        # pop_region = self.xr_total.sel(Time=self.start_year_analysis).Population
+        # pop_earth = self.xr_total.sel(Region=self.countries_iso, 
+        #                             Time=self.start_year_analysis).Population.sum(dim=['Region'])
+        # pop_fraction =  (pop_region / pop_earth).mean(dim='Scenario')
+
+        # netzeros_delta = (2*self.xr_total.Budget*pop_fraction*1000)/self.xr_total.CO2_hist.sel(Time=2021)
+        # co2_part = (self.xr_total.CO2_hist.sel(Time=2021)-(self.xr_total.CO2_hist.sel(Time=2021)/netzeros_delta)*xr_comp)
+        # co2_part = co2_part.where(co2_part >= 0, 0)
+
+        # nonco2_current = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis) - self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
+        # nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
+        # nonco2_part = nonco2_fraction*self.xr_total.NonCO2_globe
+
     # =========================================================== #
     # =========================================================== #
 
