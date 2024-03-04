@@ -155,7 +155,7 @@ class allocation(object):
         def budget_harm(nz):
             compensation_form = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis']))
             xr_comp2 =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-            return xr_comp2 / ((nz-2021)**(3/2)*0.5)
+            return xr_comp2 / ((nz-2021)**(3/2)*(2/3)) # TODO later: should be , but I now calibrated to 0.5. Not a problem because we have the while loop later.
         def pcb_new_factor(path, f):
             netzeros = 2021+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
             netzeros = netzeros.where(netzeros < 2100, 2100)
@@ -174,17 +174,23 @@ class allocation(object):
         budget_left = (self.xr_total.CO2_globe.where(self.xr_total.CO2_globe > 0, 0).sel(Time=np.arange(self.start_year_analysis, 2101)).sum(dim='Time')*pop_fraction).sel(Region=self.FocusRegion)
 
         budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(dim='Time')
-        budget_surplus = (budget_left - budget_without_assumptions_prepeak)/10
+        budget_surplus = (budget_left - budget_without_assumptions_prepeak)
         pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name='PCB')
 
         # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
         it=0
-        while it < 9:
+        while it < 3:
             pcb_pos = pcb.where(pcb > 0, 0).sum(dim='Time')
-            budget_surplus = (budget_left - pcb_pos).PCB/10
+            budget_surplus = (budget_left - pcb_pos).PCB
             pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name='PCB')
             it+=1
-            
+
+        # CO2, but now linear
+        nz = (budget_left*2/self.xr_total.CO2_hist.sel(Region=self.FocusRegion, Time=self.start_year_analysis)+self.start_year_analysis-1)
+        coef = self.xr_total.CO2_hist.sel(Region=self.FocusRegion, Time=self.start_year_analysis)/(nz-self.start_year_analysis)
+        linear_co2 = -coef*xr.DataArray(np.arange(0, 2101-self.start_year_analysis), dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})+self.xr_total.CO2_hist.sel(Region=self.FocusRegion, Time=self.start_year_analysis)
+        linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name='PCB_lin')
+
         # Non-co2 part
         nonco2_current = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis) - self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
         nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
@@ -199,8 +205,10 @@ class allocation(object):
         nonco2_part = nonco2_part_gf*(1-xr_comp) + nonco2_part_pc*(xr_comp)
 
         # together:
-        self.ghg_pcb = pcb + nonco2_part
-        self.xr_total = self.xr_total.assign(PCB = self.ghg_pcb.PCB).sel(Region=self.FocusRegion)
+        self.ghg_pcb = pcb + nonco2_part.sel(Region=self.FocusRegion)
+        self.ghg_pcb_lin = linear_co2_pos + nonco2_part.sel(Region=self.FocusRegion)
+        self.xr_total = self.xr_total.assign(PCB = self.ghg_pcb.PCB)
+        self.xr_total = self.xr_total.assign(PCB_lin = self.ghg_pcb_lin.PCB_lin)
 
         # Linear pathway down code (for now not used)
         # xr_comp =  xr.DataArray(np.arange(0, 2101-self.settings['params']['start_year_analysis']), dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
