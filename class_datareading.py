@@ -755,47 +755,32 @@ class datareading(object):
 
     def read_ndc(self):
         print('- Reading NDC data')
-        ghg_data = np.zeros(shape=(len(self.countries_iso), 3, 2, 2, len(np.arange(2010, 2051))))
-        for cty_i, cty in enumerate(self.countries_iso):
-            for cond_i, cond in enumerate(['conditional', 'range', 'unconditional']):
-                for hot_i, hot in enumerate(['include', 'exclude']):
-                    for amb_i, amb in enumerate(['low', 'high']):
-                        params = self.settings['params']
-                        path = f'X:/user/dekkerm/Data/NDC/ClimateResource_{params["version_ndcs"]}/{cond}/{hot}/{cty.lower()}_ndc_{params["version_ndcs"]}_CR_{cond}_{hot}.json'
-                        try:
-                            with open(path, 'r') as file:
-                                json_data = json.load(file)
-                            country_name = json_data['results']['country']['name']
-                            series_items = json_data['results']['series']
-                            for item in series_items:
-                                columns = item['columns']
-                                if columns['variable'] == "Emissions|Total GHG excl. LULUCF" and columns['category'] == "Updated NDC" and columns['ambition'] == amb:
-                                    data = item['data']
-                                    time_values = [int(year) for year in data.keys()]
-                                    ghg_values = np.array(list(item['data'].values()))
-                                    ghg_values[ghg_values == 'None'] = np.nan
-                                    ghg_values = ghg_values.astype(float)
-                                    ghg_values = ghg_values[np.array(time_values) >= 2010]
-                                    ghg_data[cty_i, cond_i, hot_i, amb_i] = ghg_values
-                                    #series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
-                        except:
-                            continue
-        coords = {
-            'Region': self.countries_iso,
-            'Conditionality': ['conditional', 'range', 'unconditional'],
-            'Hot_air': ['include', 'exclude'],
-            'Ambition': ['low', 'high'],
-            'Time': np.array(time_values)[np.array(time_values)>=2010],
-        }
-        data_vars = {
-            'GHG_ndc': (['Region', 'Conditionality', 'Hot_air', 'Ambition', 'Time'], ghg_data),
-        }
-        xr_ndc = xr.Dataset(data_vars, coords=coords)
+        df_ndc = pd.read_excel("X:/user/dekkerm/Data/NDC/Infographics version 23May2024_CarbonBudgetExplorer.xlsx", sheet_name='CBE_Curated data', header=[0, 1, 2])
+        iso = np.array(df_ndc["(Mt CO2 equivalent)"]['ISO3 code']['Unnamed: 2_level_2'])
+        ndc_cond_min = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['min']
+        ndc_cond_max = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['max']
+        ndc_uncond_min = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['min']
+        ndc_uncond_max = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['max']
+        emis_2015 = df_ndc["(Mt CO2 equivalent)"]['2015 emissions']['Unnamed: 6_level_2']
+        nz_co2 = df_ndc['Net-zero year']['CO2']['Unnamed: 17_level_2']
+        nz_ghg = df_ndc['Net-zero year']['GHG']['Unnamed: 18_level_2']
+        iso[-4] = 'Other Non-Annex I'
+        iso[-3] = 'Bunkers'
+        iso[-2] = 'Remaining LULUCF CO2'
+        iso[-1] = 'EARTH'
 
-        #factors = xr_ndc.sel(Time=params['start_year_analysis']).GHG_ndc / self.xr_primap.sel(Time=params['start_year_analysis']).CO2_hist
-        self.xr_ndc = xr_ndc#.assign(CO2_ndc = xr_ndc.GHG_ndc/factors)
-        diff = self.xr_ndc.sel(Time=np.arange(2010, 2021)).mean(dim='Time') - self.xr_primap_excl.GHG_hist_excl.sel(Time=np.arange(2010, 2021)).mean(dim='Time')
-        self.xr_primap['GHG_hist_ndc_corr'] = (self.xr_primap_excl.GHG_hist_excl + diff).GHG_ndc
+        rows = []
+        for reg_i, reg in enumerate(iso):
+            rows.append([reg, 'conditional', 'max', ndc_cond_max[reg_i]])
+            rows.append([reg, 'conditional', 'min', ndc_cond_min[reg_i]])
+            rows.append([reg, 'unconditional', 'max', ndc_uncond_max[reg_i]])
+            rows.append([reg, 'unconditional', 'min', ndc_uncond_min[reg_i]])
+
+        df_ndc_new = pd.DataFrame(np.array(rows),
+                                columns=['Region', 'Conditionality', 'Ambition', 'GHG_ndc'])
+        dummy = df_ndc_new.set_index(['Region', 'Conditionality', 'Ambition'])
+        dummy['GHG_ndc'] = np.array(dummy['GHG_ndc']).astype(float)
+        self.xr_ndc = xr.Dataset.from_dataframe(dummy)
 
     # =========================================================== #
     # =========================================================== #
@@ -834,9 +819,9 @@ class datareading(object):
                 coords={'Region': [country for country in np.array(self.xr_total['Region']) for group in country_to_eu[country]]}
             )
             if group_of_choice == 'EU':
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", 'GHG_ndc']].groupby(group_coord).sum()#skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", 'GHG_ndc']].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
@@ -875,7 +860,6 @@ class datareading(object):
                     "Timing": {"dtype": "str"},
 
                     "Conditionality": {"dtype": "str"},
-                    "Hot_air": {"dtype": "str"},
                     "Ambition": {"dtype": "str"},
 
                     "GDP": {"zlib": True, "complevel": 9},
@@ -884,7 +868,6 @@ class datareading(object):
                     "GHG_globe": {"zlib": True, "complevel": 9},
                     "GHG_base": {"zlib": True, "complevel": 9},
                     "GHG_ndc": {"zlib": True, "complevel": 9},
-                    "GHG_hist_ndc_corr": {"zlib": True, "complevel": 9},
                 },
                 format="NETCDF4",
                 engine="netcdf4",
