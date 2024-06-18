@@ -22,7 +22,7 @@ params:
   convergence_year_base: 2150
   discount_factor: 0.015
   version_ndcs: 13Mar2023a
-  gwp_ch4: 27.2
+  gwp_ch4: 27.2 # = non-fossil origin
   gwp_n2o: 273
   gwp_ch4_ar4: 25
   gwp_n2o_ar4: 298
