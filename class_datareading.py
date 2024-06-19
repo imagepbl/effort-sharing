@@ -191,51 +191,76 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
-    def read_historicalemis(self):
-        print('- Reading historical emissions (primap)')
-        xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
-        xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL", "M.LULUCF"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
-        xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
-        xr_primap.coords['Time'] = np.array([str(i)[:4] for i in np.array(xr_primap.Time)]).astype(int)
-        xr_primap = xr_primap.drop_vars(['source', 'Version']).sel(provenance='measured').drop_vars(['provenance'])
-        xr_primap['CO2_hist'] = xr_primap['CO2_hist']/1e3
-        xr_primap['GHG_hist_all'] = xr_primap['GHG_hist']/1e3
-        xr_primap['GHG_hist'] = (xr_primap['CO2_hist']+xr_primap['CH4_hist']*self.settings['params']['gwp_ch4']/1e3+xr_primap['N2O_hist']*self.settings['params']['gwp_n2o']/1e3)
-        xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
-        xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
-        xr_primap = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1))
+    def read_historicalemis_jones(self):
+        print('- Reading historical emissions (jones)') # No harmonization with the KEV anymore, but it's also much closer now
+        xr_primap2 = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2024-PRIMAP-hist_v2.5.1_final_no_rounding_27-Feb-2024.nc")
+        df_nwc = pd.read_csv('X:/user/dekkerm/Data/NationalWarningContributions/EMISSIONS_ANNUAL_1830-2022.csv')
+        xr_nwc = xr.Dataset.from_dataframe(df_nwc.drop(columns=['CNTR_NAME', 'Unit']).set_index(['ISO3', 'Gas', 'Component', 'Year']))
+        regs = np.array(xr_nwc.ISO3)
+        regs[regs == 'GLOBAL'] = 'EARTH'
+        xr_nwc['ISO3'] = regs
+        xr_nwc_tot = (xr_nwc.sel(Gas='CH[4]')*self.settings['params']['gwp_ch4']/1e3+xr_nwc.sel(Gas='N[2]*O')*self.settings['params']['gwp_n2o']/1e3+xr_nwc.sel(Gas='CO[2]')*1).drop_vars(['Gas'])
+        xr_nwc_co2 = xr_nwc.sel(Gas='CO[2]').drop_vars(['Gas'])
+        xr_nwc_ch4 = xr_nwc.sel(Gas='CH[4]').drop_vars(['Gas'])*self.settings['params']['gwp_ch4']/1e3
+        xr_nwc_n2o = xr_nwc.sel(Gas='N[2]*O').drop_vars(['Gas'])*self.settings['params']['gwp_n2o']/1e3
+        xr_primap_agri = xr_primap2['KYOTOGHG (AR6GWP100)'].rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'scen', 'category (IPCC2006_PRIMAP)': 'cat'}).sel(scen='HISTTP', provenance='derived', cat=['M.AG'], source='PRIMAP-hist_v2.5.1_final_nr').sum(dim='cat').drop_vars(['source', 'provenance', 'scen'])
+        xr_primap_agri['time'] = np.arange(1750, 2023)
+        xr_primap_agri = xr_primap_agri.rename({'time': 'Time'})
+        xr_ghghist = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'GHG_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
+        xr_co2hist = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CO2_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
+        xr_ch4hist = (xr_nwc_ch4.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CH4_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
+        xr_n2ohist = (xr_nwc_n2o.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'N2O_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
+        xr_ghgexcl = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'GHG_hist_excl'})
+        self.xr_hist = xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist,xr_ch4hist, xr_n2ohist])*1e3
 
-        # Dutch emissions - harmonized with the KEV
-        dutch_time = np.array([1990, 1995, 2000, 2005, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021])
-        dutch_ghg = np.array([228.9, 238.0, 225.7, 220.9, 219.8, 206, 202, 201.2, 192.9, 199.8, 200.2, 196.5, 191.4, 185.6, 168.9, 172.0])
-        dutch_time_interp = np.arange(1990, 2021+1)
-        dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
-        fraction_1990 = dutch_ghg[0] / xr_primap['GHG_hist'].sel(Region='NLD', Time=1990)
-        pre_1990_raw = np.array(xr_primap['GHG_hist'].sel(Region='NLD', Time=np.arange(1750, 1990)))*float(fraction_1990)
-        total_time = np.arange(1750, 2021+1)
-        total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
-        fractions = np.array(xr_primap.GHG_hist.sel(Region='NLD') / total_ghg_nld)
-        for t_i, t in enumerate(total_time):
-            xr_primap.GHG_hist_all.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
-            xr_primap.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
-        xr_primap.CO2_hist.loc[dict(Region='NLD')] = xr_primap.CO2_hist.sel(Region='NLD')/fractions
-        xr_primap.CH4_hist.loc[dict(Region='NLD')] = xr_primap.CH4_hist.sel(Region='NLD')/fractions
-        xr_primap.N2O_hist.loc[dict(Region='NLD')] = xr_primap.N2O_hist.sel(Region='NLD')/fractions
+    # =========================================================== #
+    # =========================================================== #
 
-        self.xr_primap = xr_primap
+    # def read_historicalemis(self):
+    #     print('- Reading historical emissions (primap)')
+    #     xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
+    #     xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL", "M.LULUCF"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
+    #     xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
+    #     xr_primap.coords['Time'] = np.array([str(i)[:4] for i in np.array(xr_primap.Time)]).astype(int)
+    #     xr_primap = xr_primap.drop_vars(['source', 'Version']).sel(provenance='measured').drop_vars(['provenance'])
+    #     xr_primap['CO2_hist'] = xr_primap['CO2_hist']/1e3
+    #     xr_primap['GHG_hist_all'] = xr_primap['GHG_hist']/1e3
+    #     xr_primap['GHG_hist'] = (xr_primap['CO2_hist']+xr_primap['CH4_hist']*self.settings['params']['gwp_ch4']/1e3+xr_primap['N2O_hist']*self.settings['params']['gwp_n2o']/1e3)
+    #     xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
+    #     xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
+    #     xr_primap = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1))
 
-        # TODO Excluding LULUCF is not harmonized with KEV !!
-        xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
-        xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
-        xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
-        xr_primap.coords['Time'] = np.array([str(i)[:4] for i in np.array(xr_primap.Time)]).astype(int)
-        xr_primap['CO2_hist'] = xr_primap['CO2_hist']/1e3
-        xr_primap['GHG_hist_all'] = xr_primap['GHG_hist']/1e3
-        xr_primap['GHG_hist_excl'] = (xr_primap['CO2_hist']+xr_primap['CH4_hist']*self.settings['params']['gwp_ch4']/1e3+xr_primap['N2O_hist']*self.settings['params']['gwp_n2o']/1e3)
-        xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
-        xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
-        xr_primap = xr_primap.drop_vars(['CO2_hist', 'GHG_hist_all', 'CH4_hist', 'N2O_hist', 'GHG_hist'])
-        self.xr_primap_excl = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1), provenance='measured')
+    #     # Dutch emissions - harmonized with the KEV
+    #     dutch_time = np.array([1990, 1995, 2000, 2005, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021])
+    #     dutch_ghg = np.array([228.9, 238.0, 225.7, 220.9, 219.8, 206, 202, 201.2, 192.9, 199.8, 200.2, 196.5, 191.4, 185.6, 168.9, 172.0])
+    #     dutch_time_interp = np.arange(1990, 2021+1)
+    #     dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
+    #     fraction_1990 = dutch_ghg[0] / xr_primap['GHG_hist'].sel(Region='NLD', Time=1990)
+    #     pre_1990_raw = np.array(xr_primap['GHG_hist'].sel(Region='NLD', Time=np.arange(1750, 1990)))*float(fraction_1990)
+    #     total_time = np.arange(1750, 2021+1)
+    #     total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
+    #     fractions = np.array(xr_primap.GHG_hist.sel(Region='NLD') / total_ghg_nld)
+    #     for t_i, t in enumerate(total_time):
+    #         xr_primap.GHG_hist_all.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+    #         xr_primap.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+    #     xr_primap.CO2_hist.loc[dict(Region='NLD')] = xr_primap.CO2_hist.sel(Region='NLD')/fractions
+    #     xr_primap.CH4_hist.loc[dict(Region='NLD')] = xr_primap.CH4_hist.sel(Region='NLD')/fractions
+    #     xr_primap.N2O_hist.loc[dict(Region='NLD')] = xr_primap.N2O_hist.sel(Region='NLD')/fractions
+
+    #     self.xr_primap = xr_primap
+
+    #     # TODO Excluding LULUCF is not harmonized with KEV !!
+    #     xr_primap = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2023b-PRIMAP-hist_v2.5_final_no_rounding_15-Oct-2023.nc")
+    #     xr_primap = xr_primap.rename({"area (ISO3)": "Region", 'time': 'Time', "category (IPCC2006_PRIMAP)": 'Category', "scenario (PRIMAP-hist)": "Version"}).sel(source='PRIMAP-hist_v2.5_final_nr', Version='HISTTP', Category=["M.0.EL"])[['KYOTOGHG (AR4GWP100)', 'CO2', 'N2O', 'CH4']].sum(dim='Category')
+    #     xr_primap = xr_primap.rename({'KYOTOGHG (AR4GWP100)': "GHG_hist", "CO2": "CO2_hist", "CH4": "CH4_hist", "N2O": "N2O_hist"})
+    #     xr_primap.coords['Time'] = np.array([str(i)[:4] for i in np.array(xr_primap.Time)]).astype(int)
+    #     xr_primap['CO2_hist'] = xr_primap['CO2_hist']/1e3
+    #     xr_primap['GHG_hist_all'] = xr_primap['GHG_hist']/1e3
+    #     xr_primap['GHG_hist_excl'] = (xr_primap['CO2_hist']+xr_primap['CH4_hist']*self.settings['params']['gwp_ch4']/1e3+xr_primap['N2O_hist']*self.settings['params']['gwp_n2o']/1e3)
+    #     xr_primap['CH4_hist'] = xr_primap['CH4_hist']/1e3
+    #     xr_primap['N2O_hist'] = xr_primap['N2O_hist']/1e3
+    #     xr_primap = xr_primap.drop_vars(['CO2_hist', 'GHG_hist_all', 'CH4_hist', 'N2O_hist', 'GHG_hist'])
+    #     self.xr_primap_excl = xr_primap.sel(Time=np.arange(1750, self.settings['params']['start_year_analysis']+1), provenance='measured')
 
     # =========================================================== #
     # =========================================================== #
@@ -289,7 +314,7 @@ class datareading(object):
         self.xr_ar6_prevet = xr_scen2.interpolate_na(dim="Time", method="linear")
 
         vetting_nans = np.array(self.xr_ar6_prevet.ModelScenario[~np.isnan(self.xr_ar6_prevet.Value.sel(Time=2100, Variable='Emissions|CO2'))])
-        vetting_2020 = np.array(self.xr_ar6_prevet.ModelScenario[np.where(np.abs(self.xr_ar6_prevet.sel(Time=2020, Variable='Emissions|CO2').Value - self.xr_primap.sel(Region='EARTH', Time=2020).CO2_hist) < 1e4)[0]])
+        vetting_2020 = np.array(self.xr_ar6_prevet.ModelScenario[np.where(np.abs(self.xr_ar6_prevet.sel(Time=2020, Variable='Emissions|CO2').Value - self.xr_hist.sel(Region='EARTH', Time=2020).CO2_hist) < 1e4)[0]])
         vetting_total = np.intersect1d(vetting_nans, vetting_2020)
         self.xr_ar6 = self.xr_ar6_prevet.sel(ModelScenario=vetting_total)
         self.ms_immediate = np.array(df_ar6_meta[df_ar6_meta.Policy_category.isin(['P2', 'P2a', 'P2b', 'P2c'])].ModelScenario)
@@ -320,19 +345,19 @@ class datareading(object):
         print('- Computing global nonco2 trajectories')
         xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2020, 2101))*self.settings['params']['gwp_ch4']/1e3
         xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O', Time=np.arange(2020, 2101))*self.settings['params']['gwp_n2o']/1e6
-        n2o_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        ch4_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).CH4_hist*self.settings['params']['gwp_ch4']/1e3
-        n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
+        n2o_start = self.xr_hist.sel(Region='EARTH').sel(Time=self.settings['params']['start_year_analysis']).N2O_hist
+        ch4_start = self.xr_hist.sel(Region='EARTH').sel(Time=self.settings['params']['start_year_analysis']).CH4_hist
+        n2o_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).N2O_hist
+        ch4_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).CH4_hist
         tot_2020 = n2o_2020+ch4_2020
-        tot_2021 = n2o_2021+ch4_2021
+        tot_start = n2o_start+ch4_start
 
         # Rescale CH4 and N2O trajectories
         compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], self.settings['params']['harmonization_year']))))+[1]*len(np.arange(self.settings['params']['harmonization_year'], 2101)))
         xr_comp =  xr.DataArray(1-compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
         xr_nonco2_raw = xr_ch4_raw + xr_n2o_raw
-        xr_nonco2_raw_2020 = xr_nonco2_raw.sel(Time=2021)
-        xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(2021, 2101))
+        xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=self.settings['params']['start_year_analysis'])
+        xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
 
         def ms_temp(T):
             peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
@@ -348,7 +373,7 @@ class datareading(object):
             return np.array(vec)
 
         def rescale(traj):
-            offset = traj.sel(Time = 2021) - tot_2021
+            offset = traj.sel(Time = 2021) - tot_start
             traj_scaled = (-xr_comp*offset+traj)
             return traj_scaled
 
@@ -372,7 +397,7 @@ class datareading(object):
                         nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
                         temps = temps + [temp]*len(list(np.arange(2021, 2101)))
                 else:
-                    reductions = (xr_nonco2_raw.sel(ModelScenario=ms, Time=2040)-xr_nonco2_raw_2020) / xr_nonco2_raw_2020
+                    reductions = (xr_nonco2_raw.sel(ModelScenario=ms, Time=2040)-xr_nonco2_raw_start) / xr_nonco2_raw_start
                     reds = reductions.Value.quantile(self.NonCO2list[::-1])
                     for n_i, n in enumerate(self.NonCO2list):
                         red = reds[n_i]
@@ -382,7 +407,7 @@ class datareading(object):
 
                         # Harmonize reduction
                         red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
-                        traj2 = -(1-xr_comp)*(red_traj-red*1.5)*xr_nonco2_raw_2020.mean().Value+trajectory_mean
+                        traj2 = -(1-xr_comp)*(red_traj-red*1.5)*xr_nonco2_raw_start.mean().Value+trajectory_mean
                         trajectory_mean2 = check_monotomy(np.array(traj2))
                         times = times + list(np.arange(2021, 2101))
                         timings = timings+[timing]*len(list(np.arange(2021, 2101)))
@@ -405,107 +430,6 @@ class datareading(object):
         self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
         self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
 
-        # self.xr_traj_nonco2_del = self.xr_traj_nonco2.reindex({'Temperature': [1.56, 2.4]}) # Because 1.5 is empty for delayed
-        # self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.reindex({'Temperature': self.Tlist})
-        # self.xr_traj_nonco2_del = self.xr_traj_nonco2_del.interpolate_na(dim='Temperature').sel(Timing='Delayed').expand_dims(Timing=["Delayed"])
-
-        #self.xr_traj_nonco2 = xr.merge([self.xr_traj_nonco2_imm, self.xr_traj_nonco2_del])
-
-        # # Non-CO2 trajectories
-        # xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2020, 2101))*self.settings['params']['gwp_ch4']/1e3
-        # xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O', Time=np.arange(2020, 2101))*self.settings['params']['gwp_n2o']/1e6
-        # n2o_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        # ch4_2021 = self.xr_primap.sel(Region='EARTH').sel(Time=2021).CH4_hist*self.settings['params']['gwp_ch4']/1e3
-        # n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        # ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
-        # tot_2020 = n2o_2020+ch4_2020
-        # tot_2021 = n2o_2021+ch4_2021
-
-        # # Rescale CH4 and N2O trajectories
-        # compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2035))))+[1]*len(np.arange(2035, 2101)))
-        # xr_comp =  xr.DataArray(1-compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-        # # offset = xr_ch4_raw.sel(Time = 2021) - ch4_2021
-        # # xr_ch4 = (-xr_comp*offset+xr_ch4_raw)
-        # # offset = xr_n2o_raw.sel(Time = 2021) - n2o_2021
-        # # xr_n2o = (-xr_comp*offset+xr_n2o_raw)
-        # # xr_nonco2 = xr_ch4 + xr_n2o
-        # xr_nonco2_raw = xr_ch4_raw + xr_n2o_raw
-        # xr_nonco2_raw_2020 = xr_nonco2_raw.sel(Time=2021)
-        # xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(2021, 2101))
-        # #xr_nonco2 = xr_nonco2.sel(Time = np.arange(2021, 2101))
-
-        # # For each level of nonCO2 dimension, grab the trajectories
-        # #reduction_2040_2020 = -(xr_nonco2.sel(Time=2040) - tot_2020) / tot_2020
-
-        # def ms_temp(T):
-        #     peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
-        #     return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.05) & (peaktemp > T-0.05))[0]]
-
-        # def check_monotomy(traj):
-        #     vec = [traj[0]]
-        #     for i in range(1, len(traj)):
-        #         if traj[i]<=vec[i-1]:
-        #             vec.append(traj[i])
-        #         else:
-        #             vec.append(vec[i-1])
-        #     return np.array(vec)
-
-        # def rescale(traj):
-        #     offset = traj.sel(Time = 2021) - tot_2021
-        #     traj_scaled = (-xr_comp*offset+traj)
-        #     return traj_scaled
-
-        # temps = []
-        # times = []
-        # nonco2 = []
-        # vals = []
-        # timings = []
-        # for temp_i, temp in enumerate(self.Tlist):
-        #     ms_t = ms_temp(temp)
-        #     reductions = (xr_nonco2_raw.sel(ModelScenario=ms_t, Time=2040)-xr_nonco2_raw_2020) / xr_nonco2_raw_2020
-        #     reds = reductions.Value.quantile(self.NonCO2list[::-1])
-        #     for n_i, n in enumerate(self.NonCO2list):
-        #         red = reds[n_i]
-        #         ms_2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
-        #         for timing_i, timing in enumerate(self.Timinglist):
-        #             mslist = [self.ms_immediate, self.ms_delayed][timing_i]
-        #             ms = np.intersect1d(ms_2, mslist)
-        #             if len(ms) == 0: print(temp, n, timing)
-        #             trajs = xr_nonco2_raw.sel(ModelScenario = ms, Time=np.arange(2021, 2101))
-        #             trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
-
-        #             # Harmonize reduction
-        #             red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
-        #             traj2 = -(1-xr_comp)*(red_traj-red*1.5)*xr_nonco2_raw_2020.mean().Value+trajectory_mean
-        #             # if n == 0.5 and timing == 'Immediate':
-        #             #     trajectory_mean_imm = check_monotomy(trajectory_mean)
-        #             # if n == 0.5 and timing == 'Delayed':
-        #             #     trajectory_mean_del = check_monotomy(trajectory_mean)
-        #             # if n == 0.7 or n == 0.8:
-        #             #     dif = (trajectory_mean_del - trajectory_mean_imm)
-        #             #     trajectory_mean2 = trajectory_mean2 + [dif, 0][timing_i]
-        #             trajectory_mean2 = check_monotomy(np.array(traj2))
-        #             times = times + list(np.arange(2021, 2101))
-        #             timings = timings+[timing]*len(list(np.arange(2021, 2101)))
-        #             vals = vals+list(trajectory_mean2)
-        #             nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
-        #             temps = temps + [temp]*len(list(np.arange(2021, 2101)))
-
-        # dict_nonco2 = {}
-        # dict_nonco2['Time'] = times
-        # dict_nonco2['NonCO2red'] = nonco2
-        # dict_nonco2['NonCO2_globe'] = vals
-        # dict_nonco2['Timing'] = timings
-        # dict_nonco2['Temperature'] = temps
-        # df_nonco2 = pd.DataFrame(dict_nonco2)
-        # dummy = df_nonco2.set_index(["NonCO2red", "Time", "Timing", 'Temperature'])
-        # self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
-
-        # # Post-processing: making temperature dependence smooth
-        # self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 2.4]})
-        # self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
-        # self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
-
     # =========================================================== #
     # =========================================================== #
 
@@ -523,7 +447,7 @@ class datareading(object):
             dummy['dT_targets'] = dummy['dT_targets'].astype(float).round(1)
             dummy = dummy.set_index(["dT_targets", "Probability"])
             #dummy['Budget'] = dummy['Budget'] + float(self.xr_primap.sel(Region='EARTH', Time=2021).CO2_hist)/1e3 + 40.9 # from Forster 2023 for the year 2022 -> 1 Jan 2021 as starting year! So not + float(self.xr_primap.sel(Region='EARTH', Time=2020).CO2_hist)/1e3 
-            dummy['Budget'] = dummy['Budget'] - float(self.xr_primap.sel(Region='EARTH', Time=2020).CO2_hist)/1e3 # Forster without warming is from 2020 and on (so -2020 emissions)
+            dummy['Budget'] = dummy['Budget'] - float(self.xr_hist.sel(Region='EARTH', Time=2020).CO2_hist)/1e3 # Forster without warming is from 2020 and on (so -2020 emissions)
             xr_bud_co2 = xr.Dataset.from_dataframe(dummy)
             xr_bud_co2 = xr_bud_co2.rename({'dT_targets': "Temperature"}).sel(Temperature = [1.5, 1.7, 2.0])
         elif self.settings['params']['toggle_co2_budgets'] == 'WG1':
@@ -531,7 +455,7 @@ class datareading(object):
             df = df_raw.rename(columns={'Budget_17': 0.17, 'Budget_33': 0.33, 'Budget_50': 0.50, 'Budget_67': 0.67, 'Budget_83': 0.83})
             dummy = df.melt(id_vars=["Temperature"], var_name="Probability", value_name="Budget")
             dummy = dummy.set_index(["Temperature", "Probability"])
-            dummy['Budget'] = dummy['Budget'] - float(self.xr_primap.sel(Region='EARTH', Time=2020).CO2_hist)/1e3
+            dummy['Budget'] = dummy['Budget'] - float(self.xr_hist.sel(Region='EARTH', Time=2020).CO2_hist)/1e3
             xr_bud_co2 = xr.Dataset.from_dataframe(dummy)
 
         # # Fit nonco2 reduction in forster to different T levels
@@ -552,8 +476,8 @@ class datareading(object):
             bunker_subtraction += [3.3/100] # Assuming bunker emissions keep constant (3.3% of global emissions) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
 
         # Interpolate
-        n2o_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).N2O_hist*self.settings['params']['gwp_n2o']/1e3
-        ch4_2020 = self.xr_primap.sel(Region='EARTH').sel(Time=2020).CH4_hist*self.settings['params']['gwp_ch4']/1e3
+        n2o_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).N2O_hist
+        ch4_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).CH4_hist
         tot_2020 = n2o_2020+ch4_2020
         Blist = np.zeros(shape=(len(self.Tlist), len(self.Plist), len(self.NonCO2list)))+np.nan
         for p_i, p in enumerate(self.Plist):
@@ -587,7 +511,7 @@ class datareading(object):
     def determine_global_co2_trajectories(self):
         print('- Computing global co2 trajectories')
         # Initialize data arrays for co2
-        startpoint = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis'], Region="EARTH").CO2_hist
+        startpoint = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis'], Region="EARTH").CO2_hist
         #compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2101)))))#**1.1#+[1]*len(np.arange(2050, 2101)))
         
         compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], self.settings['params']['harmonization_year']))))+[1]*len(np.arange(self.settings['params']['harmonization_year'], 2101)))
@@ -710,8 +634,8 @@ class datareading(object):
                                     
                                     pathways_data['CO2_globe'][neg_i, nonco2_i, temp_i, risk_i, timing_i, :] = pathway_final2
         self.xr_traj_co2 = xr_traj_co2.update(pathways_data)
-        self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe*1e3)
-        self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_nonco2.NonCO2_globe*1e3])
+        self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe)
+        self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_nonco2.NonCO2_globe])
 
     # # =========================================================== #
     # # =========================================================== #
@@ -737,11 +661,11 @@ class datareading(object):
         xr_base_raw = xr_base_raw.astype(float)
 
         # # Using a fraction, get total CO2 emissions
-        fraction = (xr_base_raw.sel(Time=self.settings['params']['start_year_analysis']).CO2_base / self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist).mean(dim=['Scenario'])
+        fraction = (xr_base_raw.sel(Time=self.settings['params']['start_year_analysis']).CO2_base / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist).mean(dim=['Scenario'])
         xr_base_harm_co2 = xr_base_raw / fraction
 
         # Assume nonCO2 following similar evolution as CO2 
-        nonco2_2021 = self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_primap.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        nonco2_2021 = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
         nonco2_base = (nonco2_2021*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
 
         # Convert baseline emissions into GHG using this fraction (or offset)
@@ -787,12 +711,11 @@ class datareading(object):
 
     def merge_xr(self):
         print('- Merging xrarray object')
-        xr_total = xr.merge([self.xr_ssp, self.xr_primap, self.xr_primap_excl, self.xr_unp, self.xr_co2_budgets, self.xr_traj_ghg, self.xr_base, self.xr_ndc])
+        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_co2_budgets, self.xr_traj_ghg, self.xr_base, self.xr_ndc])
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
-        self.xr_total = self.xr_total.drop({'provenance'})
 
     # =========================================================== #
     # =========================================================== #
@@ -836,11 +759,11 @@ class datareading(object):
         print('- Save important files')
 
         xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2))
-        xr_pbl = self.xr_total
+        xr_ipcc = self.xr_total.sel(Temperature=np.array([1.56, 2.0]).astype(float).round(2))
 
-        for version_i, xr_version in enumerate([xr_normal, xr_pbl]):
+        for version_i, xr_version in enumerate([xr_normal, xr_ipcc]):
             if version_i == 0: ext = ''
-            else: ext = 'PBL/'
+            else: ext = 'IPCC/'
 
             np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions.npy", self.regions_iso)
             np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions_names.npy", self.regions_name)

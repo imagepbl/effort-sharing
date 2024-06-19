@@ -378,15 +378,12 @@ class allocation(object):
                 'GHG_hist', 
                 'GHG_globe', 
                 "NonCO2_globe", 
-                "GHG_hist_all", 
                 'GHG_base', 
                 'GHG_ndc', 
-                'Hot_air', 
                 'Conditionality', 
                 'Ambition', 
                 'Budget',
                 'GHG_hist_excl',
-                'GHG_hist_ndc_corr'
             ])
             .sel(
                 Region=self.FocusRegion, 
