@@ -6,7 +6,7 @@ paths:
     external: X:/user/dekkerm/Data/
     baseline: X:/user/heerdenvr/Downscaling/Mark/23_02_2024/
     internal: Data/
-    datadrive: K:/ECEMF/T5.2/
+    datadrive: K:/data/DataUpdate_ongoing/
   task: X:/user/dekkerm/Projects/ECEMF_T5.2/
 
 # ============================================== #
@@ -35,11 +35,4 @@ params:
   polynomial_fit_2030relation: 5  
   harmonization_year: 2030
 
-# ============================================== #
-# LISTS OF SCENARIOS, REGIONS AND MODELS
-# ============================================== #
-standard_settings:
-  Risk_of_exceedance: 0.4 # Probability of exceeding temp level
-  Negative_emissions: 0.2 # Quantile of C1-C3 CDR below which the average CO2 trajectory remains
-  Non_CO2_mitigation_potential: 0.4 # Quantile of C1-C3 CH4 emissions below which the average CO2 trajectory remains
 
