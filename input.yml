@@ -14,25 +14,11 @@ paths:
 # ============================================== #
 
 params:
-  toggle_co2_budgets: 'Forster' # Forster or WG1
-  # toggle_overshoot_dataread: 'yes' # If yes, then the xr_dataread file with T=1.56 in it, "allowing for overshoot in the peak temperature" (this is for the PBL report)
   pcc_conv_start: 2040
   pcc_conv_end: 2100
   convergence_year_gdr: 2100
   convergence_year_base: 2150
-  discount_factor: 0.015
-  version_ndcs: 13Mar2023a
-  gwp_ch4: 27.2 # = non-fossil origin
+  gwp_ch4: 28.5 # = (average of fossil 29.8 and non-fossil 27.2)
   gwp_n2o: 273
-  gwp_ch4_ar4: 25
-  gwp_n2o_ar4: 298
   start_year_analysis: 2021 # 1 Jan of this year
-  # global_carbon_budget_2022_15: 420 # https://essd.copernicus.org/articles/14/1917/2021/, in Gt CO2
-  # global_carbon_budget_2022_17: 770
-  # global_carbon_budget_2022_20: 1270
-  # global_carbon_budget_2022_25: 2270
-  # global_carbon_budget_2022_30: 3270
-  polynomial_fit_2030relation: 5  
   harmonization_year: 2030
-
-
