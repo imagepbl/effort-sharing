@@ -22,3 +22,4 @@ params:
   gwp_n2o: 273
   start_year_analysis: 2021 # 1 Jan of this year
   harmonization_year: 2030
+  polynomial_fit_2030relation: 5

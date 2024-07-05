@@ -145,8 +145,7 @@ class policyscenadding(object):
         xr_total = xr_total.assign(NetZero = self.xr_eng['Value'].sel(Scenario='NetZero'))
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc = self.xr_total.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'N2O_hist', 'CH4_hist', 'GHG_hist_all', 'GHG_hist_ndc_corr', 'GHG_hist_excl', 'Budget', 'GHG_globe', 'CO2_globe', 'NonCO2_globe', 'GHG_base', 'GHG_ndc'])
-        xr_total_onlyalloc = xr_total_onlyalloc.drop_vars(['source', 'Version', 'Conditionality', 'Hot_air', 'Risk', 'Temperature', 'NonCO2red', 'NegEmis', 'Scenario', 'Ambition', 'Timing'])
+        xr_total_onlyalloc = self.xr_total[['NDC', 'CurPol', 'NetZero']]
         xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_policyscen.nc')
 
         # CO2 version
@@ -155,8 +154,7 @@ class policyscenadding(object):
         xr_total2 = xr_total2.assign(NetZero = self.xr_eng_co2['Value'].sel(Scenario='NetZero'))
         xr_total2 = xr_total2.reindex(Time = np.arange(1850, 2101))
         self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc_co2 = self.xr_total_co2.drop_vars(['Population', 'GDP', 'GHG_hist', 'CO2_hist', 'N2O_hist', 'CH4_hist', 'GHG_hist_all', 'GHG_hist_ndc_corr', 'GHG_hist_excl', 'Budget', 'GHG_globe', 'CO2_globe', 'NonCO2_globe', 'GHG_base', 'GHG_ndc'])
-        xr_total_onlyalloc_co2 = xr_total_onlyalloc_co2.drop_vars(['source', 'Version', 'Conditionality', 'Hot_air', 'Risk', 'Temperature', 'NonCO2red', 'NegEmis', 'Scenario', 'Ambition', 'Timing'])
+        xr_total_onlyalloc_co2 = self.xr_total_co2[['NDC', 'CurPol', 'NetZero']]
         xr_total_onlyalloc_co2.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_policyscen_co2.nc')
 
         self.xr_total.close()

@@ -365,6 +365,58 @@ class allocation(object):
     # =========================================================== #
     # =========================================================== #
 
+    def combined_methods(self):
+        '''
+        Methods for Robiou et al. (2023), under review.
+        '''
+        self.xr_dataread = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
+        xrs = []
+        hist_emissions_startyears = [1850, 1950, 1990]
+        discount_rates = [0, 1.6, 2.0, 2.8]
+        self.all_future_years = np.arange(self.settings['params']['start_year_analysis'], 2101)
+        yearly_netto = self.xr_dataread.GHG_globe.sel(Time=self.all_future_years)
+        yearly_neg = self.xr_dataread.CO2_neg_globe.sel(Time=self.all_future_years)
+        yearly_pos = yearly_neg + yearly_netto
+
+        # Combined approach 1 (GDP)
+        app1_gdp = self.xr_dataread.sel(Time = self.all_future_years).GDP
+        app1_gdp = app1_gdp.where(~app1_gdp.Region.isin(["COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE", "MCO", "NRU"]), np.nan)
+        app1_gdp_neg = (app1_gdp/app1_gdp.sel(Region = "EARTH", Time = self.all_future_years) * yearly_neg)
+        app1_gdp_pos_total = self.xr_total.ECPC.sum(dim='Time') + app1_gdp_neg.sum(dim='Time')
+        app1_gdp_pos = (app1_gdp_pos_total.sel(Region=self.FocusRegion) / app1_gdp_pos_total.sel(Region='EARTH') * yearly_pos)
+        self.COMB1g = app1_gdp_pos - app1_gdp_neg.sel(Region=self.FocusRegion)
+
+        # Combined approach 1 (HDI)
+        app1_hdi = self.xr_dataread.sel(Time = self.all_future_years).HDIsh
+        app1_hdi = app1_hdi.where(~app1_hdi.Region.isin(["COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE", "MCO", "NRU"]), np.nan)
+        app1_hdi_neg = app1_hdi * yearly_neg
+        app1_hdi_pos_total = self.xr_total.ECPC.sum(dim='Time') + app1_hdi_neg.sum(dim='Time')
+        app1_hdi_pos = app1_hdi_pos_total.sel(Region=self.FocusRegion) / app1_hdi_pos_total.sel(Region='EARTH') * yearly_pos
+        self.COMB1h = app1_hdi_pos - app1_hdi_neg.sel(Region=self.FocusRegion)
+
+        # Approach 2
+        self.app2_pos_shares = (self.xr_total.Population**2 / self.xr_total.GDP).sel(ISO=self.all_regions_iso, Time=self.all_future_years)
+        self.app2_pos_shares = self.app2_pos_shares.where(~self.app2_pos_shares.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV",    "COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE"]), np.nan)
+        self.app2_pos_shares = self.app2_pos_shares / self.app2_pos_shares.sel(ISO=self.countries_iso, Time=self.all_future_years).sum(dim='ISO')
+        app2_current_debt = self.historical_emissions_discounted.copy()
+        app2_current_debt = app2_current_debt.where(~app2_current_debt.ISO.isin(["AND", "ATG", "DMA", "GRD", "KIR", "MHL", "FSM", "MCO", "NRU", "PRK", "PLW", "KNA", "SMR", "SYC", "SSD", "TUV",    "COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE"]), np.nan)
+        self.app2_nets = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
+        self.app2_negs = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
+        self.app2_poss = np.zeros(shape=(len(self.all_categories), len(self.all_regions_iso), len(self.all_future_years)))
+        for y_i, y in enumerate(self.all_future_years):
+            neg = yearly_negative_budgets.sel(Time=y, Category=self.all_categories)*(app2_current_debt/app2_current_debt.sel(ISO=self.countries_iso).sum(dim='ISO'))
+            pos = yearly_positive_budgets.sel(Time=y, Category=self.all_categories)*self.app2_pos_shares.sel(Time=y)
+            self.app2_nets[:, :, y_i] = pos - neg
+            app2_current_debt = app2_current_debt+pos-neg
+            self.app2_negs[:, :, y_i] = neg
+            self.app2_poss[:, :, y_i] = pos
+        self.app2_nets = grouping(self, self.app2_nets)
+        self.app2_negs = grouping(self, self.app2_negs)
+        self.app2_poss = grouping(self, self.app2_poss)
+
+    # =========================================================== #
+    # =========================================================== #
+
     def save(self):
         savename = self.version_path + 'xr_alloc_'+self.FocusRegion+'.nc'
 

@@ -76,64 +76,6 @@ class dataexportcl(object):
                         }, format='NETCDF4', engine="netcdf4")
             ds.close()
 
-
-    # =========================================================== #
-    # =========================================================== #
-
-    # def allocations_16_and_20(self):
-    #     '''
-    #     Export all allocations for two given levels of temperature and risk
-    #     '''
-    #     xr_traj = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_traj_t16_r50.nc").load()
-    #     xr_traj = xr_traj.drop_vars(['variable', 'PCB', 'Temperature', 'Risk']).sel(Time=np.array([2021]+list(np.arange(2025, 2101,5))))
-    #     xr_traj.to_netcdf(self.settings['paths']['data']['export']+"../EffortSharingExports/allocations_t16_r50.nc",
-    #                     encoding={
-    #                         "GF": {"zlib": True, "complevel": 9},
-    #                         "PC": {"zlib": True, "complevel": 9},
-    #                         "PCC": {"zlib": True, "complevel": 9},
-    #                         "PCB_lin": {"zlib": True, "complevel": 9},
-    #                         "GDR": {"zlib": True, "complevel": 9},
-    #                         "ECPC": {"zlib": True, "complevel": 9},
-    #                         "AP": {"zlib": True, "complevel": 9},
-    #                     }, format='NETCDF4', engine="netcdf4")
-    #     xr_traj.close()
-
-    #     xr_traj = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_traj_t20_r33.nc").load()
-    #     xr_traj = xr_traj.drop_vars(['variable', 'PCB', 'Temperature', 'Risk']).sel(Time=np.array([2021]+list(np.arange(2025, 2101,5))))
-    #     xr_traj.to_netcdf(self.settings['paths']['data']['export']+"../EffortSharingExports/allocations_t20_r33.nc",
-    #                     encoding={
-    #                         "GF": {"zlib": True, "complevel": 9},
-    #                         "PC": {"zlib": True, "complevel": 9},
-    #                         "PCC": {"zlib": True, "complevel": 9},
-    #                         "PCB_lin": {"zlib": True, "complevel": 9},
-    #                         "GDR": {"zlib": True, "complevel": 9},
-    #                         "ECPC": {"zlib": True, "complevel": 9},
-    #                         "AP": {"zlib": True, "complevel": 9},
-    #                     }, format='NETCDF4', engine="netcdf4")
-    #     xr_traj.close()
-
-    # =========================================================== #
-    # =========================================================== #
-
-    # def allocations_year(self):
-    #     '''
-    #     Export all allocations for a given year
-    #     '''
-    #     for t in np.arange(2030, 2101, 5):
-    #         xr_alloc = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_alloc_"+str(t)+".nc").load()
-    #         xr_alloc = xr_alloc.drop_vars(['variable', 'Time', 'PCB'])
-    #         xr_alloc.to_netcdf(self.settings['paths']['data']['export']+"../EffortSharingExports/allocations_"+str(t)+".nc",
-    #                         encoding={
-    #                             "GF": {"zlib": True, "complevel": 9},
-    #                             "PC": {"zlib": True, "complevel": 9},
-    #                             "PCC": {"zlib": True, "complevel": 9},
-    #                             "PCB_lin": {"zlib": True, "complevel": 9},
-    #                             "GDR": {"zlib": True, "complevel": 9},
-    #                             "ECPC": {"zlib": True, "complevel": 9},
-    #                             "AP": {"zlib": True, "complevel": 9},
-    #                         }, format='NETCDF4', engine="netcdf4")
-    #         xr_alloc.close()
-
     # =========================================================== #
     # =========================================================== #
 
@@ -203,26 +145,38 @@ class dataexportcl(object):
     # =========================================================== #
     # =========================================================== #
 
-    def project_ELEVATE(self):
-        '''
-        Export files for ELEVATE
-        '''
-
-    # =========================================================== #
-    # =========================================================== #
-
     def project_COMMITTED(self):
         '''
         Export files for COMMITTED
         '''
+        df = pd.read_csv("K:/data/EffortSharingExports/allocations_default_15overshoot.csv")
+        df = df[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df['Temperature'] = ["1.5 deg at 50% with small overshoot"]*len(df)
+
+        df2 = pd.read_csv("K:/data/EffortSharingExports/allocations_default_20.csv")
+        df2 = df2[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df2['Temperature'] = ["2.0 deg at 67%"]*len(df2)
+
+        df3 = pd.concat([df, df2])
+        df3.to_csv("K:/data/EffortSharingExports/allocations_COMMITTED.csv", index=False)
 
     # =========================================================== #
     # =========================================================== #
 
-    def project_DGCLIMA(self):
+    def project_DGIS(self):
         '''
-        Export files for DG-CLIMA
+        Export files for DGIS
         '''
+        df = pd.read_csv("K:/data/EffortSharingExports/allocations_default_15overshoot.csv")
+        df = df[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df['Temperature'] = ["1.5 deg at 50% with small overshoot"]*len(df)
+
+        df2 = pd.read_csv("K:/data/EffortSharingExports/allocations_default_20.csv")
+        df2 = df2[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df2['Temperature'] = ["2.0 deg at 67%"]*len(df2)
+
+        df3 = pd.concat([df, df2])
+        df3.to_csv("K:/data/EffortSharingExports/allocations_DGIS.csv", index=False)
 
     # =========================================================== #
     # =========================================================== #
