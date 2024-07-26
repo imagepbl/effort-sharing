@@ -155,22 +155,21 @@ class allocation(object):
         def budget_harm(nz):
             compensation_form = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis']))
             xr_comp2 =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-            return xr_comp2 / ((nz-2021)**(3/2)*(2/3)) # TODO later: should be , but I now calibrated to 0.5. Not a problem because we have the while loop later.
+            return xr_comp2 / ((nz-self.settings['start_year_analysis'])**(3/2)*(2/3)) # TODO later: should be , but I now calibrated to 0.5. Not a problem because we have the while loop later.
         def pcb_new_factor(path, f):
-            netzeros = 2021+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
+            netzeros = self.settings['start_year_analysis']+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
             netzeros = netzeros.where(netzeros < 2100, 2100)
             return path+budget_harm(netzeros)*f
 
         pop_region = self.xr_total.sel(Time=self.start_year_analysis).Population
-        pop_earth = self.xr_total.sel(Region=self.countries_iso, 
-                                    Time=self.start_year_analysis).Population.sum(dim=['Region'])
+        pop_earth = self.xr_total.sel(Region='EARTH', Time=self.start_year_analysis).Population
         pop_fraction =  (pop_region / pop_earth).mean(dim='Scenario')
         globalpath = self.xr_total.CO2_globe
 
-        emis_2021_i = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
-        emis_2021_w = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis, 
+        emis_start_i = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
+        emis_start_w = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis, 
                                                     Region='EARTH')
-        path_scaled_0 = (emis_2021_i/emis_2021_w*globalpath).sel(Time=np.arange(self.start_year_analysis, 2101)).sel(Region=self.FocusRegion)
+        path_scaled_0 = (emis_start_i/emis_start_w*globalpath).sel(Time=np.arange(self.start_year_analysis, 2101)).sel(Region=self.FocusRegion)
         budget_left = (self.xr_total.CO2_globe.where(self.xr_total.CO2_globe > 0, 0).sel(Time=np.arange(self.start_year_analysis, 2101)).sum(dim='Time')*pop_fraction).sel(Region=self.FocusRegion)
 
         budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(dim='Time')
@@ -209,21 +208,6 @@ class allocation(object):
         self.ghg_pcb_lin = linear_co2_pos + nonco2_part.sel(Region=self.FocusRegion)
         self.xr_total = self.xr_total.assign(PCB = self.ghg_pcb.PCB)
         self.xr_total = self.xr_total.assign(PCB_lin = self.ghg_pcb_lin.PCB_lin)
-
-        # Linear pathway down code (for now not used)
-        # xr_comp =  xr.DataArray(np.arange(0, 2101-self.settings['params']['start_year_analysis']), dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-        # pop_region = self.xr_total.sel(Time=self.start_year_analysis).Population
-        # pop_earth = self.xr_total.sel(Region=self.countries_iso, 
-        #                             Time=self.start_year_analysis).Population.sum(dim=['Region'])
-        # pop_fraction =  (pop_region / pop_earth).mean(dim='Scenario')
-
-        # netzeros_delta = (2*self.xr_total.Budget*pop_fraction*1000)/self.xr_total.CO2_hist.sel(Time=2021)
-        # co2_part = (self.xr_total.CO2_hist.sel(Time=2021)-(self.xr_total.CO2_hist.sel(Time=2021)/netzeros_delta)*xr_comp)
-        # co2_part = co2_part.where(co2_part >= 0, 0)
-
-        # nonco2_current = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis) - self.xr_total.CO2_hist.sel(Time=self.start_year_analysis)
-        # nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
-        # nonco2_part = nonco2_fraction*self.xr_total.NonCO2_globe
 
     # =========================================================== #
     # =========================================================== #
@@ -274,11 +258,11 @@ class allocation(object):
                 #globalbudget = self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe).sum(dim='Time')
                 globalpath = self.xr_total.GHG_globe
 
-                emis_2021_i = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, 
+                emis_start_i = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, 
                                                             Region=self.FocusRegion)
-                emis_2021_w = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, 
+                emis_start_w = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, 
                                                             Region='EARTH')
-                path_scaled_0 = emis_2021_i/emis_2021_w*globalpath
+                path_scaled_0 = emis_start_i/emis_start_w*globalpath
                 budget_without_assumptions = path_scaled_0.sum(dim='Time')
                 budget_surplus = budget_left - budget_without_assumptions
 
@@ -289,7 +273,7 @@ class allocation(object):
                 xrs.append(ecpc)
         xr_ecpc = xr.merge(xrs)
         self.xr_total = self.xr_total.assign(ECPC = xr_ecpc.ECPC)
-        
+
     # =========================================================== #
     # =========================================================== #
 
@@ -368,23 +352,7 @@ class allocation(object):
     def save(self):
         savename = self.version_path + 'xr_alloc_'+self.FocusRegion+'.nc'
 
-        xr_total_onlyalloc = (self.xr_total.drop_vars([
-                'Population', 
-                "CO2_hist", 
-                "CO2_globe", 
-                "N2O_hist", 
-                "CH4_hist", 
-                'GDP', 
-                'GHG_hist', 
-                'GHG_globe', 
-                "NonCO2_globe", 
-                'GHG_base', 
-                'GHG_ndc', 
-                'Conditionality', 
-                'Ambition', 
-                'Budget',
-                'GHG_hist_excl',
-            ])
+        xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
             .sel(
                 Region=self.FocusRegion, 
                 Time=np.arange(self.settings['params']['start_year_analysis'], 2101)

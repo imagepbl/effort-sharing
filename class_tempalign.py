@@ -71,12 +71,12 @@ class tempaligning(object):
 
     def determine_tempoutcomes(self):
         print("- Determine temperature metric")
-        xr_alloc_2030 = xr.open_dataset("K:/ECEMF/T5.2/xr_alloc_2030.nc")
+        xr_alloc_2030 = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_alloc_2030.nc")
         rules = ['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR']
         percs = (xr_alloc_2030[rules] / xr_alloc_2030.sel(Region=self.countries_iso).GF.sum(dim='Region')).mean(dim='Temperature')
         condition = percs < 0
         percs = percs.where(~condition, 1e-9)
-        ndc_globalversion_raw = self.xr_total.GHG_ndc.sel(Time=2030)/percs
+        ndc_globalversion_raw = self.xr_total.GHG_ndc/percs
         condition = ndc_globalversion_raw < 10000
         mod_data = ndc_globalversion_raw.where(~condition, 10000)
         condition = mod_data > 75000
