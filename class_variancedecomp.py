@@ -41,7 +41,7 @@ class vardecomposing(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xr.open_dataset("K:/ECEMF/T5.2/xr_dataread.nc")
+        self.xr_total = xr.open_dataset("K:/data/DataUpdate_ongoing/xr_dataread.nc")
         self.all_regions_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_regions.npy")
         self.all_regions_names = np.load(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy")
         self.all_countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
@@ -52,10 +52,15 @@ class vardecomposing(object):
 
     def prepare_global_sobol(self, year):
         #print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
-        self.xr_year= xr.open_dataset("K:/data/DataUpdate_02_2024/xr_alloc_"+str(year)+".nc")
-        xr_globe = self.xr_year.bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']].sel(Temperature=[1.5, 1.6, 1.7, 1.8, 1.9, 2.0])
-        array_dims = np.array(xr_globe.sel(Region = 'USA').to_array().dims)
-        array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+        self.xr_year= xr.open_dataset("K:/data/DataUpdate_ongoing/xr_alloc_"+str(year)+".nc")
+        xr_globe = self.xr_year.bfill(dim = "Timing")[['PCC', 'ECPC', 'AP']].sel(Temperature=[1.5, 1.8],
+                                                                                Risk=[0.5, 0.33],
+                                                                                NonCO2red=[0.33, 0.5, 0.67],
+                                                                                Region=np.array(self.xr_year.Region),
+                                                                                Scenario=['SSP1', 'SSP2', 'SSP3'],
+                                                                                Convergence_year = [2040, 2050, 2060])
+        array_dims = np.array(xr_globe.sel(Region = xr_globe.Region[0]).to_array().dims)
+        array_inputs = [['PCC', 'ECPC', 'AP']]
         for dim_i, dim in enumerate(array_dims[1:]):
             array_inputs.append(list(np.array(xr_globe[dim])))
         problem = {
@@ -63,26 +68,26 @@ class vardecomposing(object):
             'names': array_dims,
             'bounds': [[0, len(ly)] for ly in array_inputs],
         }
-        samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
+        samples = np.floor(saltelli.sample(problem, 2**10)).astype(int)
         return xr_globe, np.array(xr_globe.Region), array_dims, array_inputs, problem, samples
 
     # =========================================================== #
     # =========================================================== #
 
-    def prepare_temporal_sobols(self, cty):
-        #print("- Prepare Sobol decomposition and draw samples for different moments in time per country")
-        xr_cty = xr.open_dataset(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+cty+'.nc').bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
-        array_dims = np.array(xr_cty.sel(Time = 2030).to_array().dims)
-        array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
-        for dim_i, dim in enumerate(array_dims[1:]):
-            array_inputs.append(list(np.array(xr_cty[dim])))
-        problem = {
-            'num_vars': len(array_dims),
-            'names': array_dims,
-            'bounds': [[0, len(ly)] for ly in array_inputs],
-        }
-        samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
-        return xr_cty, np.array(xr_cty.Time), array_dims, array_inputs, problem, samples
+    # def prepare_temporal_sobols(self, cty):
+    #     #print("- Prepare Sobol decomposition and draw samples for different moments in time per country")
+    #     xr_cty = xr.open_dataset(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+cty+'.nc').bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+    #     array_dims = np.array(xr_cty.sel(Time = 2030).to_array().dims)
+    #     array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
+    #     for dim_i, dim in enumerate(array_dims[1:]):
+    #         array_inputs.append(list(np.array(xr_cty[dim])))
+    #     problem = {
+    #         'num_vars': len(array_dims),
+    #         'names': array_dims,
+    #         'bounds': [[0, len(ly)] for ly in array_inputs],
+    #     }
+    #     samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
+    #     return xr_cty, np.array(xr_cty.Time), array_dims, array_inputs, problem, samples
 
     # =========================================================== #
     # =========================================================== #
@@ -104,7 +109,8 @@ class vardecomposing(object):
         def func2(pars, ar):
             vec = np.zeros(len(pars))
             for i in range(len(pars)):
-                f = ar[pars[i, 0], pars[i, 1], pars[i, 2], pars[i,3], pars[i,4], pars[i, 5], pars[i, 6], pars[i, 7]]
+                f = ar[pars[i, 0], pars[i, 1], pars[i, 2], pars[i,3], pars[i,4],
+                       pars[i, 5], pars[i, 6], pars[i, 7], pars[i, 8], pars[i, 9]]
                 vec[i] = f
             return vec
     
@@ -131,7 +137,7 @@ class vardecomposing(object):
         d = {}
         d['Time'] = times_
         d['Factor'] = dims_
-        d['Region'] = np.array(xr.open_dataset("K:/data/DataUpdate_02_2024/xr_alloc_2030.nc").Region)
+        d['Region'] = np.array(xr.open_dataset("K:/data/DataUpdate_ongoing/xr_alloc_2030.nc").Region)
 
         xr_sobol = xr.Dataset(
             coords=d
@@ -147,7 +153,7 @@ class vardecomposing(object):
         }
 
         for Time_i, Time in enumerate(times_):
-            sobol_data['Sobol_index'][:, :, Time_i] = self.sobolindices[Time].T
+            sobol_data['Sobol_index'][Time_i, :, :] = self.sobolindices[Time].T
         self.xr_sobol = xr_sobol.update(sobol_data)
         self.xr_sobol.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_sobol.nc',
                                             format="NETCDF4",

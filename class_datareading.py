@@ -460,7 +460,7 @@ class datareading(object):
             return np.array(vec)
 
         def rescale(traj):
-            offset = traj.sel(Time = 2021) - tot_start
+            offset = traj.sel(Time = self.settings['start_year_analysis']) - tot_start
             traj_scaled = (-xr_comp*offset+traj)
             return traj_scaled
 
@@ -474,27 +474,27 @@ class datareading(object):
             ms = ms_temp(temp)
             if len(ms) == 0:
                 for n_i, n in enumerate(self.NonCO2list):
-                    times = times + list(np.arange(2021, 2101))
-                    vals = vals+[np.nan]*len(list(np.arange(2021, 2101)))
-                    nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
-                    temps = temps + [temp]*len(list(np.arange(2021, 2101)))
+                    times = times + list(np.arange(self.settings['start_year_analysis'], 2101))
+                    vals = vals+[np.nan]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
+                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
+                    temps = temps + [temp]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
             else:
                 reductions = xr_reductions.sel(ModelScenario=ms)
                 reds = reductions.Value.quantile(self.NonCO2list[::-1])
                 for n_i, n in enumerate(self.NonCO2list):
                     red = reds[n_i]
                     ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
-                    trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(2021, 2101))
+                    trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['start_year_analysis'], 2101))
                     trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
 
                     # Harmonize reduction
                     red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
                     traj2 = -(1-xr_comp)*(red_traj-red)*xr_nonco2_raw_start.mean().Value+trajectory_mean # 1.5*red has been removed -> check effect
                     trajectory_mean2 = check_monotomy(np.array(traj2))
-                    times = times + list(np.arange(2021, 2101))
+                    times = times + list(np.arange(self.settings['start_year_analysis'], 2101))
                     vals = vals+list(trajectory_mean2)
-                    nonco2 = nonco2+[n]*len(list(np.arange(2021, 2101)))
-                    temps = temps + [temp]*len(list(np.arange(2021, 2101)))
+                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
+                    temps = temps + [temp]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
 
         dict_nonco2 = {}
         dict_nonco2['Time'] = times
@@ -710,12 +710,12 @@ class datareading(object):
         self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe)
         self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe])
         x = (self.xr_ar6_landuse / self.xr_ar6.sel(Variable='Emissions|Kyoto Gases')).mean(dim='ModelScenario').Value
-        zero = np.arange(2021,2101)[np.where(x.sel(Time=np.arange(2021,2101))<0)[0][0]]
+        zero = np.arange(self.settings['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['start_year_analysis'],2101))<0)[0][0]]
         x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
         self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
 
-    # # =========================================================== #
-    # # =========================================================== #
+    # =========================================================== #
+    # =========================================================== #
 
     def read_baseline(self):
         print('- Reading baseline emissions')
@@ -726,7 +726,7 @@ class datareading(object):
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
-            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(2021, 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
+            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(self.settings['start_year_analysis'], 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
             df_ssps.append(df_base)
         df_base_all = pd.concat(df_ssps)
         df_base_all = df_base_all.reset_index(drop=True)
@@ -742,14 +742,19 @@ class datareading(object):
         xr_base_harm_co2 = xr_base_raw / fraction
 
         # Assume nonCO2 following similar evolution as CO2 
-        nonco2_2021 = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
-        nonco2_base = (nonco2_2021*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
+        nonco2_start = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
+        nonco2_base = (nonco2_start*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
 
         # Convert baseline emissions into GHG using this fraction (or offset)
         ghg_base = xr_base_harm_co2+nonco2_base
         ghg_base = ghg_base.rename({'CO2_base': "GHG_base"})
         ghg_base = ghg_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
-        self.xr_base = ghg_base
+        self.xr_base = xr.merge([ghg_base, xr_base_harm_co2.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))])
+
+        # Harmonize global baseline emissions with sum of all countries (this is important for consistency of AP, etc.)
+        base_onlyc = self.xr_base.reindex(Region=self.countries_iso)
+        base_w = base_onlyc.sum(dim='Region').expand_dims({'Region': ['EARTH']})
+        self.xr_base = xr.merge([base_w,base_onlyc])
 
     # =========================================================== #
     # =========================================================== #
@@ -819,15 +824,17 @@ class datareading(object):
                 coords={'Region': [country for country in np.array(self.xr_total['Region']) for group in country_to_eu[country]]}
             )
             if group_of_choice == 'EU':
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base"]].groupby(group_coord).sum()#skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
             self.xr_total = self.xr_total.reindex(Region = list_of_regions)
         self.xr_total = self.xr_total
-        #self.xr_total['GHG_base'][np.where(self.xr_total.Region=='EU')[0], np.array([2, 3, 4])] = np.nan # SSP3, 4, 5 are empty for Europe!
+        self.xr_total['GHG_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.xr_total['CO2_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.regions_iso = np.array(self.xr_total.Region)
 
     # =========================================================== #
     # =========================================================== #
@@ -891,6 +898,25 @@ class datareading(object):
                         rbw += r
                         a += 1
             rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw.nc')
+
+            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+            base_worldsum = xrt.CO2_base.sel(Region='EARTH')
+            a=0
+            for reg_i, reg in enumerate(self.countries_iso):
+                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
+                rb_part2 = xrt.CO2_base.sel(Region=reg)*(base_worldsum - xrt.CO2_globe)/base_worldsum
+                if a == 0:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw = r
+                        a += 1
+                else:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw += r
+                        a += 1
+            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_co2.nc')
 
             r=0
             hist_emissions_startyears = [1850, 1950, 1990]
