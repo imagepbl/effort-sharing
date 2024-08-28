@@ -64,6 +64,25 @@ class allocation(object):
         # Adds the new emission time series to the xr_total dataset
         self.xr_total = self.xr_total.assign(GF = xr_new)
 
+        ################
+        # CO2 analysis #
+        ################
+
+        # Calculating the current CO2 fraction for region and world based on start_year_analysis
+        current_CO2_region = self.xr_total.sel(Region=self.FocusRegion,
+                                                    Time=self.start_year_analysis).CO2_hist
+        
+        current_CO2_earth = (1e-9+self.xr_total.sel(Region='EARTH',
+                                                        Time=self.start_year_analysis).CO2_hist)
+        
+        co2_fraction = current_CO2_region / current_CO2_earth
+
+        # New CO2 time series from the start_year to 2101 by multiplying the global budget with the fraction
+        xr_new_co2 = (co2_fraction*self.xr_total.CO2_globe).sel(Time=self.analysis_timeframe)
+
+        # Adds the new CO2 time series to the xr_total dataset
+        self.xr_total = self.xr_total.assign(GF_CO2 = xr_new_co2)
+
     # =========================================================== #
     # =========================================================== #
 
@@ -352,7 +371,8 @@ class allocation(object):
     def save(self):
         savename = self.version_path + 'xr_alloc_'+self.FocusRegion+'.nc'
 
-        xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
+        # xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
+        xr_total_onlyalloc = (self.xr_total[['GF', 'GF_CO2']]
             .sel(
                 Time=np.arange(self.settings['params']['start_year_analysis'], 2101)
             )
@@ -388,6 +408,7 @@ if __name__ == "__main__":
     allocator.gf()
     allocator.pc()
     allocator.pcc()
+    allocator.pcb()
     allocator.ecpc()
     allocator.ap()
     allocator.gdr()
