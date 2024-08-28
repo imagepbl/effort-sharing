@@ -460,7 +460,7 @@ class datareading(object):
             return np.array(vec)
 
         def rescale(traj):
-            offset = traj.sel(Time = self.settings['start_year_analysis']) - tot_start
+            offset = traj.sel(Time = self.settings['params']['start_year_analysis']) - tot_start
             traj_scaled = (-xr_comp*offset+traj)
             return traj_scaled
 
@@ -474,27 +474,27 @@ class datareading(object):
             ms = ms_temp(temp)
             if len(ms) == 0:
                 for n_i, n in enumerate(self.NonCO2list):
-                    times = times + list(np.arange(self.settings['start_year_analysis'], 2101))
-                    vals = vals+[np.nan]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
-                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
-                    temps = temps + [temp]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
+                    times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
+                    vals = vals+[np.nan]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                    temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
             else:
                 reductions = xr_reductions.sel(ModelScenario=ms)
                 reds = reductions.Value.quantile(self.NonCO2list[::-1])
                 for n_i, n in enumerate(self.NonCO2list):
                     red = reds[n_i]
                     ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
-                    trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['start_year_analysis'], 2101))
+                    trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
                     trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
 
                     # Harmonize reduction
                     red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
                     traj2 = -(1-xr_comp)*(red_traj-red)*xr_nonco2_raw_start.mean().Value+trajectory_mean # 1.5*red has been removed -> check effect
                     trajectory_mean2 = check_monotomy(np.array(traj2))
-                    times = times + list(np.arange(self.settings['start_year_analysis'], 2101))
+                    times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
                     vals = vals+list(trajectory_mean2)
-                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
-                    temps = temps + [temp]*len(list(np.arange(self.settings['start_year_analysis'], 2101)))
+                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                    temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
 
         dict_nonco2 = {}
         dict_nonco2['Time'] = times
@@ -710,7 +710,7 @@ class datareading(object):
         self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe)
         self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe])
         x = (self.xr_ar6_landuse / self.xr_ar6.sel(Variable='Emissions|Kyoto Gases')).mean(dim='ModelScenario').Value
-        zero = np.arange(self.settings['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['start_year_analysis'],2101))<0)[0][0]]
+        zero = np.arange(self.settings['params']['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['params']['start_year_analysis'],2101))<0)[0][0]]
         x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
         self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
 
@@ -726,7 +726,7 @@ class datareading(object):
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
-            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(self.settings['start_year_analysis'], 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
+            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(self.settings['params']['start_year_analysis'], 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
             df_ssps.append(df_base)
         df_base_all = pd.concat(df_ssps)
         df_base_all = df_base_all.reset_index(drop=True)
@@ -843,9 +843,8 @@ class datareading(object):
         print('- Save important files')
 
         xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).drop_vars(['variable'])
-        xr_ipcc = self.xr_total.sel(Temperature=np.array([1.56, 2.0]).astype(float).round(2)).drop_vars(['variable'])
 
-        for version_i, xr_version in enumerate([xr_normal, xr_ipcc]):
+        for version_i, xr_version in enumerate([xr_normal]):
             if version_i == 0: ext = ''
             else: ext = 'IPCC/'
 

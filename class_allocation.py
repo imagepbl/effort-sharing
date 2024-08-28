@@ -155,9 +155,9 @@ class allocation(object):
         def budget_harm(nz):
             compensation_form = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis']))
             xr_comp2 =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
-            return xr_comp2 / ((nz-self.settings['start_year_analysis'])**(3/2)*(2/3)) # TODO later: should be , but I now calibrated to 0.5. Not a problem because we have the while loop later.
+            return xr_comp2 / ((nz-self.settings['params']['start_year_analysis'])**(3/2)*(2/3)) # TODO later: should be , but I now calibrated to 0.5. Not a problem because we have the while loop later.
         def pcb_new_factor(path, f):
-            netzeros = self.settings['start_year_analysis']+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
+            netzeros = self.settings['params']['start_year_analysis']+path.where(path > 0, 0).where(path < 0 , 1).sum(dim='Time')
             netzeros = netzeros.where(netzeros < 2100, 2100)
             return path+budget_harm(netzeros)*f
 
@@ -354,7 +354,6 @@ class allocation(object):
 
         xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
             .sel(
-                Region=self.FocusRegion, 
                 Time=np.arange(self.settings['params']['start_year_analysis'], 2101)
             )
             .astype("float32")

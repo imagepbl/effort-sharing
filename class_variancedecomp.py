@@ -41,7 +41,7 @@ class vardecomposing(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xr.open_dataset("K:/data/DataUpdate_ongoing/xr_dataread.nc")
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc")
         self.all_regions_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_regions.npy")
         self.all_regions_names = np.load(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy")
         self.all_countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
@@ -52,7 +52,7 @@ class vardecomposing(object):
 
     def prepare_global_sobol(self, year):
         #print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
-        self.xr_year= xr.open_dataset("K:/data/DataUpdate_ongoing/xr_alloc_"+str(year)+".nc")
+        self.xr_year= xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_alloc_"+str(year)+".nc")
         xr_globe = self.xr_year.bfill(dim = "Timing")[['PCC', 'ECPC', 'AP']].sel(Temperature=[1.5, 1.8],
                                                                                 Risk=[0.5, 0.33],
                                                                                 NonCO2red=[0.33, 0.5, 0.67],
@@ -137,7 +137,7 @@ class vardecomposing(object):
         d = {}
         d['Time'] = times_
         d['Factor'] = dims_
-        d['Region'] = np.array(xr.open_dataset("K:/data/DataUpdate_ongoing/xr_alloc_2030.nc").Region)
+        d['Region'] = np.array(xr.open_dataset("K:/Data/Data_EffortSharing/DataUpdate_ongoing/xr_alloc_2030.nc").Region)
 
         xr_sobol = xr.Dataset(
             coords=d
