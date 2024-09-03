@@ -1,4 +1,7 @@
-## Installation
+## Introduction
+This code combines a variety of data sources to compute fair national emissions allocations, studies variability in these allocations and compares them with NDC estimates and cost-optimal scenario projections. The output is publicly available on Zenodo (10.5281/zenodo.12188104). We plan to make the code more accessible in terms of commenting and cleaning up old code over time.
+
+## Installation instructions (currently aimed at direct colleagues)
 
 It is recommended to clone the code to the `K:\` directory for best performance. 
 ```shell
@@ -43,17 +46,3 @@ The third and fourth classes called in `Main.ipynb` are associated with loading 
 One final important notebook is `Aggregator.ipynb`. This script aggregates the country-individual files `xr_alloc_XYZ.nc`. One output is the aggregation of those files into a single file for a single year, for example `xr_alloc_2030.nc`. Useful for analysis purposes.
 
 Input variables can be changed in `input.yml`.
-
-## Workflow
-Please feel free to add and/or fix any of the issues on the Github issue list if you have time to contribute. But if you adjust code, please create your own branch or work in one of the existing ones - and use pull requests to merge them into the `main` branch. Ask someone (for now Chantal or me) to review it before merging, there is a button for that.
-
-## Data exports for PBL plots
-I (Mark) will be working on the data exports for the figures in the PBL reports shortly. Will give a description here in due time. UPDATE: a first script for data exports is now under review in branch `data-exports`, called `DataExports.ipynb`.
-
-## Releases
-No release of this code has been done yet. First is planned in March/April, together with the PBL report, the launch of the carbon budget explorer (CABE) version 1.0 and the preprint of this research. We should appropriately clean up the repo, this ReadMe in particular, and then release the code via a button within Github towards Zenodo.
-
-## Plotting
-All plotting scripts concerning this research are also in this repository. In order to save figures from these scripts, create a `Figures` folder in your local repository directory and the appropriate subfolders (not to be added to the github). In particular, those for the paper we are writing (location: `/Plotting/ECEMF_paper/`), but also those for the PBL report (location: `/Plotting/PBL_report/`). The latter are of course the ones that we created ourselves as concepts, not the ones from the visualisation team. One of these plots can be found as an example here, but is slowly being updated iteratively as the code develops:
-
-![Fig_NLD_nonumbers](https://github.com/imagepbl/EffortSharing/assets/47416602/6db2557d-db11-4457-9ba3-adc9a8ea1a66)
