@@ -1,5 +1,7 @@
 ## Introduction
-This code combines a variety of data sources to compute fair national emissions allocations, studies variability in these allocations and compares them with NDC estimates and cost-optimal scenario projections. The output is publicly available on Zenodo (10.5281/zenodo.12188104). We plan to make the code more accessible in terms of commenting and cleaning up old code over time.
+This code combines a variety of data sources to compute fair national emissions allocations, studies variability in these allocations and compares them with NDC estimates and cost-optimal scenario projections. We plan to make the code more accessible in terms of commenting and cleaning up old code over time. The output data of this code is publicly available on Zenodo:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
 ## Installation instructions (currently aimed at direct colleagues)
 
