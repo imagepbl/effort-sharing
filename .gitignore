@@ -7,7 +7,6 @@ __pycache__/
 Dash_CarbonBudget/*
 Data/*
 Figures/*
-Old/*
 
 # C extensions
 *.so
