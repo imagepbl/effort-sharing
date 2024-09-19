@@ -765,6 +765,8 @@ class datareading(object):
         base_onlyc = self.xr_base.reindex(Region=self.countries_iso)
         base_w = base_onlyc.sum(dim='Region').expand_dims({'Region': ['EARTH']})
         self.xr_base = xr.merge([base_w,base_onlyc])
+        self.xr_base = self.xr_base.assign(GHG_base_excl = self.xr_base.GHG_base - self.xr_ar6_landuse.GHG_LULUCF.mean(dim='ModelScenario')/1e3)
+        self.xr_base = self.xr_base.assign(CO2_base_excl = self.xr_base.CO2_base - self.xr_ar6_landuse.CO2_LULUCF.mean(dim='ModelScenario')/1e3)
 
     # =========================================================== #
     # =========================================================== #

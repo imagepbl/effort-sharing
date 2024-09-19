@@ -43,9 +43,12 @@ class AllocationCO2():
         if lulucf == 'incl':
             self.emis_hist = self.xr_total.CO2_hist
             self.emis_fut = self.xr_total.CO2_globe
-        elif lulucf == 'excl':	
+            self.emis_base = self.xr_total.CO2_base
+        elif lulucf == 'excl':
             self.emis_hist = self.xr_total.CO2_hist_excl
             self.emis_fut = self.xr_total.CO2_globe_excl
+            self.emis_base = self.xr_total.CO2_base_excl
+        self.lulucf_indicator = lulucf
 
     # =========================================================== #
     # =========================================================== #
@@ -373,16 +376,16 @@ class AllocationCO2():
         # Global average GDP per capita
         r1_nom = GDP_sum_w / pop_sum_w
 
-        base_worldsum = xrt.CO2_base.sel(Region='EARTH')
+        base_worldsum = self.emis_base.sel(Time=self.analysis_timeframe).sel(Region='EARTH')
         rb_part1 = (xrt.GDP.sel(Region=self.focus_region) / xrt.Population.sel(Region=self.focus_region) / r1_nom)**(1/3.)
-        rb_part2 = xrt.CO2_base.sel(Region=self.focus_region) * (base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe)) / base_worldsum
+        rb_part2 = self.emis_base.sel(Time=self.analysis_timeframe).sel(Region=self.focus_region) * (base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe)) / base_worldsum
         rb = rb_part1 * rb_part2
 
         # Step 2: Correction factor
         corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - xrt.GHG_globe)
 
         # Step 3: Budget after correction factor
-        ap = self.xr_total.CO2_base.sel(Region=self.focus_region) - rb/corr_factor
+        ap = self.emis_base.sel(Region=self.focus_region) - rb/corr_factor
 
         ap = ap.sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(AP = ap)
@@ -414,7 +417,7 @@ class AllocationCO2():
             rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim='Region')
 
         # Compute GDR until 2030
-        baseline = self.xr_total.CO2_base
+        baseline = self.emis_base
         global_traject = self.emis_fut
 
         gdr = baseline.sel(Region=self.focus_region) - (baseline.sel(Region='EARTH') - global_traject) * rci_reg
@@ -443,7 +446,8 @@ class AllocationCO2():
         '''
         Extract variables from xr_total dataset and save allocation data to a NetCDF file
         '''
-        save_name = 'xr_alloc_'+self.focus_region+'_CO2.nc'
+        folder_name = 'Allocations_CO2_'+self.lulucf_indicator
+        save_name = 'xr_alloc_'+self.focus_region+'.nc'
 
         xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
             .sel(
@@ -451,7 +455,7 @@ class AllocationCO2():
             )
             .astype("float32")
         )
-        xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+'Allocations/' + save_name,
+        xr_total_onlyalloc.to_netcdf(self.settings['paths']['data']['datadrive']+folder_name+'/' + save_name,
             format='NETCDF4'
         )
         self.xr_alloc = xr_total_onlyalloc
