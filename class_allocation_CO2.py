@@ -25,7 +25,7 @@ class AllocationCO2():
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, reg):
+    def __init__(self, reg, lulucf='incl'):
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
@@ -40,6 +40,12 @@ class AllocationCO2():
         self.analysis_timeframe = np.arange(self.start_year_analysis, 2101)
 
         # Historical emissions
+        if lulucf == 'incl':
+            self.emis_hist = self.xr_total.CO2_hist
+            self.emis_fut = self.xr_total.CO2_globe
+        elif lulucf == 'excl':	
+            self.emis_hist = self.xr_total.CO2_hist_excl
+            self.emis_fut = self.xr_total.CO2_globe_excl
 
     # =========================================================== #
     # =========================================================== #
@@ -51,16 +57,16 @@ class AllocationCO2():
         '''
 
         # Calculating the current CO2 fraction for region and world based on start_year_analysis
-        current_co2_region = self.xr_total.sel(Region=self.focus_region,
-                                                    Time=self.start_year_analysis).CO2_hist
+        current_co2_region = self.emis_hist.sel(Region=self.focus_region,
+                                                    Time=self.start_year_analysis)
 
-        current_co2_earth = (1e-9+self.xr_total.sel(Region='EARTH',
-                                                        Time=self.start_year_analysis).CO2_hist)
+        current_co2_earth = (1e-9+self.emis_hist.sel(Region='EARTH',
+                                                        Time=self.start_year_analysis))
 
         co2_fraction = current_co2_region / current_co2_earth
 
         # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
-        xr_new_co2 = (co2_fraction*self.xr_total.CO2_globe).sel(Time=self.analysis_timeframe)
+        xr_new_co2 = (co2_fraction*self.emis_fut).sel(Time=self.analysis_timeframe)
 
         # Adds the new CO2 time series to the xr_total dataset
         self.xr_total = self.xr_total.assign(GF = xr_new_co2)
@@ -81,7 +87,7 @@ class AllocationCO2():
 
         # Multiplying the global budget with the population fraction to create
         # new allocation time series from start_year to 2101
-        xr_new = (pop_fraction * self.xr_total.CO2_globe).sel(Time=self.analysis_timeframe)
+        xr_new = (pop_fraction * self.emis_fut).sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(PC = xr_new)
 
     # =========================================================== #
@@ -167,10 +173,10 @@ class AllocationCO2():
         pop_region = self.xr_total.sel(Time=start_year).Population
         pop_earth = self.xr_total.sel(Region='EARTH', Time=start_year).Population
         pop_fraction = (pop_region / pop_earth).mean(dim='Scenario')
-        globalpath = self.xr_total.CO2_globe
+        globalpath = self.emis_fut
 
-        emis_start_i = self.xr_total.CO2_hist.sel(Time=start_year)
-        emis_start_w = self.xr_total.CO2_hist.sel(Time=start_year, Region='EARTH')
+        emis_start_i = self.emis_hist.sel(Time=start_year)
+        emis_start_w = self.emis_hist.sel(Time=start_year, Region='EARTH')
 
         time_range = np.arange(start_year, 2101)
         path_scaled_0 = (
@@ -180,8 +186,8 @@ class AllocationCO2():
         )
 
         budget_left = (
-            self.xr_total.CO2_globe
-            .where(self.xr_total.CO2_globe > 0, 0)
+            self.emis_fut
+            .where(self.emis_fut > 0, 0)
             .sel(Time=time_range)
             .sum(dim='Time') * pop_fraction
         ).sel(Region=focus_region)
@@ -208,7 +214,7 @@ class AllocationCO2():
             pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name='PCB')
 
         # CO2, but now linear
-        co2_hist = self.xr_total.CO2_hist.sel(Region=focus_region, Time=start_year)
+        co2_hist = self.emis_hist.sel(Region=focus_region, Time=start_year)
         time_range = np.arange(start_year, 2101)
 
         nz = (budget_left * 2 / co2_hist + start_year - 1)
@@ -295,7 +301,7 @@ class AllocationCO2():
             future_emissions_timeframe = np.arange(self.start_year_analysis + 1, 2101)
 
             # Summing all historical CO2 emissions over the hist_emissions_timeframe
-            hist_emissions = self.xr_total.CO2_hist.sel(Time = hist_emissions_timeframe)
+            hist_emissions = self.emis_hist.sel(Time = hist_emissions_timeframe)
 
             # Discounting -> We only do past discounting here
             for discount in discount_rates:
@@ -310,7 +316,7 @@ class AllocationCO2():
                 hist_emissions_r = float(hist_emissions_discounted.sel(Region = self.focus_region))
 
                 # Summing all future emissions over the future_emissions_timeframe
-                future_emissions_w = self.xr_total.CO2_globe.sel(Time = future_emissions_timeframe).sum(dim='Time')
+                future_emissions_w = self.emis_fut.sel(Time = future_emissions_timeframe).sum(dim='Time')
 
                 total_emissions_w = hist_emissions_w + future_emissions_w
 
@@ -324,11 +330,11 @@ class AllocationCO2():
 
                 # Now temporal allocation
                 #globalbudget = self.xr_total.CO2_globe.sel(Time=self.analysis_timeframe).sum(dim='Time')
-                globalpath = self.xr_total.CO2_globe
+                globalpath = self.emis_fut
 
-                emis_start_r = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis,
+                emis_start_r = self.emis_hist.sel(Time=self.start_year_analysis,
                                                             Region=self.focus_region)
-                emis_start_w = self.xr_total.CO2_hist.sel(Time=self.start_year_analysis,
+                emis_start_w = self.emis_hist.sel(Time=self.start_year_analysis,
                                                             Region='EARTH')
                 emis_ratio = emis_start_r / emis_start_w
                 path_scaled_0 = emis_ratio * globalpath
@@ -369,7 +375,7 @@ class AllocationCO2():
 
         base_worldsum = xrt.CO2_base.sel(Region='EARTH')
         rb_part1 = (xrt.GDP.sel(Region=self.focus_region) / xrt.Population.sel(Region=self.focus_region) / r1_nom)**(1/3.)
-        rb_part2 = xrt.CO2_base.sel(Region=self.focus_region) * (base_worldsum - xrt.CO2_globe) / base_worldsum
+        rb_part2 = xrt.CO2_base.sel(Region=self.focus_region) * (base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe)) / base_worldsum
         rb = rb_part1 * rb_part2
 
         # Step 2: Correction factor
@@ -409,7 +415,7 @@ class AllocationCO2():
 
         # Compute GDR until 2030
         baseline = self.xr_total.CO2_base
-        global_traject = self.xr_total.CO2_globe
+        global_traject = self.emis_fut
 
         gdr = baseline.sel(Region=self.focus_region) - (baseline.sel(Region='EARTH') - global_traject) * rci_reg
         gdr = gdr.rename('Value')
