@@ -336,12 +336,17 @@ class datareading(object):
         xr_primap_agri = xr_primap2['KYOTOGHG (AR6GWP100)'].rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'scen', 'category (IPCC2006_PRIMAP)': 'cat'}).sel(scen='HISTTP', provenance='derived', cat=['M.AG'], source='PRIMAP-hist_v2.5.1_final_nr').sum(dim='cat').drop_vars(['source', 'provenance', 'scen'])
         xr_primap_agri['time'] = np.arange(1750, 2023)
         xr_primap_agri = xr_primap_agri.rename({'time': 'Time'})
+        xr_primap_agri_co2 = xr_primap2['CO2'].rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'scen', 'category (IPCC2006_PRIMAP)': 'cat'}).sel(scen='HISTTP', provenance='derived', cat=['M.AG'], source='PRIMAP-hist_v2.5.1_final_nr').sum(dim='cat').drop_vars(['source', 'provenance', 'scen'])
+        xr_primap_agri_co2['time'] = np.arange(1750, 2023)
+        xr_primap_agri_co2 = xr_primap_agri_co2.rename({'time': 'Time'})
+
         xr_ghghist = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'GHG_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
         xr_co2hist = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CO2_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
         xr_ch4hist = (xr_nwc_ch4.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CH4_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
         xr_n2ohist = (xr_nwc_n2o.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'N2O_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
         xr_ghgexcl = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'GHG_hist_excl'})
-        self.xr_hist = xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist,xr_ch4hist, xr_n2ohist])*1e3
+        xr_co2excl = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri_co2/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'CO2_hist_excl'})
+        self.xr_hist = xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist, xr_co2excl,xr_ch4hist, xr_n2ohist])*1e3
 
     # =========================================================== #
     # =========================================================== #
@@ -406,6 +411,8 @@ class datareading(object):
         self.xr_ar6_landuse = (self.xr_ar6.sel(Variable='Emissions|CO2|AFOLU|Land')*1 + 
                                self.xr_ar6.sel(Variable='Emissions|CH4|AFOLU|Land')*self.settings['params']['gwp_ch4'] + 
                                self.xr_ar6.sel(Variable='Emissions|N2O|AFOLU|Land')*self.settings['params']['gwp_n2o']/1000)
+        self.xr_ar6_landuse = self.xr_ar6_landuse.rename({'Value': 'GHG_LULUCF'})
+        self.xr_ar6_landuse = self.xr_ar6_landuse.assign(CO2_LULUCF = self.xr_ar6.sel(Variable='Emissions|CO2|AFOLU|Land').Value)
 
     # =========================================================== #
     # =========================================================== #
@@ -707,12 +714,15 @@ class datareading(object):
                                 
                                 pathways_data['CO2_globe'][neg_i, nonco2_i, temp_i, risk_i, timing_i, :] = pathway_final2
         self.xr_traj_co2 = xr_traj_co2.update(pathways_data)
-        self.xr_traj_ghg_ds = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe)
-        self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe])
-        x = (self.xr_ar6_landuse / self.xr_ar6.sel(Variable='Emissions|Kyoto Gases')).mean(dim='ModelScenario').Value
-        zero = np.arange(self.settings['params']['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['params']['start_year_analysis'],2101))<0)[0][0]]
-        x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
-        self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
+        self.xr_traj_ghg = (self.xr_traj_co2.CO2_globe+self.xr_traj_nonco2.NonCO2_globe).to_dataset(name="GHG_globe")
+        # self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe])
+        # x = (self.xr_ar6_landuse / self.xr_ar6.sel(Variable='Emissions|Kyoto Gases')).mean(dim='ModelScenario').Value
+        # zero = np.arange(self.settings['params']['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['params']['start_year_analysis'],2101))<0)[0][0]]
+        # x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
+        # self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
+        self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe - self.xr_ar6_landuse.mean(dim='ModelScenario').GHG_LULUCF).to_dataset(name='GHG_globe_excl')
+        self.xr_traj_co2_excl = (self.xr_traj_co2.CO2_globe - self.xr_ar6_landuse.mean(dim='ModelScenario').CO2_LULUCF).to_dataset(name='CO2_globe_excl')
+        self.all_projected_gases = xr.merge([self.xr_traj_ghg, self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe, self.xr_traj_ghg_excl.GHG_globe_excl, self.xr_traj_co2_excl.CO2_globe_excl])
 
     # =========================================================== #
     # =========================================================== #
@@ -793,7 +803,7 @@ class datareading(object):
 
     def merge_xr(self):
         print('- Merging xrarray object')
-        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_hdish, self.xr_co2_budgets, self.xr_traj_ghg, self.xr_traj_ghg_excl, self.xr_base, self.xr_ndc])
+        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_hdish, self.xr_co2_budgets, self.all_projected_gases, self.xr_base, self.xr_ndc])
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
