@@ -25,24 +25,21 @@ class AllocationCO2():
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, reg, version = 'normal'): # Now modulating version (PBL or normal temperature increments) via the version argument
+    def __init__(self, reg):
         self.current_dir = Path.cwd()
-        self.version = version
-        if version == 'PBL':
-            self.version_path = 'PBL/'
-        elif version == 'normal':
-            self.version_path = ''
 
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + self.version_path+ "xr_dataread.nc").load()
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
 
         # Region and Time variables
         self.focus_region = reg
         self.start_year_analysis = self.settings['params']['start_year_analysis']
         self.analysis_timeframe = np.arange(self.start_year_analysis, 2101)
+
+        # Historical emissions
 
     # =========================================================== #
     # =========================================================== #
@@ -363,7 +360,7 @@ class AllocationCO2():
         Equation from van den Berg et al. (2020)
         '''
         # Step 1: Reductions before correction factor
-        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + self.version_path + "xr_rbw.nc").load()
+        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc").load()
         xrt = self.xr_total.sel(Time=self.analysis_timeframe)
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
         pop_sum_w = xrt.Population.sel(Region='EARTH')
@@ -394,7 +391,7 @@ class AllocationCO2():
         (RCI) weighed at 50/50 to allocate the global budget
         Calculations from van den Berg et al. (2020)
         '''
-        xr_rci = xr.open_dataset(self.settings['paths']['data']['datadrive'] + self.version_path + "xr_rci.nc").load()
+        xr_rci = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rci.nc").load()
         yearfracs = xr.Dataset(data_vars={"Value": (['Time'],
                                                     (self.analysis_timeframe - 2030) \
                                                         / (self.settings['params']['convergence_year_gdr'] - 2030))},
@@ -440,7 +437,7 @@ class AllocationCO2():
         '''
         Extract variables from xr_total dataset and save allocation data to a NetCDF file
         '''
-        save_name = self.version_path + 'xr_alloc_'+self.focus_region+'_CO2.nc'
+        save_name = 'xr_alloc_'+self.focus_region+'_CO2.nc'
 
         xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
             .sel(
