@@ -41,9 +41,10 @@ pip install -r /path/to/requirements_pip.txt
 
 ### Setting up required folder structure
 
-You will need to make a folder+subfolder in the K:/ drive as follows: `K:/ECEMF/T5.2/Allocations/`. There (and in K:/ECEMF/T5.2) all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
+You will need to make a folder+subfolder in the K:/ drive as follows: `K:/Data/Data_effortsharing/DataUpdate_ongoing`. There all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
 
 ```shell
 cd K:
-mkdir ECEMF\T5.2\Allocations
+mkdir Data\Data_effortsharing\DataUpdate_ongoing\Allocations
+mkdir Data\Data_effortsharing\DataUpdate_ongoing\Allocations_CO2_excl
 ```
