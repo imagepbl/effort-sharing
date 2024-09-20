@@ -29,7 +29,7 @@ class dataexportcl(object):
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
-        with open(self.current_dir / '../input.yml') as file:
+        with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
         self.xr_dataread =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
@@ -87,7 +87,7 @@ class dataexportcl(object):
         for default_i in range(2):
             dss = []
             for cty in np.array(self.xr_dataread.Region):
-                ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations/xr_alloc_"+cty+".nc")
+                ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations_CO2_excl/xr_alloc_"+cty+".nc")
                 ds2 = ds.sel(Discount_factor=0,
                 Historical_startyear=1990,
                 Capability_threshold='Th',
@@ -105,8 +105,8 @@ class dataexportcl(object):
             ds_total = xr.merge(dss)
             cur = self.xr_dataread.GHG_hist.sel(Time=2015)
             ds_total_red = -(cur-ds_total)/cur
-            ds_total.to_dataframe().to_csv(self.settings['paths']['data']['export']+"../EffortSharingExports/allocations_default_"+['15overshoot', '20'][default_i]+".csv")
-            ds_total_red.to_dataframe().to_csv(self.settings['paths']['data']['export']+"../EffortSharingExports/reductions_default_"+['15overshoot', '20'][default_i]+".csv")
+            ds_total.to_dataframe().to_csv(self.settings['paths']['data']['export']+"../EffortSharingExports/allocations_default_"+['15overshoot', '20'][default_i]+"_CO2_excl.csv")
+            ds_total_red.to_dataframe().to_csv(self.settings['paths']['data']['export']+"../EffortSharingExports/reductions_default_"+['15overshoot', '20'][default_i]+"_CO2_excl.csv")
 
     # =========================================================== #
     # =========================================================== #
@@ -168,9 +168,9 @@ class dataexportcl(object):
         '''
         CO2 budgets PC
         '''
-        
+
         pop_region = self.xr_dataread_sub.sel(Time=self.settings['params']['start_year_analysis']).Population
-        pop_earth = self.xr_dataread_sub.sel(Region='EARTH', 
+        pop_earth = self.xr_dataread_sub.sel(Region='EARTH',
                                             Time=self.settings['params']['start_year_analysis']).Population
         pop_fraction =  pop_region / pop_earth
         self.xr_pc = (pop_fraction*self.xr_dataread_sub.Budget*1e3).to_dataset(name="PC")
@@ -201,7 +201,7 @@ class dataexportcl(object):
                 # Discounting -> We only do past discounting here
                 for discount_i, discount in enumerate([0]):
                     past_timeline = np.arange(startyear, self.settings['params']['start_year_analysis']+1)
-                    xr_dc = xr.DataArray((1-discount/100)**(self.settings['params']['start_year_analysis']-past_timeline), dims=['Time'], 
+                    xr_dc = xr.DataArray((1-discount/100)**(self.settings['params']['start_year_analysis']-past_timeline), dims=['Time'],
                                             coords={'Time': past_timeline})
                     hist_emissions_dc = (hist_emissions*xr_dc).sum(dim='Time')
                     hist_emissions_w = float(hist_emissions_dc.sel(Region='EARTH'))
@@ -242,21 +242,21 @@ class dataexportcl(object):
         Export files for COMMITTED
         '''
         # Pathways
-        df = pd.read_csv("K:/data/EffortSharingExports/allocations_default_15overshoot.csv")
-        df = df[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_15overshoot_CO2_excl.csv")
+        df = df[['Time', 'Region', 'PC', 'PCC', 'ECPC', 'AP']]
         df['Temperature'] = ["1.5 deg at 50% with small overshoot"]*len(df)
 
-        df2 = pd.read_csv("K:/data/EffortSharingExports/allocations_default_20.csv")
-        df2 = df2[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
+        df2 = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_20_CO2_excl.csv")
+        df2 = df2[['Time', 'Region', 'PC', 'PCC', 'ECPC', 'AP']]
         df2['Temperature'] = ["2.0 deg at 67%"]*len(df2)
 
         df3 = pd.concat([df, df2])
-        df3.to_csv("K:/data/EffortSharingExports/allocations_COMMITTED.csv", index=False)
+        df3.to_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_CO2_excl_COMMITTED.csv", index=False)
 
-        # Budgets
-        xr_traj_16 = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/xr_traj_t16_r50.nc")
-        xr_traj_20 = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/xr_traj_t20_r67.nc")
-        self.ecpc = xr_traj_16.ECPC.sum(dim='Time')
+        # # Budgets
+        # xr_traj_16 = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/xr_traj_t16_r50.nc")
+        # xr_traj_20 = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/xr_traj_t20_r67.nc")
+        # self.ecpc = xr_traj_16.ECPC.sum(dim='Time')
 
     # =========================================================== #
     # =========================================================== #
@@ -280,5 +280,8 @@ class dataexportcl(object):
     # =========================================================== #
 
 if __name__ == "__main__":
-    region = input("Choose a focus country or region: ")
-    dataexporter = dataexportcl(region)
+    # region = input("Choose a focus country or region: ")
+
+    dataexporter = dataexportcl()
+    # dataexporter.allocations_default()
+    dataexporter.project_COMMITTED()
