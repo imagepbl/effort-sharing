@@ -44,10 +44,12 @@ class AllocationCO2():
             self.emis_hist = self.xr_total.CO2_hist
             self.emis_fut = self.xr_total.CO2_globe
             self.emis_base = self.xr_total.CO2_base
+            self.rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2.nc").load()
         elif lulucf == 'excl':
             self.emis_hist = self.xr_total.CO2_hist_excl
             self.emis_fut = self.xr_total.CO2_globe_excl
             self.emis_base = self.xr_total.CO2_base_excl
+            self.rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2_excl.nc").load()
         self.lulucf_indicator = lulucf
 
     # =========================================================== #
@@ -369,7 +371,6 @@ class AllocationCO2():
         Equation from van den Berg et al. (2020)
         '''
         # Step 1: Reductions before correction factor
-        xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw.nc").load()
         xrt = self.xr_total.sel(Time=self.analysis_timeframe)
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
         pop_sum_w = xrt.Population.sel(Region='EARTH')
@@ -382,14 +383,14 @@ class AllocationCO2():
         rb = rb_part1 * rb_part2
 
         # Step 2: Correction factor
-        corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - xrt.GHG_globe)
+        corr_factor = (1e-9+self.rbw.__xarray_dataarray_variable__)/(base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe))
 
         # Step 3: Budget after correction factor
         ap = self.emis_base.sel(Region=self.focus_region) - rb/corr_factor
 
         ap = ap.sel(Time=self.analysis_timeframe)
         self.xr_total = self.xr_total.assign(AP = ap)
-        xr_rbw.close()
+        self.rbw.close()
 
     # =========================================================== #
     # =========================================================== #

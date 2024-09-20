@@ -929,6 +929,25 @@ class datareading(object):
                         a += 1
             rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_co2.nc')
 
+            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+            base_worldsum = xrt.CO2_base_excl.sel(Region='EARTH')
+            a=0
+            for reg_i, reg in enumerate(self.countries_iso):
+                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
+                rb_part2 = xrt.CO2_base_excl.sel(Region=reg)*(base_worldsum - xrt.CO2_globe_excl)/base_worldsum
+                if a == 0:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw = r
+                        a += 1
+                else:
+                    r = rb_part1*rb_part2
+                    if not np.isnan(np.max(r)):
+                        rbw += r
+                        a += 1
+            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_co2_excl.nc')
+
             r=0
             hist_emissions_startyears = [1850, 1950, 1990]
             capability_thresholds = ['No', 'Th', 'PrTh']
