@@ -836,9 +836,9 @@ class datareading(object):
                 coords={'Region': [country for country in np.array(self.xr_total['Region']) for group in country_to_eu[country]]}
             )
             if group_of_choice == 'EU':
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base"]].groupby(group_coord).sum()#skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
