@@ -720,8 +720,25 @@ class datareading(object):
         # zero = np.arange(self.settings['params']['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['params']['start_year_analysis'],2101))<0)[0][0]]
         # x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
         # self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
-        self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe - self.xr_ar6_landuse.mean(dim='ModelScenario').GHG_LULUCF).to_dataset(name='GHG_globe_excl')
-        self.xr_traj_co2_excl = (self.xr_traj_co2.CO2_globe - self.xr_ar6_landuse.mean(dim='ModelScenario').CO2_LULUCF).to_dataset(name='CO2_globe_excl')
+
+        # projected land use emissions
+        landuse_ghg = self.xr_ar6_landuse.mean(dim='ModelScenario').GHG_LULUCF
+        landuse_co2 = self.xr_ar6_landuse.mean(dim='ModelScenario').CO2_LULUCF
+
+        # historical land use emissions
+        landuse_ghg_hist = self.xr_hist.sel(Region='EARTH').GHG_hist - self.xr_hist.sel(Region='EARTH').GHG_hist_excl
+        landuse_co2_hist = self.xr_hist.sel(Region='EARTH').CO2_hist - self.xr_hist.sel(Region='EARTH').CO2_hist_excl
+
+        # Harmonize on 2021
+        diff_ghg = -landuse_ghg.sel(Time=2021) + landuse_ghg_hist.sel(Time=2021)
+        diff_co2 = -landuse_co2.sel(Time=2021) + landuse_co2_hist.sel(Time=2021)
+
+        # Corrected
+        self.landuse_ghg_corr = landuse_ghg + diff_ghg
+        self.landuse_co2_corr = landuse_co2 + diff_co2
+
+        self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe - self.landuse_ghg_corr).to_dataset(name='GHG_globe_excl')
+        self.xr_traj_co2_excl = (self.xr_traj_co2.CO2_globe - self.landuse_co2_corr).to_dataset(name='CO2_globe_excl')
         self.all_projected_gases = xr.merge([self.xr_traj_ghg, self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe, self.xr_traj_ghg_excl.GHG_globe_excl, self.xr_traj_co2_excl.CO2_globe_excl])
 
     # =========================================================== #
@@ -765,8 +782,11 @@ class datareading(object):
         base_onlyc = self.xr_base.reindex(Region=self.countries_iso)
         base_w = base_onlyc.sum(dim='Region').expand_dims({'Region': ['EARTH']})
         self.xr_base = xr.merge([base_w,base_onlyc])
-        self.xr_base = self.xr_base.assign(GHG_base_excl = self.xr_base.GHG_base - self.xr_ar6_landuse.GHG_LULUCF.mean(dim='ModelScenario')/1e3)
-        self.xr_base = self.xr_base.assign(CO2_base_excl = self.xr_base.CO2_base - self.xr_ar6_landuse.CO2_LULUCF.mean(dim='ModelScenario')/1e3)
+
+        fraction_lulucf_ghg = (self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist_excl / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist)
+        fraction_lulucf_co2 = (self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist)
+        self.xr_base = self.xr_base.assign(GHG_base_excl = self.xr_base.GHG_base * fraction_lulucf_ghg)
+        self.xr_base = self.xr_base.assign(CO2_base_excl = self.xr_base.CO2_base * fraction_lulucf_co2)
 
     # =========================================================== #
     # =========================================================== #
