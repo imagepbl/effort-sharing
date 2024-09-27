@@ -348,6 +348,9 @@ class datareading(object):
         xr_co2excl = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri_co2/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'CO2_hist_excl'})
         self.xr_hist = xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist, xr_co2excl,xr_ch4hist, xr_n2ohist])*1e3
 
+        self.xr_ghg_afolu = xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component')
+        self.xr_ghg_agri = xr_primap_agri/1e6
+
     # =========================================================== #
     # =========================================================== #
 

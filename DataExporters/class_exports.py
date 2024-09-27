@@ -167,7 +167,7 @@ class dataexportcl(object):
         corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)))
 
         # Step 3: Budget after correction factor
-        ap = self.xr_dataread_sub.emis_base - rb/corr_factor
+        ap = self.emis_base - rb/corr_factor
         self.xr_ap = (ap.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sel(Scenario='SSP2', NegEmis=0.5, NonCO2red=0.5, Timing='Immediate')*xr.where(self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)) > 0, 1, 0)).to_dataset(name="AP").sum(dim='Time')
 
     # =========================================================== #
@@ -180,8 +180,8 @@ class dataexportcl(object):
         if lulucf == 'incl':
             budget = self.xr_dataread_sub.Budget
         elif lulucf == 'excl':
-            temporalemis = self.xr_dataread_sub.CO2_globe_excl.sel(NegEmis=0.5, Timing='Immediate')
-            temporalemis[temporalemis < 0] = 0
+            temporalemis = self.xr_dataread_sub.CO2_globe_excl
+            temporalemis = temporalemis.where(temporalemis > 0, 0)
             budget = temporalemis.sum(dim='Time')/1e3
         
         pop_region = self.xr_dataread_sub.sel(Time=self.settings['params']['start_year_analysis']).Population
@@ -202,8 +202,8 @@ class dataexportcl(object):
             budget = self.xr_dataread_sub.Budget
         elif lulucf == 'excl':
             self.emis_hist = self.xr_dataread_sub.CO2_hist_excl
-            temporalemis = self.xr_dataread_sub.CO2_globe_excl.sel(NegEmis=0.5, Timing='Immediate')
-            temporalemis[temporalemis < 0] = 0
+            temporalemis = self.xr_dataread_sub.CO2_globe_excl
+            temporalemis = temporalemis.where(temporalemis > 0, 0)
             budget = temporalemis.sum(dim='Time')/1e3
 
         xrs = []
@@ -256,7 +256,7 @@ class dataexportcl(object):
         self.xr_budgets = xr.merge([self.xr_pc, self.xr_ecpc, self.xr_ap])
         self.xr_budgets = xr.merge([xr.where(self.xr_budgets.sel(Region='EARTH').expand_dims(['Region']), self.xr_budgets.sel(Region=self.countries_iso).sum(dim='Region'), 0), self.xr_budgets.drop_sel(Region='EARTH')])
         self.xr_budgets.to_netcdf(self.settings['paths']['data']['datadrive']+"CO2budgets_"+lulucf+".nc",format="NETCDF4", engine="netcdf4")
-        self.xr_budgets.drop_vars(['Scenario', 'Time', 'NonCO2red', 'NegEmis', 'Timing']).to_dataframe().to_csv("K:/data/EffortSharingExports/CO2budgets_"+lulucf+".csv")
+        self.xr_budgets.drop_vars(['Scenario', 'Time', 'NonCO2red', 'NegEmis', 'Timing']).to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/CO2budgets_"+lulucf+".csv")
 
     # =========================================================== #
     # =========================================================== #
@@ -266,16 +266,16 @@ class dataexportcl(object):
         Export files for COMMITTED
         '''
         # Pathways
-        df = pd.read_csv("K:/data/EffortSharingExports/allocations_default_15overshoot.csv")
+        df = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_15overshoot.csv")
         df = df[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
         df['Temperature'] = ["1.5 deg at 50% with small overshoot"]*len(df)
 
-        df2 = pd.read_csv("K:/data/EffortSharingExports/allocations_default_20.csv")
+        df2 = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_20.csv")
         df2 = df2[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
         df2['Temperature'] = ["2.0 deg at 67%"]*len(df2)
 
         df3 = pd.concat([df, df2])
-        df3.to_csv("K:/data/EffortSharingExports/allocations_COMMITTED.csv", index=False)
+        df3.to_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_COMMITTED.csv", index=False)
 
         # Budgets
         xr_traj_16 = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/xr_traj_t16_r50.nc")
@@ -289,16 +289,16 @@ class dataexportcl(object):
         '''
         Export files for DGIS
         '''
-        df = pd.read_csv("K:/data/EffortSharingExports/allocations_default_15overshoot.csv")
+        df = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_15overshoot.csv")
         df = df[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
         df['Temperature'] = ["1.5 deg at 50% with small overshoot"]*len(df)
 
-        df2 = pd.read_csv("K:/data/EffortSharingExports/allocations_default_20.csv")
+        df2 = pd.read_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_20.csv")
         df2 = df2[['Time', 'Region', 'PCC', 'ECPC', 'AP']]
         df2['Temperature'] = ["2.0 deg at 67%"]*len(df2)
 
         df3 = pd.concat([df, df2])
-        df3.to_csv("K:/data/EffortSharingExports/allocations_DGIS.csv", index=False)
+        df3.to_csv("K:/Data/Data_effortsharing/EffortSharingExports/allocations_DGIS.csv", index=False)
 
     # =========================================================== #
     # =========================================================== #
