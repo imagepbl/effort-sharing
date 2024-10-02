@@ -34,6 +34,13 @@ class dataexportcl(object):
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
         self.xr_dataread =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc").load()
         self.xr_dataread_sub = self.xr_dataread.sel(Temperature=[1.5, 1.6, 2.0], Risk=[0.5, 0.33, 0.17], NegEmis=0.5, NonCO2red=0.5, Timing='Immediate', Scenario='SSP2')
+        self.settings_default =  {'Temperature': [1.6, 2.0],
+                   'Risk': [0.5, 0.33, 0.17],
+                   'NegEmis': 0.5,
+                   'NonCO2red': [0.33, 0.5, 0.67],
+                   'Timing': "Immediate"}
+        self.settings_specific = {'Convergence_year': [2040, 2050, 2060, 2070]}
+        self.xr_dataread_sub_broader = self.xr_dataread.sel(**self.settings_default)
 
     # =========================================================== #
     # =========================================================== #
@@ -143,17 +150,17 @@ class dataexportcl(object):
         CO2 budgets AP
         '''
         if lulucf == 'incl':
-            self.emis_hist = self.xr_dataread_sub.CO2_hist
-            self.emis_fut = self.xr_dataread_sub.CO2_globe
-            self.emis_base = self.xr_dataread_sub.CO2_base
-            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2.nc").load()
+            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist
+            self.emis_fut = self.xr_dataread_sub_broader.CO2_globe
+            self.emis_base = self.xr_dataread_sub_broader.CO2_base
+            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2.nc").load().sel(**self.settings_default)
         elif lulucf == 'excl':
-            self.emis_hist = self.xr_dataread_sub.CO2_hist_excl
-            self.emis_fut = self.xr_dataread_sub.CO2_globe_excl
-            self.emis_base = self.xr_dataread_sub.CO2_base_excl
-            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2_excl.nc").load()
+            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist_excl
+            self.emis_fut = self.xr_dataread_sub_broader.CO2_globe_excl
+            self.emis_base = self.xr_dataread_sub_broader.CO2_base_excl
+            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_co2_excl.nc").load().sel(**self.settings_default)
 
-        xrt = self.xr_dataread_sub.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+        xrt = self.xr_dataread_sub_broader.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
         pop_sum_w = xrt.Population.sel(Region='EARTH')
         r1_nom = GDP_sum_w / pop_sum_w
@@ -168,7 +175,7 @@ class dataexportcl(object):
 
         # Step 3: Budget after correction factor
         ap = self.emis_base - rb/corr_factor
-        self.xr_ap = (ap.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).sel(Scenario='SSP2', NegEmis=0.5, NonCO2red=0.5, Timing='Immediate')*xr.where(self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)) > 0, 1, 0)).to_dataset(name="AP").sum(dim='Time')
+        self.xr_ap = (ap.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))*xr.where(self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)) > 0, 1, 0)).to_dataset(name="AP").sum(dim='Time') #.sel(Scenario='SSP2', NegEmis=0.5, NonCO2red=0.5, Timing='Immediate')
 
     # =========================================================== #
     # =========================================================== #
@@ -178,14 +185,14 @@ class dataexportcl(object):
         CO2 budgets PC
         '''
         if lulucf == 'incl':
-            budget = self.xr_dataread_sub.Budget
+            budget = self.xr_dataread_sub_broader.Budget
         elif lulucf == 'excl':
-            temporalemis = self.xr_dataread_sub.CO2_globe_excl
+            temporalemis = self.xr_dataread_sub_broader.CO2_globe_excl
             temporalemis = temporalemis.where(temporalemis > 0, 0)
             budget = temporalemis.sum(dim='Time')/1e3
         
-        pop_region = self.xr_dataread_sub.sel(Time=self.settings['params']['start_year_analysis']).Population
-        pop_earth = self.xr_dataread_sub.sel(Region='EARTH', 
+        pop_region = self.xr_dataread_sub_broader.sel(Time=self.settings['params']['start_year_analysis']).Population
+        pop_earth = self.xr_dataread_sub_broader.sel(Region='EARTH', 
                                             Time=self.settings['params']['start_year_analysis']).Population
         pop_fraction =  pop_region / pop_earth
         self.xr_pc = (pop_fraction*budget*1e3).to_dataset(name="PC")
@@ -198,23 +205,24 @@ class dataexportcl(object):
         CO2 budgets ECPC
         '''
         if lulucf == 'incl':
-            self.emis_hist = self.xr_dataread_sub.CO2_hist
-            budget = self.xr_dataread_sub.Budget
+            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist
+            budget = self.xr_dataread_sub_broader.Budget
         elif lulucf == 'excl':
-            self.emis_hist = self.xr_dataread_sub.CO2_hist_excl
-            temporalemis = self.xr_dataread_sub.CO2_globe_excl
+            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist_excl
+            temporalemis = self.xr_dataread_sub_broader.CO2_globe_excl
             temporalemis = temporalemis.where(temporalemis > 0, 0)
             budget = temporalemis.sum(dim='Time')/1e3
 
+        hist_emissions_startyears = self.settings['params']['hist_emissions_startyears']
+        discount_rates = self.settings['params']['discount_rates']
         xrs = []
-        for focusregion in tqdm(np.array(self.xr_dataread_sub.Region)):
+        for focusregion in tqdm(np.array(self.xr_dataread_sub_broader.Region)):
             compensation_form_sqrt = np.sqrt(np.arange(0, 2101-self.settings['params']['start_year_analysis'])) #make sqrt curve
             compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt) #sum of values has to be 1
 
             xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
 
             # Defining the timeframes for historical and future emissions
-            hist_emissions_startyears = [1990]
             for startyear_i, startyear in enumerate(hist_emissions_startyears):
                 hist_emissions_timeframe = np.arange(startyear, 1 + self.settings['params']['start_year_analysis'])
                 future_emissions_timeframe = np.arange(self.settings['params']['start_year_analysis']+1, 2101)
@@ -223,7 +231,7 @@ class dataexportcl(object):
                 hist_emissions = self.emis_hist.sel(Time = hist_emissions_timeframe)
 
                 # Discounting -> We only do past discounting here
-                for discount_i, discount in enumerate([0]):
+                for discount_i, discount in enumerate(discount_rates):
                     past_timeline = np.arange(startyear, self.settings['params']['start_year_analysis']+1)
                     xr_dc = xr.DataArray((1-discount/100)**(self.settings['params']['start_year_analysis']-past_timeline), dims=['Time'], 
                                             coords={'Time': past_timeline})
@@ -236,14 +244,14 @@ class dataexportcl(object):
                     total_emissions_w = hist_emissions_w + future_emissions_w
 
                     # Calculating the cumulative population shares for region and world
-                    cum_pop = self.xr_dataread_sub.Population.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
+                    cum_pop = self.xr_dataread_sub_broader.Population.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
                     cum_pop_r = cum_pop.sel(Region=focusregion)
                     cum_pop_w = cum_pop.sel(Region='EARTH')
                     share_cum_pop = cum_pop_r / cum_pop_w
                     budget_rightful = total_emissions_w * share_cum_pop
                     budget_left = budget_rightful - hist_emissions_r
                     ecpc = budget_left.to_dataset(name='ECPC')
-            xrs.append(ecpc.expand_dims(Region=[focusregion]))
+                    xrs.append(ecpc.expand_dims(Region=[focusregion], Discount_factor=[discount], Historical_startyear=[startyear]))
         self.xr_ecpc = xr.merge(xrs)
 
     # =========================================================== #
@@ -256,7 +264,7 @@ class dataexportcl(object):
         self.xr_budgets = xr.merge([self.xr_pc, self.xr_ecpc, self.xr_ap])
         self.xr_budgets = xr.merge([xr.where(self.xr_budgets.sel(Region='EARTH').expand_dims(['Region']), self.xr_budgets.sel(Region=self.countries_iso).sum(dim='Region'), 0), self.xr_budgets.drop_sel(Region='EARTH')])
         self.xr_budgets.to_netcdf(self.settings['paths']['data']['datadrive']+"CO2budgets_"+lulucf+".nc",format="NETCDF4", engine="netcdf4")
-        self.xr_budgets.drop_vars(['Scenario', 'Time', 'NonCO2red', 'NegEmis', 'Timing']).to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/CO2budgets_"+lulucf+".csv")
+        self.xr_budgets.drop_vars(['Time', 'Variable']).to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/CO2budgets_"+lulucf+".csv")
 
     # =========================================================== #
     # =========================================================== #
