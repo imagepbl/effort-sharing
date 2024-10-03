@@ -933,63 +933,30 @@ class datareading(object):
                 engine="netcdf4",
             )
 
-            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
-            base_worldsum = xrt.GHG_base.sel(Region='EARTH')
-            a=0
-            for reg_i, reg in enumerate(self.countries_iso):
-                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
-                rb_part2 = xrt.GHG_base.sel(Region=reg)*(base_worldsum - xrt.GHG_globe)/base_worldsum
-                if a == 0:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw = r
-                        a += 1
-                else:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw += r
-                        a += 1
-            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw.nc')
+            # AP rbw factors
+            for gas in ['CO2', 'GHG']:
+                for lulucf_i, lulucf in enumerate(['incl', 'excl']):
+                    luext = ['', '_excl'][lulucf_i]
+                    xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+                    r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+                    base_worldsum = xrt[gas+'_base'+luext].sel(Region='EARTH')
+                    a=0
+                    for reg_i, reg in enumerate(self.countries_iso):
+                        rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
+                        rb_part2 = xrt[gas+'_base'+luext].sel(Region=reg)*(base_worldsum - xrt[gas+'_globe'+luext])/base_worldsum
+                        if a == 0:
+                            r = rb_part1*rb_part2
+                            if not np.isnan(np.max(r)):
+                                rbw = r
+                                a += 1
+                        else:
+                            r = rb_part1*rb_part2
+                            if not np.isnan(np.max(r)):
+                                rbw += r
+                                a += 1
+                    rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_'+gas+'_'+lulucf+'.nc')
 
-            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
-            base_worldsum = xrt.CO2_base.sel(Region='EARTH')
-            a=0
-            for reg_i, reg in enumerate(self.countries_iso):
-                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
-                rb_part2 = xrt.CO2_base.sel(Region=reg)*(base_worldsum - xrt.CO2_globe)/base_worldsum
-                if a == 0:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw = r
-                        a += 1
-                else:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw += r
-                        a += 1
-            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_co2.nc')
-
-            xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-            r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
-            base_worldsum = xrt.CO2_base_excl.sel(Region='EARTH')
-            a=0
-            for reg_i, reg in enumerate(self.countries_iso):
-                rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
-                rb_part2 = xrt.CO2_base_excl.sel(Region=reg)*(base_worldsum - xrt.CO2_globe_excl)/base_worldsum
-                if a == 0:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw = r
-                        a += 1
-                else:
-                    r = rb_part1*rb_part2
-                    if not np.isnan(np.max(r)):
-                        rbw += r
-                        a += 1
-            rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_co2_excl.nc')
-
+            # GDR RCI indices
             r=0
             hist_emissions_startyears = [1850, 1950, 1990]
             capability_thresholds = ['No', 'Th', 'PrTh']
@@ -1037,6 +1004,12 @@ class datareading(object):
         fractions = np.array(xr_dataread_nld.GHG_hist.sel(Region='NLD', Time=np.arange(1850, 2022)) / total_ghg_nld)
         for t_i, t in enumerate(total_time):
             xr_dataread_nld.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+            
+        xr_dataread_nld.CO2_base.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.CO2_base.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nld.CO2_base_excl.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.CO2_base_excl.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nld.GHG_base.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.GHG_base.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nld.GHG_base_excl.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.GHG_base_excl.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
+
         xr_dataread_nld.CO2_hist.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
         xr_dataread_nld.CO2_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
         xr_dataread_nld.GHG_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.GHG_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
@@ -1082,6 +1055,12 @@ class datareading(object):
         fractions = np.array(xr_dataread_nor.GHG_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022)) / total_ghg_nor)
         for t_i, t in enumerate(total_time):
             xr_dataread_nor.GHG_hist_excl.loc[dict(Time=t, Region='NOR')] = total_ghg_nor[t_i]
+            
+        xr_dataread_nor.CO2_base.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.CO2_base.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nor.CO2_base_excl.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.CO2_base_excl.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nor.GHG_base.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.GHG_base.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nor.GHG_base_excl.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.GHG_base_excl.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
+
         xr_dataread_nor.CO2_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
         xr_dataread_nor.CO2_hist_excl.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
         xr_dataread_nor.GHG_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.GHG_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions

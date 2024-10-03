@@ -311,18 +311,17 @@ class dataexportcl(object):
     # =========================================================== #
     # =========================================================== #
 
-    def countr_to_csv(self, cty):
+    def countr_to_csv(self, cty, adapt='', lulucf='incl', gas='GHG'):
         '''
         Convert .nc to .csv for a specific country
         '''
-        ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations/xr_alloc_"+cty+".nc")
-        ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations/xr_alloc_"+cty+".nc").sel(Temperature=[1.5, 1.6, 2.0],
+        ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations_"+gas+"_"+lulucf+"/xr_alloc_"+cty+adapt+".nc").sel(Temperature=[1.5, 1.6, 2.0],
                                                                                                          Risk=[0.5, 0.33, 0.17],
                                                                                                          Time=[2021]+list(np.arange(2025, 2101, 5)),
                                                                                                          Convergence_year=[2040, 2050, 2060, 2070])
         # Export ds to csv
         for rule in ['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']:
-            ds[rule].to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/xr_alloc_"+cty+"_"+rule+".csv")
+            ds[rule].to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/Country_CSVs/"+gas+"_"+lulucf+"/xr_alloc_"+cty+adapt+"_"+rule+".csv")
 
     # =========================================================== #
     # =========================================================== #
