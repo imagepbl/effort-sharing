@@ -351,6 +351,25 @@ class datareading(object):
         self.xr_ghg_afolu = xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component')
         self.xr_ghg_agri = xr_primap_agri/1e6
 
+        # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
+        df_edgar = pd.read_excel('X:/user/dekkerm/Data/EDGAR/EDGARv8.0_FT2022_GHG_booklet_2023.xlsx', sheet_name='GHG_totals_by_country').drop(['Country'], axis=1).set_index('EDGAR Country Code')
+        df_edgar.columns = df_edgar.columns.astype(int)
+
+        # drop second-to-last row
+        df_edgar = df_edgar.drop(df_edgar.index[-2])
+
+        # Rename index column
+        df_edgar.index.name = 'Region'
+
+        # Melt time columns into a time index
+        df_edgar = df_edgar.reset_index().melt(id_vars='Region', var_name='Time', value_name='Emissions').set_index(['Region', 'Time'])
+
+        # Convert to xarray
+        self.xr_edgar = df_edgar.to_xarray()
+
+        self.xr_primap = xr_primap2.rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'Scenario', 'category (IPCC2006_PRIMAP)': 'Category'}).sel(provenance='derived', source='PRIMAP-hist_v2.5.1_final_nr')
+        self.xr_primap = self.xr_primap.assign_coords(time=self.xr_primap.time.dt.year)
+
     # =========================================================== #
     # =========================================================== #
 
@@ -1000,3 +1019,94 @@ class datareading(object):
             xr_rci = xr.Dataset.from_dataframe(dfdummy)
             xr_rci = xr_rci.reindex({"Region": xr_version.Region})
             xr_rci.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rci.nc')
+
+    # =========================================================== #
+    # =========================================================== #
+
+    def country_specific_datareaders(self):
+        # Dutch emissions - harmonized with the KEV # TODO harmonize global emissions with this, as well.
+        xr_dataread_nld =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + 'xr_dataread.nc').load().copy()
+        dutch_time = np.array([1990, 1995, 2000, 2005, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021])
+        dutch_ghg = np.array([228.9, 238.0, 225.7, 220.9, 219.8, 206, 202, 201.2, 192.9, 199.8, 200.2, 196.5, 191.4, 185.6, 168.9, 172.0])
+        dutch_time_interp = np.arange(1990, 2021+1)
+        dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
+        fraction_1990 = float(dutch_ghg[0] / self.xr_total.GHG_hist.sel(Region='NLD', Time=1990))
+        pre_1990_raw = np.array(self.xr_total.GHG_hist.sel(Region='NLD', Time=np.arange(1850, 1990)))*fraction_1990
+        total_time = np.arange(1850, 2021+1)
+        total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
+        fractions = np.array(xr_dataread_nld.GHG_hist.sel(Region='NLD', Time=np.arange(1850, 2022)) / total_ghg_nld)
+        for t_i, t in enumerate(total_time):
+            xr_dataread_nld.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
+        xr_dataread_nld.CO2_hist.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nld.CO2_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nld.GHG_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.GHG_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nld.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_NLD.nc',
+                        encoding={
+                            "Region": {"dtype": "str"},
+                            "Scenario": {"dtype": "str"},
+                            "Time": {"dtype": "int"},
+
+                            "Temperature": {"dtype": "float"},
+                            "NonCO2red": {"dtype": "float"},
+                            "NegEmis": {"dtype": "float"},
+                            "Risk": {"dtype": "float"},
+                            "Timing": {"dtype": "str"},
+
+                            "Conditionality": {"dtype": "str"},
+                            "Ambition": {"dtype": "str"},
+
+                            "GDP": {"zlib": True, "complevel": 9},
+                            "Population": {"zlib": True, "complevel": 9},
+                            "GHG_hist": {"zlib": True, "complevel": 9},
+                            "GHG_globe": {"zlib": True, "complevel": 9},
+                            "GHG_base": {"zlib": True, "complevel": 9},
+                            "GHG_ndc": {"zlib": True, "complevel": 9},
+                        },
+                        format="NETCDF4",
+                        engine="netcdf4",
+                    )
+        
+        # Norwegian emissions - harmonized with EDGAR
+        xr_dataread_nor =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + 'xr_dataread.nc').load().copy()
+        # Get data and interpolate
+        time_axis = np.arange(1990, 2021+1)
+        ghg_axis = np.array(self.xr_primap.sel(Scenario='HISTCR', Region='NOR', time=time_axis, Category='M.0.EL')['KYOTOGHG (AR6GWP100)'])
+        time_interp = np.arange(np.min(time_axis), np.max(time_axis)+1)
+        ghg_interp = np.interp(time_interp, time_axis, ghg_axis)
+
+        # Get older data by linking to Jones
+        fraction_minyear = float(ghg_axis[0] / self.xr_total.GHG_hist_excl.sel(Region='NOR', Time=np.min(time_axis)))
+        pre_minyear_raw = np.array(self.xr_total.GHG_hist_excl.sel(Region='NOR', Time=np.arange(1850, np.min(time_axis))))*fraction_minyear
+        total_time = np.arange(1850, 2021+1)
+        total_ghg_nor = np.array(list(pre_minyear_raw) + list(ghg_interp))/1e3
+        fractions = np.array(xr_dataread_nor.GHG_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022)) / total_ghg_nor)
+        for t_i, t in enumerate(total_time):
+            xr_dataread_nor.GHG_hist_excl.loc[dict(Time=t, Region='NOR')] = total_ghg_nor[t_i]
+        xr_dataread_nor.CO2_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nor.CO2_hist_excl.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nor.GHG_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.GHG_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
+        xr_dataread_nor.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_NOR.nc',
+                        encoding={
+                            "Region": {"dtype": "str"},
+                            "Scenario": {"dtype": "str"},
+                            "Time": {"dtype": "int"},
+
+                            "Temperature": {"dtype": "float"},
+                            "NonCO2red": {"dtype": "float"},
+                            "NegEmis": {"dtype": "float"},
+                            "Risk": {"dtype": "float"},
+                            "Timing": {"dtype": "str"},
+
+                            "Conditionality": {"dtype": "str"},
+                            "Ambition": {"dtype": "str"},
+
+                            "GDP": {"zlib": True, "complevel": 9},
+                            "Population": {"zlib": True, "complevel": 9},
+                            "GHG_hist": {"zlib": True, "complevel": 9},
+                            "GHG_globe": {"zlib": True, "complevel": 9},
+                            "GHG_base": {"zlib": True, "complevel": 9},
+                            "GHG_ndc": {"zlib": True, "complevel": 9},
+                        },
+                        format="NETCDF4",
+                        engine="netcdf4",
+                    )
