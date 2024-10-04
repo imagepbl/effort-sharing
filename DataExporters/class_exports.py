@@ -321,7 +321,7 @@ class dataexportcl(object):
                                                                                                          Convergence_year=[2040, 2050, 2060, 2070])
         # Export ds to csv
         for rule in ['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']:
-            ds[rule].to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/Country_CSVs/"+gas+"_"+lulucf+"/xr_alloc_"+cty+adapt+"_"+rule+".csv")
+            ds[rule].to_dataframe().to_csv("K:/Data/Data_effortsharing/EffortSharingExports/Country_CSVs/"+cty+"/"+gas+"_"+lulucf+"/xr_alloc_"+cty+adapt+"_"+rule+".csv")
 
     # =========================================================== #
     # =========================================================== #

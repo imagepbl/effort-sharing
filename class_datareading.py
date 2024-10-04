@@ -862,6 +862,8 @@ class datareading(object):
         df = pd.read_excel(path_ctygroups, sheet_name = "Country groups")
         countries_iso = np.array(df["Country ISO Code"])
         list_of_regions = list(np.array(self.regions_iso).copy())
+        reg_iso = list(self.regions_iso)
+        reg_name = list(self.regions_name)
         for group_of_choice in ['G20', 'EU', 'G7', 'SIDS', 'LDC', 'Northern America', 'Australasia', 'African Group', 'Umbrella']:
             if group_of_choice != "EU":
                 list_of_regions = list_of_regions + [group_of_choice]
@@ -885,10 +887,14 @@ class datareading(object):
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
             self.xr_total = self.xr_total.reindex(Region = list_of_regions)
+            if group_of_choice not in ['EU', 'EARTH']:
+                reg_iso.append(group_of_choice)
+                reg_name.append(group_of_choice)
         self.xr_total = self.xr_total
         self.xr_total['GHG_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
         self.xr_total['CO2_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
-        self.regions_iso = np.array(self.xr_total.Region)
+        self.regions_iso = np.array(reg_iso)
+        self.regions_name = np.array(reg_name)
 
     # =========================================================== #
     # =========================================================== #
