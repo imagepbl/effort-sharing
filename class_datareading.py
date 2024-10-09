@@ -161,27 +161,32 @@ class datareading(object):
     # =========================================================== #
 
     def read_undata(self):
-        print('- Reading UN population data (for past population)')
-        df_unp = pd.read_excel(self.settings['paths']['data']['external']+'/UN Population/WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS.xlsx',
-                                sheet_name="Estimates", header=16)[["Region, subregion, country or area *", "ISO3 Alpha-code", "Total Population, as of 1 January (thousands)", "Year"]]
-        df_unp = df_unp.rename(columns={"Region, subregion, country or area *": "Region",
-                                        "ISO3 Alpha-code": "ISO",
-                                        "Total Population, as of 1 January (thousands)": "Population",
-                                        "Year": "Time"})
-        vals = np.array(df_unp.Population).astype(str)
-        vals[vals == '...'] = 'nan'
-        vals = vals.astype(float)
-        vals = vals/1e3
-        df_unp['Population'] = vals
-        df_unp = df_unp.drop(['Region'], axis=1)
-        df_unp = df_unp[df_unp.Time < 2000]
-        df_unp['Time'] = df_unp['Time'].astype(int)
-        df_unp = df_unp[df_unp.ISO.isin(self.regions_iso)]
-        dummy = df_unp.rename(columns={'ISO': "Region"})
-        dummy = dummy.set_index(['Region', 'Time'])
-        self.xr_unp = xr.Dataset.from_dataframe(dummy)
-        self.xr_unp = self.xr_unp.reindex({'Region': list(np.array(self.xr_unp.Region))+['EARTH']})
-        self.xr_unp.loc[{'Region': 'EARTH'}] = self.xr_unp.sum('Region')
+        print('- Reading UN population data and gapminder, processed by OWID (for past population)')
+        df_pop = pd.read_csv(self.settings['paths']['data']['external']+"UN Population/population_HYDE_UNP_Gapminder.csv")[['Code', 'Year', 'Population (historical)']].rename({'Code': "Region", 'Population (historical)': 'Population', 'Year': "Time"}, axis=1)
+        reg = np.array(df_pop.Region)
+        reg[reg == 'OWID_WRL'] = 'EARTH'
+        df_pop.Region = reg
+        self.xr_unp = xr.Dataset.from_dataframe(df_pop[df_pop.Region.isin(list(self.countries_iso)+['EARTH'])].set_index(['Region', 'Time'])).sel(Time = np.arange(1850, 2000))/1e6
+        # df_unp = pd.read_excel(self.settings['paths']['data']['external']+'/UN Population/WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS.xlsx',
+        #                         sheet_name="Estimates", header=16)[["Region, subregion, country or area *", "ISO3 Alpha-code", "Total Population, as of 1 January (thousands)", "Year"]]
+        # df_unp = df_unp.rename(columns={"Region, subregion, country or area *": "Region",
+        #                                 "ISO3 Alpha-code": "ISO",
+        #                                 "Total Population, as of 1 January (thousands)": "Population",
+        #                                 "Year": "Time"})
+        # vals = np.array(df_unp.Population).astype(str)
+        # vals[vals == '...'] = 'nan'
+        # vals = vals.astype(float)
+        # vals = vals/1e3
+        # df_unp['Population'] = vals
+        # df_unp = df_unp.drop(['Region'], axis=1)
+        # df_unp = df_unp[df_unp.Time < 2000]
+        # df_unp['Time'] = df_unp['Time'].astype(int)
+        # df_unp = df_unp[df_unp.ISO.isin(self.regions_iso)]
+        # dummy = df_unp.rename(columns={'ISO': "Region"})
+        # dummy = dummy.set_index(['Region', 'Time'])
+        # self.xr_unp = xr.Dataset.from_dataframe(dummy)
+        # self.xr_unp = self.xr_unp.reindex({'Region': list(np.array(self.xr_unp.Region))+['EARTH']})
+        # self.xr_unp.loc[{'Region': 'EARTH'}] = self.xr_unp.sum('Region')
 
     # =========================================================== #
     # =========================================================== #
