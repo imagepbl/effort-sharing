@@ -391,6 +391,12 @@ class datareading(object):
         self.xr_primap = xr_primap2.rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'Scenario', 'category (IPCC2006_PRIMAP)': 'Category'}).sel(provenance='derived', source='PRIMAP-hist_v2.5.1_final_nr')
         self.xr_primap = self.xr_primap.assign_coords(time=self.xr_primap.time.dt.year)
 
+        # Add EU (this is required for the NDC data reading)
+        df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
+        countries_iso = np.array(df["Country ISO Code"])
+        group_eu = countries_iso[np.array(df["EU"]) == 1]
+        self.xr_hist.GHG_hist.loc[dict(Region='EU')] = self.xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
+
     # =========================================================== #
     # =========================================================== #
 
@@ -893,32 +899,63 @@ class datareading(object):
 
     def read_ndc(self):
         print('- Reading NDC data')
-        df_ndc = pd.read_excel("X:/user/dekkerm/Data/NDC/Infographics version 23May2024_CarbonBudgetExplorer.xlsx", sheet_name='CBE_Curated data', header=[0, 1, 2])
-        iso = np.array(df_ndc["(Mt CO2 equivalent)"]['ISO3 code']['Unnamed: 2_level_2'])
-        ndc_cond_min = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['min']
-        ndc_cond_max = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['max']
-        ndc_uncond_min = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['min']
-        ndc_uncond_max = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['max']
-        emis_2015 = df_ndc["(Mt CO2 equivalent)"]['2015 emissions']['Unnamed: 6_level_2']
-        nz_co2 = df_ndc['Net-zero year']['CO2']['Unnamed: 17_level_2']
-        nz_ghg = df_ndc['Net-zero year']['GHG']['Unnamed: 18_level_2']
-        iso[-4] = 'Other Non-Annex I'
-        iso[-3] = 'Bunkers'
-        iso[-2] = 'Remaining LULUCF CO2'
-        iso[-1] = 'EARTH'
+        df_ndc_raw = pd.read_excel(self.settings['paths']['data']['external']+ "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx", sheet_name='Reduction All_GHG_incl', header=[0, 1])
+        regs = df_ndc_raw['(Mt CO2 equivalent)']['Country name']
+        regs_iso = []
+        for r in regs:
+            wh = np.where(self.countries_name == r)[0]
+            if len(wh) == 0:
+                if r == 'United States':
+                    regs_iso.append('USA')
+                elif r == 'EU27':
+                    regs_iso.append('EU')
+                elif r == 'Turkey':
+                    regs_iso.append('TUR')
+                else:
+                    regs_iso.append(np.nan)
+            else:
+                regs_iso.append(self.countries_iso[wh[0]])
+        regs_iso = np.array(regs_iso)
+        df_ndc_raw['ISO'] = regs_iso
 
-        rows = []
-        for reg_i, reg in enumerate(iso):
-            rows.append([reg, 'conditional', 'max', ndc_cond_max[reg_i]])
-            rows.append([reg, 'conditional', 'min', ndc_cond_min[reg_i]])
-            rows.append([reg, 'unconditional', 'max', ndc_uncond_max[reg_i]])
-            rows.append([reg, 'unconditional', 'min', ndc_uncond_min[reg_i]])
+        df_regs = []
+        df_amb = []
+        df_con = []
+        df_emis = []
+        df_lulucf = []
+        df_red = []
+        df_abs = []
+        histemis = self.xr_hist.GHG_hist.sel(Time=2015)
+        for r in list(self.countries_iso) + ['EU']:
+            histemis_r = float(histemis.sel(Region=r))
+            df_ndc_raw_sub = df_ndc_raw[df_ndc_raw['ISO'] == r]
+            if len(df_ndc_raw_sub) > 0:
+                val_2015 = float(df_ndc_raw_sub['(Mt CO2 equivalent)'][2015])
+                for lulucf in ['incl']: # Maybe add excl later?
+                    for emis_i, emis in enumerate(['NDC']):# , 'CP']): 
+                        key = ['2030 NDCs', 'Domestic actions 2030'][emis_i]
+                        for cond_i, cond in enumerate(['unconditional', 'conditional']):
+                            condkey = ['Unconditional NDCs', 'Conditional NDCs'][cond_i]
+                            for ambition_i, ambition in enumerate(['min', 'max']):
+                                add = ['', '.1'][ambition_i]
+                                val = float(df_ndc_raw_sub[key][condkey+add])
+                                red = 1- val/val_2015
+                                abs_jones = histemis_r*(1-red)
+                                df_regs.append(r)
+                                df_amb.append(ambition)
+                                df_con.append(cond)
+                                df_emis.append(emis)
+                                df_lulucf.append(lulucf)
+                                df_red.append(red)
+                                df_abs.append(abs_jones)
 
-        df_ndc_new = pd.DataFrame(np.array(rows),
-                                columns=['Region', 'Conditionality', 'Ambition', 'GHG_ndc'])
-        dummy = df_ndc_new.set_index(['Region', 'Conditionality', 'Ambition'])
-        dummy['GHG_ndc'] = np.array(dummy['GHG_ndc']).astype(float)
-        self.xr_ndc = xr.Dataset.from_dataframe(dummy)
+        dict_ndc = {"Region": df_regs,
+                    "Ambition": df_amb,
+                    "Conditionality": df_con,
+                    "GHG_ndc_red": df_red,
+                    "GHG_ndc": df_abs}
+        df_ndc = pd.DataFrame(dict_ndc)
+        self.xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
     # =========================================================== #
     # =========================================================== #
@@ -960,7 +997,7 @@ class datareading(object):
             if group_of_choice == 'EU':
                 xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
@@ -1132,6 +1169,7 @@ class datareading(object):
                         "CO2_base_excl": {"zlib": True, "complevel": 9},
 
                         "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_red": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
                         engine="netcdf4",
