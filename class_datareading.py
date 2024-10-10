@@ -925,6 +925,7 @@ class datareading(object):
         df_lulucf = []
         df_red = []
         df_abs = []
+        df_inv = []
         histemis = self.xr_hist.GHG_hist.sel(Time=2015)
         for r in list(self.countries_iso) + ['EU']:
             histemis_r = float(histemis.sel(Region=r))
@@ -948,12 +949,14 @@ class datareading(object):
                                 df_lulucf.append(lulucf)
                                 df_red.append(red)
                                 df_abs.append(abs_jones)
+                                df_inv.append(val)
 
         dict_ndc = {"Region": df_regs,
                     "Ambition": df_amb,
                     "Conditionality": df_con,
                     "GHG_ndc_red": df_red,
-                    "GHG_ndc": df_abs}
+                    "GHG_ndc": df_abs,
+                    "GHG_ndc_inv": df_inv}
         df_ndc = pd.DataFrame(dict_ndc)
         self.xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
@@ -997,7 +1000,7 @@ class datareading(object):
             if group_of_choice == 'EU':
                 xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc", "GHG_ndc_inv"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
@@ -1169,6 +1172,7 @@ class datareading(object):
                         "CO2_base_excl": {"zlib": True, "complevel": 9},
 
                         "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_inv": {"zlib": True, "complevel": 9},
                         "GHG_ndc_red": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
