@@ -865,6 +865,12 @@ class datareading(object):
         xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
         for year in np.arange(self.settings['params']['start_year_analysis'], 2021):
             xr_base.CO2_base_excl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(Time=year, Region=self.countries_iso).CO2_hist_excl
+        
+        # Harmonize emissions from historical values to baseline emissions
+        diffrac = self.xr_hist.CO2_hist_excl.sel(Time=self.settings['params']['start_year_analysis']) / xr_base.CO2_base_excl.sel(Time=self.settings['params']['start_year_analysis'])
+        diffrac = diffrac.where(diffrac < 1e9)
+        diffrac = diffrac.where(diffrac > -1e9)
+        xr_base = xr_base.assign(CO2_base_excl = xr_base.CO2_base_excl * diffrac)
 
         # Using a fraction, get other emissions variables
         fraction_startyear_co2_incl = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl
