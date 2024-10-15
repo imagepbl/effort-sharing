@@ -27,8 +27,7 @@ class datareading(object):
 
     def __init__(self):
         print("# ==================================== #")
-        print("# Initializing datareading class     #")
-        print("# ==================================== #")
+        print("# DATAREADING class                    #")
 
         self.current_dir = Path.cwd()
 
@@ -42,6 +41,13 @@ class datareading(object):
         self.Neglist = np.array([0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]).round(2) 
         self.NonCO2list = np.array([0.1, 0.33, 0.5, 0.67, 0.9]).round(2) # These are reductions in 2040 tov 2020
         self.Timinglist = ['Immediate', 'Delayed']
+        self.time_future = np.arange(self.settings['params']['start_year_analysis'], 2101)
+        self.time_past = np.arange(1850, self.settings['params']['start_year_analysis']+1)
+        self.savepath = self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"
+        self.recent_increment = int(np.floor(self.settings['params']['start_year_analysis']/5)*5)
+        
+        print("# startyear: ", self.settings['params']['start_year_analysis'])
+        print("# ==================================== #")
 
     # =========================================================== #
     # =========================================================== #
@@ -59,114 +65,128 @@ class datareading(object):
 
     def read_ssps(self):
         print('- Reading GDP and population data from SSPs')
-        df_ssp = pd.read_excel(self.settings['paths']['data']['external']+"SSPs/SSPs_v2023.xlsx", sheet_name='data')
-        df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023', 'IIASA-WiC POP 2023'])) & (df_ssp.Scenario.isin(['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']))]
-        region_full = np.array(df_ssp.Region)
-        region_iso = []
-        for r_i, r in enumerate(region_full):
-            wh = np.where(self.regions_name == r)[0]
-            if len(wh) > 0:
-                iso = self.countries_iso[wh[0]]
-            elif r == 'Aruba':
-                iso = 'ABW'
-            elif r == 'Bahamas':
-                iso = 'BHS'
-            elif r == 'Democratic Republic of the Congo':
-                iso = 'COD'
-            elif r == 'Cabo Verde':
-                iso = 'CPV'
-            elif r == "C?te d'Ivoire":
-                iso = 'CIV'
-            elif r == 'Western Sahara':
-                iso = 'ESH'
-            elif r == 'Gambia':
-                iso = 'GMB'
-            elif r == 'Czechia':
-                iso = 'CZE'
-            elif r == 'French Guiana':
-                iso = 'GUF'
-            elif r == 'Guam':
-                iso = 'GUM'
-            elif r == 'Hong Kong':
-                iso = 'HKG'
-            elif r == 'Iran':
-                iso = 'IRN'
-            elif r == 'Macao':
-                iso = 'MAC'
-            elif r == 'Moldova':
-                iso = 'MDA'
-            elif r == 'Mayotte':
-                iso = 'MYT'
-            elif r == 'New Caledonia':
-                iso = 'NCL'
-            elif r == 'Puerto Rico':
-                iso = 'PRI'
-            elif r == 'French Polynesia':
-                iso = 'PYF'
-            elif r == 'Turkey':
-                iso = 'TUR'
-            elif r == 'Taiwan':
-                iso = 'TWN'
-            elif r == 'Tanzania':
-                iso = 'TZA'
-            elif r == 'United States':
-                iso = 'USA'
-            elif r == 'United States Virgin Islands':
-                iso = 'VIR'
-            elif r == 'Viet Nam':
-                iso = 'VNM'
-            elif r == 'Cura?ao':
-                iso = 'CUW'
-            elif r == 'Guadeloupe':
-                iso = 'GLP'
-            elif r == 'Martinique':
-                iso = 'MTQ'
-            elif r == 'Palestine':
-                iso = 'PSE'
-            elif r == 'R?union':
-                iso = 'REU'
-            elif r == 'Syria':
-                iso = 'SYR'
-            elif r == 'Venezuela':
-                iso = 'VEN'
-            elif r == 'World':
-                iso = 'EARTH'
+        for i in range(6):
+            df_ssp = pd.read_excel(self.settings['paths']['data']['external']+"SSPs/SSPs_v2023.xlsx", sheet_name='data')
+            if i >= 1: df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023'])) & (df_ssp.Scenario == 'Historical Reference')]
+            else: df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023', 'IIASA-WiC POP 2023'])) & (df_ssp.Scenario.isin(['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']))]
+            region_full = np.array(df_ssp.Region)
+            region_iso = []
+            for r_i, r in enumerate(region_full):
+                wh = np.where(self.regions_name == r)[0]
+                if len(wh) > 0:
+                    iso = self.countries_iso[wh[0]]
+                elif r == 'Aruba':
+                    iso = 'ABW'
+                elif r == 'Bahamas':
+                    iso = 'BHS'
+                elif r == 'Democratic Republic of the Congo':
+                    iso = 'COD'
+                elif r == 'Cabo Verde':
+                    iso = 'CPV'
+                elif r == "C?te d'Ivoire":
+                    iso = 'CIV'
+                elif r == 'Western Sahara':
+                    iso = 'ESH'
+                elif r == 'Gambia':
+                    iso = 'GMB'
+                elif r == 'Czechia':
+                    iso = 'CZE'
+                elif r == 'French Guiana':
+                    iso = 'GUF'
+                elif r == 'Guam':
+                    iso = 'GUM'
+                elif r == 'Hong Kong':
+                    iso = 'HKG'
+                elif r == 'Iran':
+                    iso = 'IRN'
+                elif r == 'Macao':
+                    iso = 'MAC'
+                elif r == 'Moldova':
+                    iso = 'MDA'
+                elif r == 'Mayotte':
+                    iso = 'MYT'
+                elif r == 'New Caledonia':
+                    iso = 'NCL'
+                elif r == 'Puerto Rico':
+                    iso = 'PRI'
+                elif r == 'French Polynesia':
+                    iso = 'PYF'
+                elif r == 'Turkey':
+                    iso = 'TUR'
+                elif r == 'Taiwan':
+                    iso = 'TWN'
+                elif r == 'Tanzania':
+                    iso = 'TZA'
+                elif r == 'United States':
+                    iso = 'USA'
+                elif r == 'United States Virgin Islands':
+                    iso = 'VIR'
+                elif r == 'Viet Nam':
+                    iso = 'VNM'
+                elif r == 'Cura?ao':
+                    iso = 'CUW'
+                elif r == 'Guadeloupe':
+                    iso = 'GLP'
+                elif r == 'Martinique':
+                    iso = 'MTQ'
+                elif r == 'Palestine':
+                    iso = 'PSE'
+                elif r == 'R?union':
+                    iso = 'REU'
+                elif r == 'Syria':
+                    iso = 'SYR'
+                elif r == 'Venezuela':
+                    iso = 'VEN'
+                elif r == 'World':
+                    iso = 'EARTH'
+                else:
+                    print(r)
+                    iso = 'oeps'
+                region_iso.append(iso)
+            df_ssp['Region'] = region_iso
+            Variable = np.array(df_ssp['Variable'])
+            Variable[Variable == 'GDP|PPP'] = 'GDP'
+            df_ssp['Variable'] = Variable
+            df_ssp = df_ssp.drop(['Model', 'Unit'], axis=1)
+            dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
+            dummy['Time'] = np.array(dummy['Time'].astype(int))
+            if i >= 1:
+                dummy['Scenario'] = ['SSP'+str(i)]*len(dummy)
+                xr_hist_gdp_i = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value')).sel(Time=[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015])
+                self.xr_ssp = xr.merge([self.xr_ssp, xr_hist_gdp_i])
             else:
-                print(r)
-                iso = 'oeps'
-            region_iso.append(iso)
-        df_ssp['Region'] = region_iso
-        Variable = np.array(df_ssp['Variable'])
-        Variable[Variable == 'GDP|PPP'] = 'GDP'
-        df_ssp['Variable'] = Variable
-        df_ssp = df_ssp.drop(['Model', 'Unit'], axis=1)
-        dummy = df_ssp.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value")
-        dummy['Time'] = np.array(dummy['Time'].astype(int))
-        self.xr_ssp = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value'))
+                self.xr_ssp = xr.Dataset.from_dataframe(dummy.pivot(index=['Scenario', 'Region', 'Time'], columns='Variable', values='Value')).reindex({'Time': np.arange(2020, 2101, 5)}).reindex({'Time': np.arange(1980, 2101, 5)})
 
     # =========================================================== #
     # =========================================================== #
 
     def read_undata(self):
-        print('- Reading UN population data (for past population)')
-        df_unp = pd.read_excel(self.settings['paths']['data']['external']+'/UN Population/WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS.xlsx',
-                               sheet_name="Estimates", header=16)
-        df_unp = df_unp[["Region, subregion, country or area *", "ISO3 Alpha-code", "Total Population, as of 1 January (thousands)", "Year"]]
-        df_unp = df_unp.rename(columns={"Region, subregion, country or area *": "Region",
-                                        "ISO3 Alpha-code": "ISO",
-                                        "Total Population, as of 1 January (thousands)": "Population",
-                                        "Year": "Time"})
-        vals = np.array(df_unp.Population).astype(str)
-        vals[vals == '...'] = 'nan'
-        vals = vals.astype(float)
-        vals = vals/1e3
-        df_unp['Population'] = vals
-        df_unp = df_unp.drop(['Region'], axis=1)
-        df_unp = df_unp[df_unp.Time < 2000]
-        df_unp = df_unp[df_unp.ISO.isin(self.regions_iso)]
-        dummy = df_unp.rename(columns={'ISO': "Region"})
-        dummy = dummy.set_index(['Region', 'Time'])
-        self.xr_unp = xr.Dataset.from_dataframe(dummy)
+        print('- Reading UN population data and gapminder, processed by OWID (for past population)')
+        df_pop = pd.read_csv(self.settings['paths']['data']['external']+"UN Population/population_HYDE_UNP_Gapminder.csv")[['Code', 'Year', 'Population (historical)']].rename({'Code': "Region", 'Population (historical)': 'Population', 'Year': "Time"}, axis=1)
+        reg = np.array(df_pop.Region)
+        reg[reg == 'OWID_WRL'] = 'EARTH'
+        df_pop.Region = reg
+        self.xr_unp = xr.Dataset.from_dataframe(df_pop[df_pop.Region.isin(list(self.countries_iso)+['EARTH'])].set_index(['Region', 'Time'])).sel(Time = np.arange(1850, 2000))/1e6
+        # df_unp = pd.read_excel(self.settings['paths']['data']['external']+'/UN Population/WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS.xlsx',
+        #                         sheet_name="Estimates", header=16)[["Region, subregion, country or area *", "ISO3 Alpha-code", "Total Population, as of 1 January (thousands)", "Year"]]
+        # df_unp = df_unp.rename(columns={"Region, subregion, country or area *": "Region",
+        #                                 "ISO3 Alpha-code": "ISO",
+        #                                 "Total Population, as of 1 January (thousands)": "Population",
+        #                                 "Year": "Time"})
+        # vals = np.array(df_unp.Population).astype(str)
+        # vals[vals == '...'] = 'nan'
+        # vals = vals.astype(float)
+        # vals = vals/1e3
+        # df_unp['Population'] = vals
+        # df_unp = df_unp.drop(['Region'], axis=1)
+        # df_unp = df_unp[df_unp.Time < 2000]
+        # df_unp['Time'] = df_unp['Time'].astype(int)
+        # df_unp = df_unp[df_unp.ISO.isin(self.regions_iso)]
+        # dummy = df_unp.rename(columns={'ISO': "Region"})
+        # dummy = dummy.set_index(['Region', 'Time'])
+        # self.xr_unp = xr.Dataset.from_dataframe(dummy)
+        # self.xr_unp = self.xr_unp.reindex({'Region': list(np.array(self.xr_unp.Region))+['EARTH']})
+        # self.xr_unp.loc[{'Region': 'EARTH'}] = self.xr_unp.sum('Region')
 
     # =========================================================== #
     # =========================================================== #
@@ -340,13 +360,14 @@ class datareading(object):
         xr_primap_agri_co2['time'] = np.arange(1750, 2023)
         xr_primap_agri_co2 = xr_primap_agri_co2.rename({'time': 'Time'})
 
-        xr_ghghist = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'GHG_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
-        xr_co2hist = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CO2_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
-        xr_ch4hist = (xr_nwc_ch4.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CH4_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
-        xr_n2ohist = (xr_nwc_n2o.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'N2O_hist'}).sel(Component='Total').drop_vars('Component')).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1))
-        xr_ghgexcl = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'GHG_hist_excl'})
-        xr_co2excl = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri_co2/1e6).sel(Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)).rename({'Data': 'CO2_hist_excl'})
+        xr_ghghist = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'GHG_hist'}).sel(Component='Total').drop_vars('Component'))
+        xr_co2hist = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CO2_hist'}).sel(Component='Total').drop_vars('Component'))
+        xr_ch4hist = (xr_nwc_ch4.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'CH4_hist'}).sel(Component='Total').drop_vars('Component'))
+        xr_n2ohist = (xr_nwc_n2o.rename({'ISO3': 'Region', 'Year': 'Time', 'Data': 'N2O_hist'}).sel(Component='Total').drop_vars('Component'))
+        xr_ghgexcl = (xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri/1e6).rename({'Data': 'GHG_hist_excl'})
+        xr_co2excl = (xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='Total').drop_vars('Component') - xr_nwc_co2.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component') + xr_primap_agri_co2/1e6).rename({'Data': 'CO2_hist_excl'})
         self.xr_hist = xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist, xr_co2excl,xr_ch4hist, xr_n2ohist])*1e3
+        self.xr_hist = self.xr_hist.reindex({'Region': self.regions_iso})
 
         self.xr_ghg_afolu = xr_nwc_tot.rename({'ISO3': 'Region', 'Year': 'Time'}).sel(Component='LULUCF').drop_vars('Component')
         self.xr_ghg_agri = xr_primap_agri/1e6
@@ -369,6 +390,12 @@ class datareading(object):
 
         self.xr_primap = xr_primap2.rename({'area (ISO3)': 'Region', 'scenario (PRIMAP-hist)': 'Scenario', 'category (IPCC2006_PRIMAP)': 'Category'}).sel(provenance='derived', source='PRIMAP-hist_v2.5.1_final_nr')
         self.xr_primap = self.xr_primap.assign_coords(time=self.xr_primap.time.dt.year)
+
+        # Add EU (this is required for the NDC data reading)
+        df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
+        countries_iso = np.array(df["Country ISO Code"])
+        group_eu = countries_iso[np.array(df["EU"]) == 1]
+        self.xr_hist.GHG_hist.loc[dict(Region='EU')] = self.xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
 
     # =========================================================== #
     # =========================================================== #
@@ -425,8 +452,8 @@ class datareading(object):
         self.xr_ar6_prevet = xr_scen2.interpolate_na(dim="Time", method="linear")
 
         vetting_nans = np.array(self.xr_ar6_prevet.ModelScenario[~np.isnan(self.xr_ar6_prevet.Value.sel(Time=2100, Variable='Emissions|CO2'))])
-        vetting_2020 = np.array(self.xr_ar6_prevet.ModelScenario[np.where(np.abs(self.xr_ar6_prevet.sel(Time=2020, Variable='Emissions|CO2').Value - self.xr_hist.sel(Region='EARTH', Time=2020).CO2_hist) < 1e4)[0]])
-        vetting_total = np.intersect1d(vetting_nans, vetting_2020)
+        vetting_recentyear = np.array(self.xr_ar6_prevet.ModelScenario[np.where(np.abs(self.xr_ar6_prevet.sel(Time=self.recent_increment, Variable='Emissions|CO2').Value - self.xr_hist.sel(Region='EARTH', Time=self.recent_increment).CO2_hist) < 1e4)[0]])
+        vetting_total = np.intersect1d(vetting_nans, vetting_recentyear)
         self.xr_ar6 = self.xr_ar6_prevet.sel(ModelScenario=vetting_total)
         self.ms_immediate = np.array(df_ar6_meta[df_ar6_meta.Policy_category.isin(['P2', 'P2a', 'P2b', 'P2c'])].ModelScenario)
         self.ms_delayed = np.array(df_ar6_meta[df_ar6_meta.Policy_category.isin(['P3a', 'P3b', 'P3c'])].ModelScenario)
@@ -459,8 +486,9 @@ class datareading(object):
 
     def determine_global_nonco2_trajectories(self):
         print('- Computing global nonco2 trajectories')
-        xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4', Time=np.arange(2020, 2101))*self.settings['params']['gwp_ch4']
-        xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O', Time=np.arange(2020, 2101))*self.settings['params']['gwp_n2o']/1e3
+        # Relationship between non-co2 reduction and budget is based on Rogelj et al and requires the year 2020 (even though startyear may be different) - not a problem
+        xr_ch4_raw = self.xr_ar6.sel(Variable='Emissions|CH4')*self.settings['params']['gwp_ch4']
+        xr_n2o_raw = self.xr_ar6.sel(Variable='Emissions|N2O')*self.settings['params']['gwp_n2o']/1e3
         n2o_start = self.xr_hist.sel(Region='EARTH').sel(Time=self.settings['params']['start_year_analysis']).N2O_hist
         ch4_start = self.xr_hist.sel(Region='EARTH').sel(Time=self.settings['params']['start_year_analysis']).CH4_hist
         n2o_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).N2O_hist
@@ -538,6 +566,17 @@ class datareading(object):
         self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 1.8, 2.1, 2.4]})
         self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
         self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
+        self.xr_traj_nonco2_2 = self.xr_traj_nonco2.copy()
+
+        # change time coordinate in self.xr_traj_nonco2
+        difyears = 2020+1-self.settings['params']['start_year_analysis']
+        if difyears > 0:
+            self.xr_traj_nonco2_adapt = self.xr_traj_nonco2.assign_coords({'Time': self.xr_traj_nonco2.Time-(difyears-1)}).reindex({'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+            for t in np.arange(0, difyears):
+                self.xr_traj_nonco2_adapt.NonCO2_globe.loc[{'Time': 2101 - difyears + t}] = (self.xr_traj_nonco2.sel(Time=2101 - difyears + t).NonCO2_globe - self.xr_traj_nonco2.NonCO2_globe.sel(Time=2101 - difyears + t - 1)) + self.xr_traj_nonco2_adapt.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
+
+            fr = (self.xr_traj_nonco2.NonCO2_globe.sum(dim='Time') - self.xr_traj_nonco2_adapt.NonCO2_globe.sum(dim='Time')) * (1-xr_comp)/np.sum(1-xr_comp)
+            self.xr_traj_nonco2 = self.xr_traj_nonco2_adapt + fr
 
     # =========================================================== #
     # =========================================================== #
@@ -554,7 +593,20 @@ class datareading(object):
         dummy['Probability'] = ar
         dummy['dT_targets'] = dummy['dT_targets'].astype(float).round(1)
         dummy = dummy.set_index(["dT_targets", "Probability"])
-        dummy['Budget'] = dummy['Budget'] - float(self.xr_hist.sel(Region='EARTH', Time=2020).CO2_hist)/1e3 # Forster without warming is from 2020 and on (so -2020 emissions)
+
+        # Correct budgets based on startyear (Forster is from Jan 2020 and on)
+        if self.settings['params']['start_year_analysis'] == 2020:
+            budgets = dummy['Budget']
+        elif self.settings['params']['start_year_analysis'] > 2020:
+            budgets = dummy['Budget']
+            for year in np.arange(2020, self.settings['params']['start_year_analysis']):
+                budgets -= float(self.xr_hist.sel(Region='EARTH', Time=year).CO2_hist)/1e3
+        elif self.settings['params']['start_year_analysis'] < 2020:
+            budgets = dummy['Budget']
+            for year in np.arange(self.settings['params']['start_year_analysis'], 2020):
+                budgets += float(self.xr_hist.sel(Region='EARTH', Time=year).CO2_hist)/1e3
+        dummy['Budget'] = budgets
+
         xr_bud_co2 = xr.Dataset.from_dataframe(dummy)
         xr_bud_co2 = xr_bud_co2.rename({'dT_targets': "Temperature"})#.sel(Temperature = [1.5, 1.7, 2.0])
 
@@ -601,8 +653,15 @@ class datareading(object):
         startpoint = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis'], Region="EARTH").CO2_hist
         #compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2101)))))#**1.1#+[1]*len(np.arange(2050, 2101)))
 
-        compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], self.settings['params']['harmonization_year']))))+[1]*len(np.arange(self.settings['params']['harmonization_year'], 2101)))
-        xr_comp =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+        hy = self.settings['params']['harmonization_year']
+        if self.settings['params']['start_year_analysis'] >= 2020: 
+            compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], hy))))+[1]*len(np.arange(hy, 2101)))
+            xr_comp =  xr.DataArray(compensation_form, dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+        if self.settings['params']['start_year_analysis'] < 2020:
+            compensation_form = (np.arange(0, 2101-self.settings['params']['start_year_analysis']))**0.5
+            #hy = 2100
+            #compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], hy))))+[1]*len(np.arange(hy, 2101)))
+            xr_comp =  xr.DataArray(compensation_form/np.sum(compensation_form), dims=['Time'], coords={'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
 
         def budget_harm(nz):
             return xr_comp / np.sum(xr_comp.sel(Time=np.arange(self.settings['params']['start_year_analysis'], nz)))
@@ -653,6 +712,18 @@ class datareading(object):
         emis_all = xr_scen2_use.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))/1e3 + offsets*(1-xr_comp)
         emis2100 = emis_all.sel(Time=2100)
 
+        # Bend IAM curves to start in 2015 (only shape is relevant)
+        difyears = 2020+1-self.settings['params']['start_year_analysis']
+        if difyears > 0:
+            emis_all_adapt = emis_all.assign_coords({'Time': emis_all.Time-(difyears-1)}).reindex({'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
+            for t in np.arange(0, difyears):
+                dv = (emis_all.sel(Time=2101 - difyears + t).Value - emis_all.Value.sel(Time=2101 - difyears + t - 1))
+                dv = dv.where(dv < 0, 0)
+                emis_all_adapt.Value.loc[{'Time': 2101 - difyears + t}] = dv + emis_all_adapt.Value.sel(Time=2101 - difyears + t - 1)
+
+            fr = (emis_all.Value.sum(dim='Time') - emis_all_adapt.Value.sum(dim='Time')) * (xr_comp)/np.sum(xr_comp)
+            emis_all = emis_all_adapt + fr
+
         # Negative emissions from AR6 (CCS + DAC)
         xr_neg = self.xr_ar6.sel(Variable=['Carbon Sequestration|CCS', 'Carbon Sequestration|Direct Air Capture']).sum(dim='Variable', skipna=False)
         xr_neg = xr_neg.reindex(Time = np.arange(2000, 2101, 10))
@@ -666,9 +737,13 @@ class datareading(object):
             ar2[29:] = np.minimum.accumulate(ar[29:])
             return ar2
 
+        # Correction on temperature calibration when using IAM shapes starting at earlier years
+        difyear = 2021 - self.settings['params']['start_year_analysis']
+        dt = difyear/6*0.1
+
         def ms_temp(T):
             peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
-            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.) & (peaktemp > T-0.3))[0]] # This is the core functional form. Temp ranges are chosen based on fitting with IPCC WGIII pathways from C1 and C3 (SYR AR6, table 3.1)
+            return self.xr_ar6.ModelScenario[np.where((peaktemp < dt+T+0.) & (peaktemp > dt+T-0.3))[0]] # This is the core functional form. Temp ranges are chosen based on fitting with IPCC WGIII pathways from C1 and C3 (SYR AR6, table 3.1)
 
         for temp_i, temp in enumerate(self.Tlist):
             ms1 = ms_temp(temp)
@@ -751,9 +826,9 @@ class datareading(object):
         landuse_ghg_hist = self.xr_hist.sel(Region='EARTH').GHG_hist - self.xr_hist.sel(Region='EARTH').GHG_hist_excl
         landuse_co2_hist = self.xr_hist.sel(Region='EARTH').CO2_hist - self.xr_hist.sel(Region='EARTH').CO2_hist_excl
 
-        # Harmonize on 2021
-        diff_ghg = -landuse_ghg.sel(Time=2021) + landuse_ghg_hist.sel(Time=2021)
-        diff_co2 = -landuse_co2.sel(Time=2021) + landuse_co2_hist.sel(Time=2021)
+        # Harmonize on startyear
+        diff_ghg = -landuse_ghg.sel(Time=self.settings['params']['start_year_analysis']) + landuse_ghg_hist.sel(Time=self.settings['params']['start_year_analysis'])
+        diff_co2 = -landuse_co2.sel(Time=self.settings['params']['start_year_analysis']) + landuse_co2_hist.sel(Time=self.settings['params']['start_year_analysis'])
 
         # Corrected
         self.landuse_ghg_corr = landuse_ghg + diff_ghg
@@ -768,79 +843,128 @@ class datareading(object):
 
     def read_baseline(self):
         print('- Reading baseline emissions')
-        df_ssps = []
+        xr_bases = []
         for i in range(3): # In the up-to-date baselines, only SSP1, 2 and 3 are included. Will be updated at some point.
             df_base = pd.read_excel(self.settings['paths']['data']['baseline']+"SSP"+str(i+1)+".xlsx", sheet_name = 'Sheet1')
             df_base = df_base[df_base['Unnamed: 1'] == 'Emissions|CO2|Energy']
             df_base = df_base.drop(['Unnamed: 1'], axis=1)
             df_base = df_base.rename(columns={"COUNTRY": "Region"})
             df_base['Scenario'] = ['SSP'+str(i+1)]*len(df_base)
-            df_base = pd.concat([df_base, pd.DataFrame(pd.Series(np.array(['EARTH']+[df_base[i].sum() for i in np.arange(self.settings['params']['start_year_analysis'], 2101)]+['SSP'+str(i+1)]), index = df_base.keys())).transpose()])
-            df_ssps.append(df_base)
-        df_base_all = pd.concat(df_ssps)
-        df_base_all = df_base_all.reset_index(drop=True)
-        dummy = df_base_all.melt(id_vars=["Region", "Scenario"], var_name="Time", value_name="CO2_base")
-        dummy['Time'] = np.array(dummy['Time'].astype(int))
-        dummy = dummy.set_index(["Region", "Scenario", "Time"])
-        xr_base_raw = xr.Dataset.from_dataframe(dummy)
-        xr_base_raw = xr_base_raw.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
-        xr_base_raw = xr_base_raw.astype(float)
 
-        # # Using a fraction, get total CO2 emissions
-        fraction = (xr_base_raw.sel(Time=self.settings['params']['start_year_analysis']).CO2_base / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist).mean(dim=['Scenario'])
-        xr_base_harm_co2 = xr_base_raw / fraction
+            # Melt time index
+            df_base = df_base.melt(id_vars=["Region", "Scenario"], var_name="Time", value_name="CO2_base_excl")
+            df_base['Time'] = np.array(df_base['Time'].astype(int))
 
-        # Assume nonCO2 following similar evolution as CO2 
-        nonco2_start = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist - self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist
-        nonco2_base = (nonco2_start*(xr_base_harm_co2/xr_base_harm_co2.sel(Time=self.settings['params']['start_year_analysis'])).to_array()).sel(variable='CO2_base')
+            # Convert to xarray
+            dummy = df_base.set_index(["Region", "Scenario", "Time"])
+            dummy = dummy.astype(float)
+            xr_bases.append(xr.Dataset.from_dataframe(dummy))
+        xr_base = xr.merge(xr_bases).reindex({'Region': self.countries_iso})
 
-        # Convert baseline emissions into GHG using this fraction (or offset)
-        ghg_base = xr_base_harm_co2+nonco2_base
-        ghg_base = ghg_base.rename({'CO2_base': "GHG_base"})
-        ghg_base = ghg_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
-        self.xr_base = xr.merge([ghg_base, xr_base_harm_co2.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))])
+        # Assign 2020 values in Time index
+        xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        for year in np.arange(self.settings['params']['start_year_analysis'], 2021):
+            xr_base.CO2_base_excl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(Time=year, Region=self.countries_iso).CO2_hist_excl
+        
+        # Harmonize emissions from historical values to baseline emissions
+        diffrac = self.xr_hist.CO2_hist_excl.sel(Time=self.settings['params']['start_year_analysis']) / xr_base.CO2_base_excl.sel(Time=self.settings['params']['start_year_analysis'])
+        diffrac = diffrac.where(diffrac < 1e9)
+        diffrac = diffrac.where(diffrac > -1e9)
+        xr_base = xr_base.assign(CO2_base_excl = xr_base.CO2_base_excl * diffrac)
+
+        # Using a fraction, get other emissions variables
+        fraction_startyear_co2_incl = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl
+        fraction_startyear_co2_incl = fraction_startyear_co2_incl.where(fraction_startyear_co2_incl < 1e9)
+        fraction_startyear_co2_incl = fraction_startyear_co2_incl.where(fraction_startyear_co2_incl > -1e9)
+        xr_base = xr_base.assign(CO2_base_incl = xr_base.CO2_base_excl * fraction_startyear_co2_incl)
+
+        fraction_startyear_ghg_excl = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist_excl / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl
+        fraction_startyear_ghg_excl = fraction_startyear_ghg_excl.where(fraction_startyear_ghg_excl < 1e9)
+        fraction_startyear_ghg_excl = fraction_startyear_ghg_excl.where(fraction_startyear_ghg_excl > -1e9)
+        xr_base = xr_base.assign(GHG_base_excl = xr_base.CO2_base_excl * fraction_startyear_ghg_excl)
+
+        fraction_startyear_ghg_incl = self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl
+        fraction_startyear_ghg_incl = fraction_startyear_ghg_incl.where(fraction_startyear_ghg_incl < 1e9)
+        fraction_startyear_ghg_incl = fraction_startyear_ghg_incl.where(fraction_startyear_ghg_incl > -1e9)
+        xr_base = xr_base.assign(GHG_base_incl = xr_base.CO2_base_excl * fraction_startyear_ghg_incl)
+
+        # Assign 2020 values in Time index
+        xr_base = xr_base.reindex(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
+        for year in np.arange(self.settings['params']['start_year_analysis'], 2021):
+            xr_base.GHG_base_excl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(Time=year, Region=self.countries_iso).GHG_hist_excl
+            xr_base.CO2_base_incl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(Time=year, Region=self.countries_iso).CO2_hist
+            xr_base.GHG_base_incl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(Time=year, Region=self.countries_iso).GHG_hist
 
         # Harmonize global baseline emissions with sum of all countries (this is important for consistency of AP, etc.)
-        base_onlyc = self.xr_base.reindex(Region=self.countries_iso)
+        base_onlyc = xr_base.reindex(Region=self.countries_iso)
         base_w = base_onlyc.sum(dim='Region').expand_dims({'Region': ['EARTH']})
         self.xr_base = xr.merge([base_w,base_onlyc])
-
-        fraction_lulucf_ghg = (self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist_excl / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).GHG_hist)
-        fraction_lulucf_co2 = (self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist_excl / self.xr_hist.sel(Time=self.settings['params']['start_year_analysis']).CO2_hist)
-        self.xr_base = self.xr_base.assign(GHG_base_excl = self.xr_base.GHG_base * fraction_lulucf_ghg)
-        self.xr_base = self.xr_base.assign(CO2_base_excl = self.xr_base.CO2_base * fraction_lulucf_co2)
 
     # =========================================================== #
     # =========================================================== #
 
     def read_ndc(self):
         print('- Reading NDC data')
-        df_ndc = pd.read_excel("X:/user/dekkerm/Data/NDC/Infographics version 23May2024_CarbonBudgetExplorer.xlsx", sheet_name='CBE_Curated data', header=[0, 1, 2])
-        iso = np.array(df_ndc["(Mt CO2 equivalent)"]['ISO3 code']['Unnamed: 2_level_2'])
-        ndc_cond_min = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['min']
-        ndc_cond_max = df_ndc["2030 NDC emission levels"]['Conditional NDCs']['max']
-        ndc_uncond_min = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['min']
-        ndc_uncond_max = df_ndc["2030 NDC emission levels"]['Unconditional NDCs']['max']
-        emis_2015 = df_ndc["(Mt CO2 equivalent)"]['2015 emissions']['Unnamed: 6_level_2']
-        nz_co2 = df_ndc['Net-zero year']['CO2']['Unnamed: 17_level_2']
-        nz_ghg = df_ndc['Net-zero year']['GHG']['Unnamed: 18_level_2']
-        iso[-4] = 'Other Non-Annex I'
-        iso[-3] = 'Bunkers'
-        iso[-2] = 'Remaining LULUCF CO2'
-        iso[-1] = 'EARTH'
+        df_ndc_raw = pd.read_excel(self.settings['paths']['data']['external']+ "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx", sheet_name='Reduction All_GHG_incl', header=[0, 1])
+        regs = df_ndc_raw['(Mt CO2 equivalent)']['Country name']
+        regs_iso = []
+        for r in regs:
+            wh = np.where(self.countries_name == r)[0]
+            if len(wh) == 0:
+                if r == 'United States':
+                    regs_iso.append('USA')
+                elif r == 'EU27':
+                    regs_iso.append('EU')
+                elif r == 'Turkey':
+                    regs_iso.append('TUR')
+                else:
+                    regs_iso.append(np.nan)
+            else:
+                regs_iso.append(self.countries_iso[wh[0]])
+        regs_iso = np.array(regs_iso)
+        df_ndc_raw['ISO'] = regs_iso
 
-        rows = []
-        for reg_i, reg in enumerate(iso):
-            rows.append([reg, 'conditional', 'max', ndc_cond_max[reg_i]])
-            rows.append([reg, 'conditional', 'min', ndc_cond_min[reg_i]])
-            rows.append([reg, 'unconditional', 'max', ndc_uncond_max[reg_i]])
-            rows.append([reg, 'unconditional', 'min', ndc_uncond_min[reg_i]])
+        df_regs = []
+        df_amb = []
+        df_con = []
+        df_emis = []
+        df_lulucf = []
+        df_red = []
+        df_abs = []
+        df_inv = []
+        histemis = self.xr_hist.GHG_hist.sel(Time=2015)
+        for r in list(self.countries_iso) + ['EU']:
+            histemis_r = float(histemis.sel(Region=r))
+            df_ndc_raw_sub = df_ndc_raw[df_ndc_raw['ISO'] == r]
+            if len(df_ndc_raw_sub) > 0:
+                val_2015 = float(df_ndc_raw_sub['(Mt CO2 equivalent)'][2015])
+                for lulucf in ['incl']: # Maybe add excl later?
+                    for emis_i, emis in enumerate(['NDC']):# , 'CP']): 
+                        key = ['2030 NDCs', 'Domestic actions 2030'][emis_i]
+                        for cond_i, cond in enumerate(['unconditional', 'conditional']):
+                            condkey = ['Unconditional NDCs', 'Conditional NDCs'][cond_i]
+                            for ambition_i, ambition in enumerate(['min', 'max']):
+                                add = ['', '.1'][ambition_i]
+                                val = float(df_ndc_raw_sub[key][condkey+add])
+                                red = 1- val/val_2015
+                                abs_jones = histemis_r*(1-red)
+                                df_regs.append(r)
+                                df_amb.append(ambition)
+                                df_con.append(cond)
+                                df_emis.append(emis)
+                                df_lulucf.append(lulucf)
+                                df_red.append(red)
+                                df_abs.append(abs_jones)
+                                df_inv.append(val)
 
-        df_ndc_new = pd.DataFrame(np.array(rows),
-                                columns=['Region', 'Conditionality', 'Ambition', 'GHG_ndc'])
-        dummy = df_ndc_new.set_index(['Region', 'Conditionality', 'Ambition'])
-        dummy['GHG_ndc'] = np.array(dummy['GHG_ndc']).astype(float)
-        self.xr_ndc = xr.Dataset.from_dataframe(dummy)
+        dict_ndc = {"Region": df_regs,
+                    "Ambition": df_amb,
+                    "Conditionality": df_con,
+                    "GHG_ndc_red": df_red,
+                    "GHG_ndc": df_abs,
+                    "GHG_ndc_inv": df_inv}
+        df_ndc = pd.DataFrame(dict_ndc)
+        self.xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
     # =========================================================== #
     # =========================================================== #
@@ -880,9 +1004,9 @@ class datareading(object):
                 coords={'Region': [country for country in np.array(self.xr_total['Region']) for group in country_to_eu[country]]}
             )
             if group_of_choice == 'EU':
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base", "CO2_hist", "CO2_base", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc", "GHG_ndc_inv"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
@@ -891,8 +1015,10 @@ class datareading(object):
                 reg_iso.append(group_of_choice)
                 reg_name.append(group_of_choice)
         self.xr_total = self.xr_total
-        self.xr_total['GHG_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
-        self.xr_total['CO2_base'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.xr_total['GHG_base_incl'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.xr_total['CO2_base_incl'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.xr_total['GHG_base_excl'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
+        self.xr_total['CO2_base_excl'][np.where(self.xr_total.Region=='EU')[0], np.array([3, 4])] = np.nan # SSP4, 5 are empty for Europe!
         self.regions_iso = np.array(reg_iso)
         self.regions_name = np.array(reg_name)
 
@@ -902,153 +1028,167 @@ class datareading(object):
     def save(self): 
         print('- Save important files')
 
-        xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).drop_vars(['variable'])
+        xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2))
+        xr_version = xr_normal
 
-        for version_i, xr_version in enumerate([xr_normal]):
-            if version_i == 0: ext = ''
-            else: ext = 'IPCC/'
+        np.save(self.settings['paths']['data']['datadrive'] + "all_regions.npy", self.regions_iso)
+        np.save(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy", self.regions_name)
+        np.save(self.settings['paths']['data']['datadrive'] + "all_countries.npy", self.countries_iso)
+        np.save(self.settings['paths']['data']['datadrive'] + "all_countries_names.npy", self.countries_name)
 
-            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions.npy", self.regions_iso)
-            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_regions_names.npy", self.regions_name)
-            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_countries.npy", self.countries_iso)
-            np.save(self.settings['paths']['data']['datadrive'] + ext + "all_countries_names.npy", self.countries_name)
+        xr_version.to_netcdf(self.savepath+'xr_dataread.nc',
+            encoding={
+                "Region": {"dtype": "str"},
+                "Scenario": {"dtype": "str"},
+                "Time": {"dtype": "int"},
 
-            xr_version.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_dataread.nc',
-                encoding={
-                    "Region": {"dtype": "str"},
-                    "Scenario": {"dtype": "str"},
-                    "Time": {"dtype": "int"},
+                "Temperature": {"dtype": "float"},
+                "NonCO2red": {"dtype": "float"},
+                "NegEmis": {"dtype": "float"},
+                "Risk": {"dtype": "float"},
+                "Timing": {"dtype": "str"},
 
-                    "Temperature": {"dtype": "float"},
-                    "NonCO2red": {"dtype": "float"},
-                    "NegEmis": {"dtype": "float"},
-                    "Risk": {"dtype": "float"},
-                    "Timing": {"dtype": "str"},
+                "Conditionality": {"dtype": "str"},
+                "Ambition": {"dtype": "str"},
 
-                    "Conditionality": {"dtype": "str"},
-                    "Ambition": {"dtype": "str"},
+                "GDP": {"zlib": True, "complevel": 9},
+                "Population": {"zlib": True, "complevel": 9},
 
-                    "GDP": {"zlib": True, "complevel": 9},
-                    "Population": {"zlib": True, "complevel": 9},
-                    "GHG_hist": {"zlib": True, "complevel": 9},
-                    "GHG_globe": {"zlib": True, "complevel": 9},
-                    "GHG_base": {"zlib": True, "complevel": 9},
-                    "GHG_ndc": {"zlib": True, "complevel": 9},
-                },
-                format="NETCDF4",
-                engine="netcdf4",
-            )
+                "GHG_hist": {"zlib": True, "complevel": 9},
+                "GHG_hist_excl": {"zlib": True, "complevel": 9},
+                "CO2_hist": {"zlib": True, "complevel": 9},
+                "CO2_hist_excl": {"zlib": True, "complevel": 9},
 
-            # AP rbw factors
-            for gas in ['CO2', 'GHG']:
-                for lulucf_i, lulucf in enumerate(['incl', 'excl']):
-                    luext = ['', '_excl'][lulucf_i]
-                    xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-                    r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
-                    base_worldsum = xrt[gas+'_base'+luext].sel(Region='EARTH')
-                    a=0
-                    for reg_i, reg in enumerate(self.countries_iso):
-                        rb_part1 = (xrt.GDP.sel(Region=reg) / xrt.Population.sel(Region=reg) / r1_nom)**(1/3.)
-                        rb_part2 = xrt[gas+'_base'+luext].sel(Region=reg)*(base_worldsum - xrt[gas+'_globe'+luext])/base_worldsum
-                        if a == 0:
-                            r = rb_part1*rb_part2
-                            if not np.isnan(np.max(r)):
-                                rbw = r
-                                a += 1
-                        else:
-                            r = rb_part1*rb_part2
-                            if not np.isnan(np.max(r)):
-                                rbw += r
-                                a += 1
-                    rbw.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rbw_'+gas+'_'+lulucf+'.nc')
+                "GHG_globe": {"zlib": True, "complevel": 9},
+                "GHG_globe_excl": {"zlib": True, "complevel": 9},
+                "CO2_globe": {"zlib": True, "complevel": 9},
+                "CO2_globe_excl": {"zlib": True, "complevel": 9},
 
-            # GDR RCI indices
-            r=0
-            hist_emissions_startyears = [1850, 1950, 1990]
-            capability_thresholds = ['No', 'Th', 'PrTh']
-            rci_weights = ['Resp', 'Half', 'Cap']
-            for startyear_i, startyear in enumerate(hist_emissions_startyears):
-                for th_i, th in enumerate(capability_thresholds):
-                    for weight_i, weight in enumerate(rci_weights):
-                        # Read RCI
-                        df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/GDR_15_"+str(startyear)+"_"+th+"_"+weight+".xls", 
-                                                delimiter='\t', 
-                                                skiprows=30)[:-2]
-                        df_rci = df_rci[['iso3', 'year', 'rci']]
-                        iso3 = np.array(df_rci.iso3)
-                        iso3[iso3 == 'CHK'] = 'CHN'
-                        df_rci['iso3'] = iso3
-                        df_rci['year'] = df_rci['year'].astype(int)
-                        df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
-                        df_rci['Historical_startyear'] = startyear
-                        df_rci['Capability_threshold'] = th
-                        df_rci['RCI_weight'] = weight
-                        if r==0:
-                            fulldf = df_rci
-                            r+=1
-                        else:
-                            fulldf = pd.concat([fulldf, df_rci])
-            dfdummy = fulldf.set_index(['Region', 'Time', 'Historical_startyear', 'Capability_threshold', 'RCI_weight'])
-            xr_rci = xr.Dataset.from_dataframe(dfdummy)
-            xr_rci = xr_rci.reindex({"Region": xr_version.Region})
-            xr_rci.to_netcdf(self.settings['paths']['data']['datadrive']+ext+'xr_rci.nc')
+                "GHG_base_incl": {"zlib": True, "complevel": 9},
+                "GHG_base_excl": {"zlib": True, "complevel": 9},
+                "CO2_base_incl": {"zlib": True, "complevel": 9},
+                "CO2_base_excl": {"zlib": True, "complevel": 9},
+
+                "GHG_ndc": {"zlib": True, "complevel": 9},
+            },
+            format="NETCDF4",
+            engine="netcdf4",
+        )
+
+        # AP rbw factors
+        for gas in ['CO2', 'GHG']:
+            for lulucf_i, lulucf in enumerate(['incl', 'excl']):
+                luext = ['', '_excl'][lulucf_i]
+                xrt = xr_version.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+                r1_nom = (xrt.GDP.sel(Region='EARTH') / xrt.Population.sel(Region='EARTH'))
+                base_worldsum = xrt[gas+'_base_'+lulucf].sel(Region='EARTH')
+                rb_part1 = (xrt.GDP / xrt.Population / r1_nom)**(1/3.)
+                rb_part2 = xrt[gas+'_base_'+lulucf]*(base_worldsum - xrt[gas+'_globe'+luext])/base_worldsum
+                rbw = (rb_part1*rb_part2).sel(Region=self.countries_iso).sum(dim='Region')
+                rbw = rbw.where(rbw != 0)
+                rbw.to_netcdf(self.savepath+'xr_rbw_'+gas+'_'+lulucf+'.nc')
+
+        # GDR RCI indices
+        r=0
+        hist_emissions_startyears = [1850, 1950, 1990]
+        capability_thresholds = ['No', 'Th', 'PrTh']
+        rci_weights = ['Resp', 'Half', 'Cap']
+        for startyear_i, startyear in enumerate(hist_emissions_startyears):
+            for th_i, th in enumerate(capability_thresholds):
+                for weight_i, weight in enumerate(rci_weights):
+                    # Read RCI
+                    df_rci = pd.read_csv(self.settings['paths']['data']['external'] + "RCI/GDR_15_"+str(startyear)+"_"+th+"_"+weight+".xls", 
+                                            delimiter='\t', 
+                                            skiprows=30)[:-2]
+                    df_rci = df_rci[['iso3', 'year', 'rci']]
+                    iso3 = np.array(df_rci.iso3)
+                    iso3[iso3 == 'CHK'] = 'CHN'
+                    df_rci['iso3'] = iso3
+                    df_rci['year'] = df_rci['year'].astype(int)
+                    df_rci = df_rci.rename(columns={"iso3": 'Region', 'year': 'Time'})
+                    df_rci['Historical_startyear'] = startyear
+                    df_rci['Capability_threshold'] = th
+                    df_rci['RCI_weight'] = weight
+                    if r==0:
+                        fulldf = df_rci
+                        r+=1
+                    else:
+                        fulldf = pd.concat([fulldf, df_rci])
+        dfdummy = fulldf.set_index(['Region', 'Time', 'Historical_startyear', 'Capability_threshold', 'RCI_weight'])
+        xr_rci = xr.Dataset.from_dataframe(dfdummy)
+        xr_rci = xr_rci.reindex({"Region": xr_version.Region})
+        xr_rci.to_netcdf(self.settings['paths']['data']['datadrive'] +'xr_rci.nc')
 
     # =========================================================== #
     # =========================================================== #
 
     def country_specific_datareaders(self):
         # Dutch emissions - harmonized with the KEV # TODO harmonize global emissions with this, as well.
-        xr_dataread_nld =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + 'xr_dataread.nc').load().copy()
+        xr_dataread_nld =  xr.open_dataset(self.savepath + 'xr_dataread.nc').load().copy()
         dutch_time = np.array([1990, 1995, 2000, 2005, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021])
         dutch_ghg = np.array([228.9, 238.0, 225.7, 220.9, 219.8, 206, 202, 201.2, 192.9, 199.8, 200.2, 196.5, 191.4, 185.6, 168.9, 172.0])
-        dutch_time_interp = np.arange(1990, 2021+1)
+        dutch_time_interp = np.arange(1990, self.settings['params']['start_year_analysis']+1)
         dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
         fraction_1990 = float(dutch_ghg[0] / self.xr_total.GHG_hist.sel(Region='NLD', Time=1990))
         pre_1990_raw = np.array(self.xr_total.GHG_hist.sel(Region='NLD', Time=np.arange(1850, 1990)))*fraction_1990
-        total_time = np.arange(1850, 2021+1)
         total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
-        fractions = np.array(xr_dataread_nld.GHG_hist.sel(Region='NLD', Time=np.arange(1850, 2022)) / total_ghg_nld)
-        for t_i, t in enumerate(total_time):
+        fractions = np.array(xr_dataread_nld.GHG_hist.sel(Region='NLD', Time=np.arange(1850, self.settings['params']['start_year_analysis']+1)) / total_ghg_nld)
+        for t_i, t in enumerate(self.time_past):
             xr_dataread_nld.GHG_hist.loc[dict(Time=t, Region='NLD')] = total_ghg_nld[t_i]
             
-        xr_dataread_nld.CO2_base.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.CO2_base.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nld.CO2_base_excl.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.CO2_base_excl.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nld.GHG_base.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.GHG_base.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nld.GHG_base_excl.loc[dict(Region='NLD', Time=np.arange(2021, 2101))] = xr_dataread_nld.GHG_base_excl.sel(Region='NLD', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nld.CO2_base_incl.loc[dict(Region='NLD', Time=self.time_future)] = xr_dataread_nld.CO2_base_incl.sel(Region='NLD', Time=self.time_future)/fractions[-1]
+        xr_dataread_nld.CO2_base_excl.loc[dict(Region='NLD', Time=self.time_future)] = xr_dataread_nld.CO2_base_excl.sel(Region='NLD', Time=self.time_future)/fractions[-1]
+        xr_dataread_nld.GHG_base_incl.loc[dict(Region='NLD', Time=self.time_future)] = xr_dataread_nld.GHG_base_incl.sel(Region='NLD', Time=self.time_future)/fractions[-1]
+        xr_dataread_nld.GHG_base_excl.loc[dict(Region='NLD', Time=self.time_future)] = xr_dataread_nld.GHG_base_excl.sel(Region='NLD', Time=self.time_future)/fractions[-1]
 
-        xr_dataread_nld.CO2_hist.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nld.CO2_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.CO2_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nld.GHG_hist_excl.loc[dict(Region='NLD', Time=np.arange(1850, 2022))] = xr_dataread_nld.GHG_hist_excl.sel(Region='NLD', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nld.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_NLD.nc',
+        xr_dataread_nld.CO2_hist.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.CO2_hist.sel(Region='NLD', Time=self.time_past)/fractions
+        xr_dataread_nld.CO2_hist_excl.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.CO2_hist_excl.sel(Region='NLD', Time=self.time_past)/fractions
+        xr_dataread_nld.GHG_hist_excl.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.GHG_hist_excl.sel(Region='NLD', Time=self.time_past)/fractions
+        xr_dataread_nld.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NLD.nc',
                         encoding={
-                            "Region": {"dtype": "str"},
-                            "Scenario": {"dtype": "str"},
-                            "Time": {"dtype": "int"},
+                        "Region": {"dtype": "str"},
+                        "Scenario": {"dtype": "str"},
+                        "Time": {"dtype": "int"},
 
-                            "Temperature": {"dtype": "float"},
-                            "NonCO2red": {"dtype": "float"},
-                            "NegEmis": {"dtype": "float"},
-                            "Risk": {"dtype": "float"},
-                            "Timing": {"dtype": "str"},
+                        "Temperature": {"dtype": "float"},
+                        "NonCO2red": {"dtype": "float"},
+                        "NegEmis": {"dtype": "float"},
+                        "Risk": {"dtype": "float"},
+                        "Timing": {"dtype": "str"},
 
-                            "Conditionality": {"dtype": "str"},
-                            "Ambition": {"dtype": "str"},
+                        "Conditionality": {"dtype": "str"},
+                        "Ambition": {"dtype": "str"},
 
-                            "GDP": {"zlib": True, "complevel": 9},
-                            "Population": {"zlib": True, "complevel": 9},
-                            "GHG_hist": {"zlib": True, "complevel": 9},
-                            "GHG_globe": {"zlib": True, "complevel": 9},
-                            "GHG_base": {"zlib": True, "complevel": 9},
-                            "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GDP": {"zlib": True, "complevel": 9},
+                        "Population": {"zlib": True, "complevel": 9},
+
+                        "GHG_hist": {"zlib": True, "complevel": 9},
+                        "GHG_hist_excl": {"zlib": True, "complevel": 9},
+                        "CO2_hist": {"zlib": True, "complevel": 9},
+                        "CO2_hist_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_globe": {"zlib": True, "complevel": 9},
+                        "GHG_globe_excl": {"zlib": True, "complevel": 9},
+                        "CO2_globe": {"zlib": True, "complevel": 9},
+                        "CO2_globe_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_base_incl": {"zlib": True, "complevel": 9},
+                        "GHG_base_excl": {"zlib": True, "complevel": 9},
+                        "CO2_base_incl": {"zlib": True, "complevel": 9},
+                        "CO2_base_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_inv": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_red": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
                         engine="netcdf4",
                     )
         
         # Norwegian emissions - harmonized with EDGAR
-        xr_dataread_nor =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + 'xr_dataread.nc').load().copy()
+        xr_dataread_nor =  xr.open_dataset(self.savepath + 'xr_dataread.nc').load().copy()
         # Get data and interpolate
-        time_axis = np.arange(1990, 2021+1)
+        time_axis = np.arange(1990, self.settings['params']['start_year_analysis']+1)
         ghg_axis = np.array(self.xr_primap.sel(Scenario='HISTCR', Region='NOR', time=time_axis, Category='M.0.EL')['KYOTOGHG (AR6GWP100)'])
         time_interp = np.arange(np.min(time_axis), np.max(time_axis)+1)
         ghg_interp = np.interp(time_interp, time_axis, ghg_axis)
@@ -1056,41 +1196,53 @@ class datareading(object):
         # Get older data by linking to Jones
         fraction_minyear = float(ghg_axis[0] / self.xr_total.GHG_hist_excl.sel(Region='NOR', Time=np.min(time_axis)))
         pre_minyear_raw = np.array(self.xr_total.GHG_hist_excl.sel(Region='NOR', Time=np.arange(1850, np.min(time_axis))))*fraction_minyear
-        total_time = np.arange(1850, 2021+1)
         total_ghg_nor = np.array(list(pre_minyear_raw) + list(ghg_interp))/1e3
-        fractions = np.array(xr_dataread_nor.GHG_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022)) / total_ghg_nor)
-        for t_i, t in enumerate(total_time):
+        fractions = np.array(xr_dataread_nor.GHG_hist_excl.sel(Region='NOR', Time=self.time_past) / total_ghg_nor)
+        for t_i, t in enumerate(self.time_past):
             xr_dataread_nor.GHG_hist_excl.loc[dict(Time=t, Region='NOR')] = total_ghg_nor[t_i]
             
-        xr_dataread_nor.CO2_base.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.CO2_base.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nor.CO2_base_excl.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.CO2_base_excl.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nor.GHG_base.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.GHG_base.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
-        xr_dataread_nor.GHG_base_excl.loc[dict(Region='NOR', Time=np.arange(2021, 2101))] = xr_dataread_nor.GHG_base_excl.sel(Region='NOR', Time=np.arange(2021, 2101))/fractions[-1]
+        xr_dataread_nor.CO2_base_incl.loc[dict(Region='NOR', Time=self.time_future)] = xr_dataread_nor.CO2_base_incl.sel(Region='NOR', Time=self.time_future)/fractions[-1]
+        xr_dataread_nor.CO2_base_excl.loc[dict(Region='NOR', Time=self.time_future)] = xr_dataread_nor.CO2_base_excl.sel(Region='NOR', Time=self.time_future)/fractions[-1]
+        xr_dataread_nor.GHG_base_incl.loc[dict(Region='NOR', Time=self.time_future)] = xr_dataread_nor.GHG_base_incl.sel(Region='NOR', Time=self.time_future)/fractions[-1]
+        xr_dataread_nor.GHG_base_excl.loc[dict(Region='NOR', Time=self.time_future)] = xr_dataread_nor.GHG_base_excl.sel(Region='NOR', Time=self.time_future)/fractions[-1]
 
-        xr_dataread_nor.CO2_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nor.CO2_hist_excl.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.CO2_hist_excl.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nor.GHG_hist.loc[dict(Region='NOR', Time=np.arange(1850, 2022))] = xr_dataread_nor.GHG_hist.sel(Region='NOR', Time=np.arange(1850, 2022))/fractions
-        xr_dataread_nor.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.settings['paths']['data']['datadrive']+'xr_dataread_NOR.nc',
+        xr_dataread_nor.CO2_hist.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.CO2_hist.sel(Region='NOR', Time=self.time_past)/fractions
+        xr_dataread_nor.CO2_hist_excl.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.CO2_hist_excl.sel(Region='NOR', Time=self.time_past)/fractions
+        xr_dataread_nor.GHG_hist.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.GHG_hist.sel(Region='NOR', Time=self.time_past)/fractions
+        xr_dataread_nor.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NOR.nc',
                         encoding={
-                            "Region": {"dtype": "str"},
-                            "Scenario": {"dtype": "str"},
-                            "Time": {"dtype": "int"},
+                        "Region": {"dtype": "str"},
+                        "Scenario": {"dtype": "str"},
+                        "Time": {"dtype": "int"},
 
-                            "Temperature": {"dtype": "float"},
-                            "NonCO2red": {"dtype": "float"},
-                            "NegEmis": {"dtype": "float"},
-                            "Risk": {"dtype": "float"},
-                            "Timing": {"dtype": "str"},
+                        "Temperature": {"dtype": "float"},
+                        "NonCO2red": {"dtype": "float"},
+                        "NegEmis": {"dtype": "float"},
+                        "Risk": {"dtype": "float"},
+                        "Timing": {"dtype": "str"},
 
-                            "Conditionality": {"dtype": "str"},
-                            "Ambition": {"dtype": "str"},
+                        "Conditionality": {"dtype": "str"},
+                        "Ambition": {"dtype": "str"},
 
-                            "GDP": {"zlib": True, "complevel": 9},
-                            "Population": {"zlib": True, "complevel": 9},
-                            "GHG_hist": {"zlib": True, "complevel": 9},
-                            "GHG_globe": {"zlib": True, "complevel": 9},
-                            "GHG_base": {"zlib": True, "complevel": 9},
-                            "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GDP": {"zlib": True, "complevel": 9},
+                        "Population": {"zlib": True, "complevel": 9},
+
+                        "GHG_hist": {"zlib": True, "complevel": 9},
+                        "GHG_hist_excl": {"zlib": True, "complevel": 9},
+                        "CO2_hist": {"zlib": True, "complevel": 9},
+                        "CO2_hist_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_globe": {"zlib": True, "complevel": 9},
+                        "GHG_globe_excl": {"zlib": True, "complevel": 9},
+                        "CO2_globe": {"zlib": True, "complevel": 9},
+                        "CO2_globe_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_base_incl": {"zlib": True, "complevel": 9},
+                        "GHG_base_excl": {"zlib": True, "complevel": 9},
+                        "CO2_base_incl": {"zlib": True, "complevel": 9},
+                        "CO2_base_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_ndc": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
                         engine="netcdf4",

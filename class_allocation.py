@@ -32,7 +32,8 @@ class allocation():
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + dataread_file).load()
+        self.savepath = self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"
+        self.xr_total = xr.open_dataset(self.savepath + dataread_file).load()
         self.dataread_file = dataread_file
 
         # Region and Time variables
@@ -44,11 +45,11 @@ class allocation():
         if lulucf == 'incl' and gas == 'CO2':
             self.emis_hist = self.xr_total.CO2_hist
             self.emis_fut = self.xr_total.CO2_globe
-            self.emis_base = self.xr_total.CO2_base
+            self.emis_base = self.xr_total.CO2_base_incl
         elif lulucf == 'incl' and gas == 'GHG':
             self.emis_hist = self.xr_total.GHG_hist
             self.emis_fut = self.xr_total.GHG_globe
-            self.emis_base = self.xr_total.GHG_base
+            self.emis_base = self.xr_total.GHG_base_incl
         elif lulucf == 'excl' and gas == 'CO2':
             self.emis_hist = self.xr_total.CO2_hist_excl
             self.emis_fut = self.xr_total.CO2_globe_excl
@@ -57,7 +58,7 @@ class allocation():
             self.emis_hist = self.xr_total.GHG_hist_excl
             self.emis_fut = self.xr_total.GHG_globe_excl
             self.emis_base = self.xr_total.GHG_base_excl
-        self.rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_rbw_"+gas+"_"+lulucf+".nc").load()
+        self.rbw = xr.open_dataset(self.savepath + "xr_rbw_"+gas+"_"+lulucf+".nc").load()
         self.lulucf_indicator = lulucf
         self.gas_indicator = "_"+gas
 
@@ -401,8 +402,6 @@ class allocation():
         self.xr_total = self.xr_total.assign(AP = ap)
         self.rbw.close()
 
-
-
     # =========================================================== #
     # =========================================================== #
 
@@ -462,7 +461,7 @@ class allocation():
         savename = 'xr_alloc_'+self.focus_region+'.nc'
         if self.dataread_file != 'xr_dataread.nc':
             savename = 'xr_alloc_'+self.focus_region+'_adapt.nc'
-        savepath = self.settings['paths']['data']['datadrive']+foldername+'/'+savename
+        savepath = self.savepath+foldername+'/'+savename
 
         xr_total_onlyalloc = (self.xr_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB', 'PCB_lin']]
             .sel(
@@ -478,7 +477,7 @@ class allocation():
 
 if __name__ == "__main__":
     region = input("Choose a focus country or region: ")
-    allocator = Allocation(region)
+    allocator = allocation(region)
     allocator.gf()
     allocator.pc()
     allocator.pcc()
