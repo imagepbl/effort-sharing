@@ -167,26 +167,6 @@ class datareading(object):
         reg[reg == 'OWID_WRL'] = 'EARTH'
         df_pop.Region = reg
         self.xr_unp = xr.Dataset.from_dataframe(df_pop[df_pop.Region.isin(list(self.countries_iso)+['EARTH'])].set_index(['Region', 'Time'])).sel(Time = np.arange(1850, 2000))/1e6
-        # df_unp = pd.read_excel(self.settings['paths']['data']['external']+'/UN Population/WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS.xlsx',
-        #                         sheet_name="Estimates", header=16)[["Region, subregion, country or area *", "ISO3 Alpha-code", "Total Population, as of 1 January (thousands)", "Year"]]
-        # df_unp = df_unp.rename(columns={"Region, subregion, country or area *": "Region",
-        #                                 "ISO3 Alpha-code": "ISO",
-        #                                 "Total Population, as of 1 January (thousands)": "Population",
-        #                                 "Year": "Time"})
-        # vals = np.array(df_unp.Population).astype(str)
-        # vals[vals == '...'] = 'nan'
-        # vals = vals.astype(float)
-        # vals = vals/1e3
-        # df_unp['Population'] = vals
-        # df_unp = df_unp.drop(['Region'], axis=1)
-        # df_unp = df_unp[df_unp.Time < 2000]
-        # df_unp['Time'] = df_unp['Time'].astype(int)
-        # df_unp = df_unp[df_unp.ISO.isin(self.regions_iso)]
-        # dummy = df_unp.rename(columns={'ISO': "Region"})
-        # dummy = dummy.set_index(['Region', 'Time'])
-        # self.xr_unp = xr.Dataset.from_dataframe(dummy)
-        # self.xr_unp = self.xr_unp.reindex({'Region': list(np.array(self.xr_unp.Region))+['EARTH']})
-        # self.xr_unp.loc[{'Region': 'EARTH'}] = self.xr_unp.sum('Region')
 
     # =========================================================== #
     # =========================================================== #
@@ -966,12 +946,75 @@ class datareading(object):
         df_ndc = pd.DataFrame(dict_ndc)
         self.xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
+        # Now for GHG excluding LULUCF
+        df_ndc_raw = pd.read_excel(self.settings['paths']['data']['external']+ "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx", sheet_name='Reduction All_GHG_excl', header=[0, 1])
+        regs = df_ndc_raw['(Mt CO2 equivalent)']['Country name']
+        regs_iso = []
+        for r in regs:
+            wh = np.where(self.countries_name == r)[0]
+            if len(wh) == 0:
+                if r == 'United States':
+                    regs_iso.append('USA')
+                elif r == 'EU27':
+                    regs_iso.append('EU')
+                elif r == 'Turkey':
+                    regs_iso.append('TUR')
+                else:
+                    regs_iso.append(np.nan)
+            else:
+                regs_iso.append(self.countries_iso[wh[0]])
+        regs_iso = np.array(regs_iso)
+        df_ndc_raw['ISO'] = regs_iso
+
+        df_regs = []
+        df_amb = []
+        df_con = []
+        df_emis = []
+        df_lulucf = []
+        df_red = []
+        df_abs = []
+        df_inv = []
+        histemis = self.xr_hist.GHG_hist.sel(Time=2015)
+        for r in list(self.countries_iso) + ['EU']:
+            histemis_r = float(histemis.sel(Region=r))
+            df_ndc_raw_sub = df_ndc_raw[df_ndc_raw['ISO'] == r]
+            if len(df_ndc_raw_sub) > 0:
+                val_2015 = float(df_ndc_raw_sub['(Mt CO2 equivalent)'][2015])
+                for lulucf in ['incl']: # Maybe add excl later?
+                    for emis_i, emis in enumerate(['NDC']):# , 'CP']): 
+                        key = ['2030 NDCs', 'Domestic actions 2030'][emis_i]
+                        for cond_i, cond in enumerate(['unconditional', 'conditional']):
+                            condkey = ['Unconditional NDCs', 'Conditional NDCs'][cond_i]
+                            for ambition_i, ambition in enumerate(['min', 'max']):
+                                add = ['', '.1'][ambition_i]
+                                val = float(df_ndc_raw_sub[key][condkey+add])
+                                red = 1- val/val_2015
+                                abs_jones = histemis_r*(1-red)
+                                df_regs.append(r)
+                                df_amb.append(ambition)
+                                df_con.append(cond)
+                                df_emis.append(emis)
+                                df_lulucf.append(lulucf)
+                                df_red.append(red)
+                                df_abs.append(abs_jones)
+                                df_inv.append(val)
+
+        dict_ndc = {"Region": df_regs,
+                    "Ambition": df_amb,
+                    "Conditionality": df_con,
+                    "GHG_ndc_excl_red": df_red,
+                    "GHG_ndc_excl": df_abs,
+                    "GHG_ndc_excl_inv": df_inv}
+        df_ndc = pd.DataFrame(dict_ndc)
+        self.xr_ndc_excl = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
+
+
     # =========================================================== #
     # =========================================================== #
 
     def merge_xr(self):
         print('- Merging xrarray object')
-        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_hdish, self.xr_co2_budgets, self.all_projected_gases, self.xr_base, self.xr_ndc])
+        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_hdish, self.xr_co2_budgets, self.all_projected_gases, self.xr_base, self.xr_ndc, self.xr_ndc_excl])
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
@@ -1006,7 +1049,7 @@ class datareading(object):
             if group_of_choice == 'EU':
                 xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl"]].groupby(group_coord).sum()#skipna=False)
             else:
-                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc", "GHG_ndc_inv"]].groupby(group_coord).sum(skipna=False)
+                xr_eu = self.xr_total[['Population', 'GDP', 'GHG_hist', "GHG_base_incl", "CO2_hist", "CO2_base_incl", "GHG_hist_excl", "GHG_base_excl", "CO2_hist_excl", "CO2_base_excl", "GHG_ndc", "GHG_ndc_inv", "GHG_ndc_excl", "GHG_ndc_excl_inv"]].groupby(group_coord).sum(skipna=False)
             xr_eu2 = xr_eu.rename({'group': "Region"})
             dummy = self.xr_total.reindex(Region = list_of_regions)
             self.xr_total = xr.merge([dummy, xr_eu2])
@@ -1070,6 +1113,7 @@ class datareading(object):
                 "CO2_base_excl": {"zlib": True, "complevel": 9},
 
                 "GHG_ndc": {"zlib": True, "complevel": 9},
+                "GHG_ndc_excl": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
@@ -1180,6 +1224,10 @@ class datareading(object):
                         "GHG_ndc": {"zlib": True, "complevel": 9},
                         "GHG_ndc_inv": {"zlib": True, "complevel": 9},
                         "GHG_ndc_red": {"zlib": True, "complevel": 9},
+
+                        "GHG_ndc_excl": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_excl_inv": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_excl_red": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
                         engine="netcdf4",
@@ -1243,6 +1291,7 @@ class datareading(object):
                         "CO2_base_excl": {"zlib": True, "complevel": 9},
 
                         "GHG_ndc": {"zlib": True, "complevel": 9},
+                        "GHG_ndc_excl": {"zlib": True, "complevel": 9},
                         },
                         format="NETCDF4",
                         engine="netcdf4",

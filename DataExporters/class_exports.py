@@ -67,8 +67,9 @@ class dataexportcl(object):
         '''
         Export all pathways
         '''
-        self.data = self.xr_dataread[['GHG_globe', 'CO2_globe', 'NonCO2_globe']].sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+        self.data = self.xr_dataread[['GHG_globe', 'CO2_globe', 'GHG_globe_excl', 'CO2_globe_excl']].sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).drop_vars(['Variable'])
         self.data.to_dataframe().to_csv(self.savepath+'emissionspathways_all.csv')
+        self.data.sel(Risk=[0.33, 0.5, 0.67], NonCO2red=[0.33, 0.5, 0.67], NegEmis=[0.4, 0.5, 0.6]).to_dataframe().to_csv(self.savepath+'emissionspathways_subset.csv')
 
     def reduce_country_files(self):
         '''
