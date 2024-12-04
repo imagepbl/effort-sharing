@@ -31,7 +31,7 @@ class vardecomposing(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self):
+    def __init__(self, startyear=2021, gas='GHG', lulucf='incl'):
         print("# ==================================== #")
         print("# Initializing vardecomposing class    #")
         print("# ==================================== #")
@@ -41,7 +41,12 @@ class vardecomposing(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_dataread.nc")
+        
+        self.startyear = startyear
+        self.gas = gas
+        self.lulucf = lulucf
+
+        self.xr_total = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_"+str(self.startyear)+"/xr_dataread.nc")
         self.all_regions_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_regions.npy")
         self.all_regions_names = np.load(self.settings['paths']['data']['datadrive'] + "all_regions_names.npy")
         self.all_countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
@@ -52,7 +57,7 @@ class vardecomposing(object):
 
     def prepare_global_sobol(self, year):
         #print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
-        self.xr_year= xr.open_dataset(self.settings['paths']['data']['datadrive'] + "xr_alloc_"+str(year)+".nc")
+        self.xr_year= xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_"+str(self.startyear)+"/Aggregated_files/xr_alloc_"+str(year)+"_"+self.gas+"_"+self.lulucf+".nc")
         xr_globe = self.xr_year.bfill(dim = "Timing")[['PCC', 'ECPC', 'AP']].sel(Temperature=[1.5, 1.8],
                                                                                 Risk=[0.5, 0.33],
                                                                                 NonCO2red=[0.33, 0.5, 0.67],
@@ -70,24 +75,6 @@ class vardecomposing(object):
         }
         samples = np.floor(saltelli.sample(problem, 2**10)).astype(int)
         return xr_globe, np.array(xr_globe.Region), array_dims, array_inputs, problem, samples
-
-    # =========================================================== #
-    # =========================================================== #
-
-    # def prepare_temporal_sobols(self, cty):
-    #     #print("- Prepare Sobol decomposition and draw samples for different moments in time per country")
-    #     xr_cty = xr.open_dataset(self.settings['paths']['data']['datadrive']+'Allocations/xr_alloc_'+cty+'.nc').bfill(dim = "Timing")[['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
-    #     array_dims = np.array(xr_cty.sel(Time = 2030).to_array().dims)
-    #     array_inputs = [['GF', 'PCC', 'ECPC', 'AP', 'GDR']]
-    #     for dim_i, dim in enumerate(array_dims[1:]):
-    #         array_inputs.append(list(np.array(xr_cty[dim])))
-    #     problem = {
-    #         'num_vars': len(array_dims),
-    #         'names': array_dims,
-    #         'bounds': [[0, len(ly)] for ly in array_inputs],
-    #     }
-    #     samples = np.floor(saltelli.sample(problem, 2**8)).astype(int)
-    #     return xr_cty, np.array(xr_cty.Time), array_dims, array_inputs, problem, samples
 
     # =========================================================== #
     # =========================================================== #
@@ -137,7 +124,7 @@ class vardecomposing(object):
         d = {}
         d['Time'] = times_
         d['Factor'] = dims_
-        d['Region'] = np.array(xr.open_dataset("K:/Data/Data_EffortSharing/DataUpdate_ongoing/xr_alloc_2030.nc").Region)
+        d['Region'] = np.array(xr.open_dataset("K:/Data/Data_EffortSharing/DataUpdate_ongoing/startyear_2021/Aggregated_files/xr_alloc_2030_GHG_incl.nc").Region) # Is independent of startyear, gas and lulucf
 
         xr_sobol = xr.Dataset(
             coords=d
@@ -155,7 +142,7 @@ class vardecomposing(object):
         for Time_i, Time in enumerate(times_):
             sobol_data['Sobol_index'][Time_i, :, :] = self.sobolindices[Time].T
         self.xr_sobol = xr_sobol.update(sobol_data)
-        self.xr_sobol.to_netcdf(self.settings['paths']['data']['datadrive']+'xr_sobol.nc',
+        self.xr_sobol.to_netcdf(self.settings['paths']['data']['datadrive']+'/startyear_'+str(self.startyear)+'/xr_sobol_'+self.gas+'_'+self.lulucf+'.nc',
                                             format="NETCDF4",
                                             engine="netcdf4",
         )

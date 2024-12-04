@@ -1018,7 +1018,7 @@ class datareading(object):
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
-        self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
+        self.xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(['Variable'])
 
     # =========================================================== #
     # =========================================================== #
