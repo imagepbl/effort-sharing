@@ -301,15 +301,18 @@ class allocation():
         '''
         # make sqrt curve
         compensation_form_sqrt = np.sqrt(np.arange(0, 2101 - self.start_year_analysis))
-        # sum of values has to be 1
-        compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt)
-
+        compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt)                                                                             # sum of values has to be 1
         xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': self.analysis_timeframe})
+
+        convergence_years = np.arange(self.settings['params']['pcc_conv_start'],
+                                    self.settings['params']['pcc_conv_end'] + 1, 5)
 
         # Defining the timeframes for historical and future emissions
         xrs = []
         hist_emissions_startyears = self.settings['params']['hist_emissions_startyears']
         discount_rates = self.settings['params']['discount_rates']
+
+        xr_ecpc_all_list = []
 
         for startyear in hist_emissions_startyears:
             hist_emissions_timeframe = np.arange(startyear, 1 + self.start_year_analysis)
@@ -320,57 +323,57 @@ class allocation():
 
             # Discounting -> We only do past discounting here
             for discount in discount_rates:
-                past_timeline = np.arange(startyear, self.start_year_analysis + 1)
 
+                # Add discounting stuff
+                past_timeline = np.arange(startyear, self.start_year_analysis + 1)
                 discount_factor = (1 - discount / 100)
                 discount_period = self.start_year_analysis - past_timeline
                 xr_discount = xr.DataArray(discount_factor ** discount_period, dims=['Time'],
                                         coords={'Time': past_timeline})
-                hist_emissions_discounted = (hist_emissions * xr_discount).sum(dim='Time')
-                hist_emissions_w = float(hist_emissions_discounted.sel(Region='EARTH'))
-                hist_emissions_r = float(hist_emissions_discounted.sel(Region = self.focus_region))
+                
+                for conv_year in convergence_years:
+                    # Set up variables
+                    hist_emissions_rt = (hist_emissions * xr_discount)
+                    hist_emissions_wt = (hist_emissions * xr_discount).sel(Region='EARTH')
+                    share_popt =  self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
+                    Var_H = (share_popt*hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020+1)).sum(dim='Time').mean(dim='Scenario')          # Historical leftover (or debt if negative)
 
-                # Summing all future emissions over the future_emissions_timeframe
-                future_emissions_w = self.emis_fut.sel(Time = future_emissions_timeframe).sum(dim='Time')
+                    # Get GF info
+                    GF_frac = self.xr_total.GHG_hist.sel(Time=2021) / self.xr_total.GHG_hist.sel(Time=2021, Region='EARTH')
+                    Var_E = self.xr_total.GHG_globe.sel(Time=2021)*GF_frac                                                                                          # Allocation through also convergence (this is ECPC)
+                    Var_E0 = self.xr_total.GHG_globe.sel(Time=2021)*GF_frac
 
-                total_emissions_w = hist_emissions_w + future_emissions_w
+                    # Other stuff
+                    global_emissions = self.xr_total.GHG_globe
+                    globe_new = self.xr_total.GHG_globe.sel(Time=2021)
+                    globe_old = self.xr_total.GHG_globe.sel(Time=2020)
+                    Var_As = global_emissions*self.xr_total.Population.mean(dim='Scenario') / self.xr_total.Population.sel(Region='EARTH').mean(dim='Scenario')     # Additional allocation because of per capita in that year
+                    Var_L = Var_H - Var_E + Var_As.sel(Time=[2021]).sum(dim='Time')                                                                                 # Current leftover / debt
+                    es = [Var_E]
 
-                # Calculating the cumulative population shares for region and world
-                cum_pop = self.xr_total.Population.sel(Time = self.analysis_timeframe).sum(dim='Time')
-                cum_pop_r = cum_pop.sel(Region=self.focus_region)
-                cum_pop_w = cum_pop.sel(Region='EARTH')
-                share_cum_pop = cum_pop_r / cum_pop_w
-                budget_rightful = total_emissions_w * share_cum_pop
-                budget_left = budget_rightful - hist_emissions_r
+                    max_time_steps = conv_year-2021
 
-                # Now temporal allocation
-                #globalbudget = self.xr_total.CO2_globe.sel(Time=self.analysis_timeframe).sum(dim='Time')
-                globalpath = self.emis_fut
+                    for t in range(2100-self.start_year_analysis):
+                        globe_new = self.xr_total.GHG_globe.sel(Time=2022+t)
+                        pop_frac = share_popt.sel(Time=2022+t).mean(dim='Scenario')
+                        if t < max_time_steps-1:
+                            Delta_L = Var_L / (max_time_steps - t)
 
-                emis_start_r = self.emis_hist.sel(Time=self.start_year_analysis,
-                                                            Region=self.focus_region)
-                emis_start_w = self.emis_hist.sel(Time=self.start_year_analysis,
-                                                            Region='EARTH')
-                emis_ratio = emis_start_r / emis_start_w
-                path_scaled_0 = emis_ratio * globalpath
-                budget_without_assumptions = path_scaled_0.sum(dim='Time')
-                budget_surplus = budget_left - budget_without_assumptions
-
-                def ecpc_factor(initial_path, f):
-                    '''
-                    Calculates a modified emissions path. Takes scaling factor f as input and
-                    returns a new emissions path by scaling the compensation form (xr_comp) with f
-                    and adding it to the initial emissions path (path_scaled_0).
-                    '''
-                    return initial_path + xr_comp * f
-
-                ecpc = ecpc_factor(path_scaled_0, budget_surplus)
-                ecpc_expanded = ecpc.expand_dims(Discount_factor=[discount],
-                                                 Historical_startyear=[startyear]).to_dataset(name='ECPC')
-                xrs.append(ecpc_expanded)
-
-        xr_ecpc = xr.merge(xrs)
-        self.xr_total = self.xr_total.assign(ECPC = xr_ecpc.ECPC)
+                            # Update variables
+                            Var_E = Delta_L*np.sin((t+1) / max_time_steps*np.pi)*3 + globe_new*(GF_frac*(1-(t+1)/(max_time_steps)) + pop_frac*((t+1)/(max_time_steps)))
+                            Var_L = Var_L-Var_E + Var_As.sel(Time=2022+t)
+                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
+                        elif t == max_time_steps-1:                                                                                                                 # TO DO somehow there is a small discontinuity at the convergence year. Not a big problem. For now a simple solution like this worked. We can make it better later.
+                            Var_E = pop_frac*globe_new*0.67 + es[-1].sel(Time=2022+t-1)*0.33
+                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
+                        elif t > max_time_steps-1:
+                            Var_E = pop_frac*globe_new
+                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
+                    
+                    xr_ecpc_alloc= xr.concat(es, dim='Time')
+                    xr_ecpc_all_list.append(xr_ecpc_alloc.expand_dims({'Discount_factor': [discount], 'Historical_startyear': [startyear], 'Convergence_year': [conv_year]}))
+        xr_ecpc_all = xr.concat(xr_ecpc_all_list, dim='Convergence_year')
+        self.xr_total = self.xr_total.assign(ECPC = xr_ecpc_all)
 
     # =========================================================== #
     # =========================================================== #
