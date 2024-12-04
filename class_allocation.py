@@ -62,6 +62,11 @@ class allocation():
         self.lulucf_indicator = lulucf
         self.gas_indicator = "_"+gas
 
+        # Get dimension lists
+        self.dim_histstartyear = self.settings['dimension_ranges']['hist_emissions_startyears']
+        self.dim_discountrates = self.settings['dimension_ranges']['discount_rates']
+        self.dim_convyears = self.settings['dimension_ranges']['convergence_years']
+
     # =========================================================== #
     # =========================================================== #
 
@@ -134,10 +139,7 @@ class allocation():
         gfdeel = []
         pcdeel = []
 
-        convergence_years = np.arange(self.settings['params']['pcc_conv_start'],
-                                      self.settings['params']['pcc_conv_end'] + 1, 5)
-
-        for year in convergence_years:
+        for year in self.dim_convyears:
             ar = np.array([transform_time(self.xr_total.Time, year)]).T
             coords = {'Time': self.xr_total.Time, 'Convergence_year': [year]}
             dims = ['Time', 'Convergence_year']
@@ -299,22 +301,12 @@ class allocation():
         Equal Cumulative per Capita: Uses historical emissions, discount factors and
         population shares to allocate the global budget
         '''
-        # make sqrt curve
-        compensation_form_sqrt = np.sqrt(np.arange(0, 2101 - self.start_year_analysis))
-        compensation_form_sqrt = compensation_form_sqrt / np.sum(compensation_form_sqrt)                                                                             # sum of values has to be 1
-        xr_comp = xr.DataArray(compensation_form_sqrt, dims=['Time'], coords={'Time': self.analysis_timeframe})
-
-        convergence_years = np.arange(self.settings['params']['pcc_conv_start'],
-                                    self.settings['params']['pcc_conv_end'] + 1, 5)
-
         # Defining the timeframes for historical and future emissions
         xrs = []
-        hist_emissions_startyears = self.settings['params']['hist_emissions_startyears']
-        discount_rates = self.settings['params']['discount_rates']
 
         xr_ecpc_all_list = []
 
-        for startyear in hist_emissions_startyears:
+        for startyear in self.dim_histstartyear:
             hist_emissions_timeframe = np.arange(startyear, 1 + self.start_year_analysis)
             future_emissions_timeframe = np.arange(self.start_year_analysis + 1, 2101)
 
@@ -322,7 +314,7 @@ class allocation():
             hist_emissions = self.emis_hist.sel(Time = hist_emissions_timeframe)
 
             # Discounting -> We only do past discounting here
-            for discount in discount_rates:
+            for discount in self.dim_discountrates:
 
                 # Add discounting stuff
                 past_timeline = np.arange(startyear, self.start_year_analysis + 1)
@@ -331,7 +323,7 @@ class allocation():
                 xr_discount = xr.DataArray(discount_factor ** discount_period, dims=['Time'],
                                         coords={'Time': past_timeline})
                 
-                for conv_year in convergence_years:
+                for conv_year in self.dim_convyears:
                     # Set up variables
                     hist_emissions_rt = (hist_emissions * xr_discount)
                     hist_emissions_wt = (hist_emissions * xr_discount).sel(Region='EARTH')

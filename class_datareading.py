@@ -35,12 +35,14 @@ class datareading(object):
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         
-        # Lists of variable settings
-        self.Tlist = np.array([1.5, 1.56, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4]).astype(float).round(2)
-        self.Plist = np.array([.17, 0.33, 0.50, 0.67, 0.83]).round(2)
-        self.Neglist = np.array([0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]).round(2) 
-        self.NonCO2list = np.array([0.1, 0.33, 0.5, 0.67, 0.9]).round(2) # These are reductions in 2040 tov 2020
-        self.Timinglist = ['Immediate', 'Delayed']
+
+        # Get dimension lists
+        self.dim_temp = np.array(self.settings['dimension_ranges']['peak_temperature']).astype(float).round(2)
+        self.dim_prob = np.array(self.settings['dimension_ranges']['risk_of_exceedance']).round(2)
+        self.dim_negemis = np.array(self.settings['dimension_ranges']['negative_emissions']).round(2)
+        self.dim_nonco2 = np.array(self.settings['dimension_ranges']['non_co2_reduction']).round(2)
+        self.dim_timing = np.array(self.settings['dimension_ranges']['timing_of_mitigation_action'])
+
         self.time_future = np.arange(self.settings['params']['start_year_analysis'], 2101)
         self.time_past = np.arange(1850, self.settings['params']['start_year_analysis']+1)
         self.savepath = self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"
@@ -456,9 +458,9 @@ class datareading(object):
         xr_nonco2effects = xr.Dataset.from_dataframe(dummy)
         xr_nonco2effects = xr_nonco2effects.reindex(NonCO2red = np.arange(0, 0.8001, 0.01).round(2))
         xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="NonCO2red", method="linear")
-        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.Tlist)+[2.5])
+        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.dim_temp)+[2.5])
         xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="Temperature", method="linear")
-        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.Tlist))
+        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.dim_temp))
         self.xr_nonco2effects = xr_nonco2effects
 
     # =========================================================== #
@@ -507,18 +509,18 @@ class datareading(object):
         times = []
         nonco2 = []
         vals = []
-        for temp_i, temp in enumerate(self.Tlist):
+        for temp_i, temp in enumerate(self.dim_temp):
             ms = ms_temp(temp)
             if len(ms) == 0:
-                for n_i, n in enumerate(self.NonCO2list):
+                for n_i, n in enumerate(self.dim_nonco2):
                     times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
                     vals = vals+[np.nan]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
                     nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
                     temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
             else:
                 reductions = xr_reductions.sel(ModelScenario=ms)
-                reds = reductions.Value.quantile(self.NonCO2list[::-1])
-                for n_i, n in enumerate(self.NonCO2list):
+                reds = reductions.Value.quantile(self.dim_nonco2[::-1])
+                for n_i, n in enumerate(self.dim_nonco2):
                     red = reds[n_i]
                     ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
                     trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
@@ -544,7 +546,7 @@ class datareading(object):
 
         # Post-processing: making temperature dependence smooth
         self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': [1.5, 1.8, 2.1, 2.4]})
-        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.Tlist})
+        self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({'Temperature': self.dim_temp})
         self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
         self.xr_traj_nonco2_2 = self.xr_traj_nonco2.copy()
 
@@ -596,7 +598,7 @@ class datareading(object):
 
         # Determine bunker emissions to subtract from global budget
         bunker_subtraction = []
-        for t_i, t in enumerate(self.Tlist):
+        for t_i, t in enumerate(self.dim_temp):
             ms = ms_temp(t)
             bunker_subtraction += [3.3/100] # Assuming bunker emissions keep constant (3.3% of global emissions) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
 
@@ -605,12 +607,12 @@ class datareading(object):
         ch4_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).CH4_hist
         tot_2020 = n2o_2020+ch4_2020
 
-        Blist = np.zeros(shape=(len(self.Tlist), len(self.Plist), len(self.NonCO2list)))+np.nan
-        for p_i, p in enumerate(self.Plist):
+        Blist = np.zeros(shape=(len(self.dim_temp), len(self.dim_prob), len(self.dim_nonco2)))+np.nan
+        for p_i, p in enumerate(self.dim_prob):
             a, b = np.polyfit(xr_bud_co2.Temperature, xr_bud_co2.sel(Probability = np.round(p, 2)).Budget, 1)
-            for t_i, t in enumerate(self.Tlist):
+            for t_i, t in enumerate(self.dim_temp):
                 median_budget = (a*t+b)*(1-bunker_subtraction[t_i])  # relation may slightly deviate from Forster
-                for n_i, n in enumerate(self.NonCO2list):
+                for n_i, n in enumerate(self.dim_nonco2):
                     nonco2_reduction_given_quantile = np.array((((self.xr_traj_nonco2.sel(NonCO2red=n, Time=2040, Temperature=t)-tot_2020) / tot_2020).round(2)).NonCO2_globe)
                     nonco2_reduction_given_quantile = nonco2_reduction_given_quantile[~np.isnan(nonco2_reduction_given_quantile)]
                     nonco2_reduction_given_quantile[nonco2_reduction_given_quantile > 0] =0
@@ -618,9 +620,9 @@ class datareading(object):
                     nonco2effect = self.xr_nonco2effects.sel(Temperature=t, NonCO2red=-nonco2_reduction_given_quantile.round(2)).EffectOnRCB # Effect on RCB based on how different non-CO2 paths are than they are in Forster
                     Blist[t_i, p_i, n_i] = median_budget+nonco2effect
         data2 = xr.DataArray(Blist,
-                            coords={'Temperature': self.Tlist,
-                                    'Risk': (1-self.Plist).astype(float).round(2),
-                                    'NonCO2red': self.NonCO2list},
+                            coords={'Temperature': self.dim_temp,
+                                    'Risk': (1-self.dim_prob).astype(float).round(2),
+                                    'NonCO2red': self.dim_nonco2},
                             dims=['Temperature', 'Risk', 'NonCO2red'])
         self.xr_co2_budgets = xr.Dataset({'Budget': data2})
         
@@ -649,19 +651,19 @@ class datareading(object):
         #compensation_form2 = np.array(list(np.linspace(0, 1, len(np.arange(self.settings['params']['start_year_analysis'], 2101)))))**0.5#+[1]*len(np.arange(2050, 2101)))
         xr_traj_co2 = xr.Dataset(
             coords={
-                'NegEmis': self.Neglist,
-                'NonCO2red': self.NonCO2list,
-                'Temperature': self.Tlist,
-                'Risk': self.Plist,
-                'Timing': self.Timinglist,
+                'NegEmis': self.dim_negemis,
+                'NonCO2red': self.dim_nonco2,
+                'Temperature': self.dim_temp,
+                'Risk': self.dim_prob,
+                'Timing': self.dim_timing,
                 'Time': np.arange(self.settings['params']['start_year_analysis'], 2101),
             }
         )
 
         xr_traj_co2_neg = xr.Dataset(
             coords={
-                'NegEmis': self.Neglist,
-                'Temperature': self.Tlist,
+                'NegEmis': self.dim_negemis,
+                'Temperature': self.dim_temp,
                 'Time': np.arange(self.settings['params']['start_year_analysis'], 2101),
             }
         )
@@ -725,10 +727,10 @@ class datareading(object):
             peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
             return self.xr_ar6.ModelScenario[np.where((peaktemp < dt+T+0.) & (peaktemp > dt+T-0.3))[0]] # This is the core functional form. Temp ranges are chosen based on fitting with IPCC WGIII pathways from C1 and C3 (SYR AR6, table 3.1)
 
-        for temp_i, temp in enumerate(self.Tlist):
+        for temp_i, temp in enumerate(self.dim_temp):
             ms1 = ms_temp(temp)
             # Shape impacted by timing of action
-            for timing_i, timing in enumerate(self.Timinglist):
+            for timing_i, timing in enumerate(self.dim_timing):
                 if timing == 'Immediate' or temp in [1.5, 1.56, 1.6] and timing == 'Delayed':
                     mslist = self.ms_immediate
                 else:
@@ -749,12 +751,12 @@ class datareading(object):
                 surplus_factor2 = np.convolve(surplus_factor, np.ones(3)/3, mode='valid')
                 surplus_factor[1:-1] = surplus_factor2
 
-                for neg_i, neg in enumerate(self.Neglist):
+                for neg_i, neg in enumerate(self.dim_negemis):
                     xset = emis_all.sel(ModelScenario=ms2)-surplus_factor*(neg-0.5)
                     pathways_neg = xr_neg.sel(ModelScenario=ms1).quantile(neg, dim='ModelScenario')
                     pathways_data['CO2_neg_globe'][neg_i, temp_i, :] = np.array(pathways_neg.Value)
-                    for risk_i, risk in enumerate(self.Plist):
-                        for nonco2_i, nonco2 in enumerate(self.NonCO2list):
+                    for risk_i, risk in enumerate(self.dim_prob):
+                        for nonco2_i, nonco2 in enumerate(self.dim_nonco2):
                             factor = (self.xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2) - xset.where(xset.Value > 0).sum(dim='Time')) / np.sum(compensation_form)
                             all_pathways = (1e3*(xset+factor*xr_comp)).Value/1e3
                             if len(all_pathways)>0:
