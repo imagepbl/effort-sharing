@@ -1073,7 +1073,7 @@ class datareading(object):
     def save(self): 
         print('- Save important files')
 
-        xr_normal = self.xr_total.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2))
+        xr_normal = self.xr_total.sel(Temperature=np.array(self.settings['dimension_ranges']['peak_temperature_saved']).astype(float).round(2))
         xr_version = xr_normal
 
         np.save(self.settings['paths']['data']['datadrive'] + "all_regions.npy", self.regions_iso)
@@ -1190,7 +1190,7 @@ class datareading(object):
         xr_dataread_nld.CO2_hist.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.CO2_hist.sel(Region='NLD', Time=self.time_past)/fractions
         xr_dataread_nld.CO2_hist_excl.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.CO2_hist_excl.sel(Region='NLD', Time=self.time_past)/fractions
         xr_dataread_nld.GHG_hist_excl.loc[dict(Region='NLD', Time=self.time_past)] = xr_dataread_nld.GHG_hist_excl.sel(Region='NLD', Time=self.time_past)/fractions
-        xr_dataread_nld.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NLD.nc',
+        xr_dataread_nld.sel(Temperature=np.array(self.settings['dimension_ranges']['peak_temperature_saved']).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NLD.nc',
                         encoding={
                         "Region": {"dtype": "str"},
                         "Scenario": {"dtype": "str"},
@@ -1259,7 +1259,7 @@ class datareading(object):
         xr_dataread_nor.CO2_hist.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.CO2_hist.sel(Region='NOR', Time=self.time_past)/fractions
         xr_dataread_nor.CO2_hist_excl.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.CO2_hist_excl.sel(Region='NOR', Time=self.time_past)/fractions
         xr_dataread_nor.GHG_hist.loc[dict(Region='NOR', Time=self.time_past)] = xr_dataread_nor.GHG_hist.sel(Region='NOR', Time=self.time_past)/fractions
-        xr_dataread_nor.sel(Temperature=np.arange(1.5, 2.4+1e-9, 0.1).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NOR.nc',
+        xr_dataread_nor.sel(Temperature=np.array(self.settings['dimension_ranges']['peak_temperature_saved']).astype(float).round(2)).to_netcdf(self.savepath+'xr_dataread_NOR.nc',
                         encoding={
                         "Region": {"dtype": "str"},
                         "Scenario": {"dtype": "str"},

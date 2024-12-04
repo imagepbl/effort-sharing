@@ -26,7 +26,8 @@ dimension_ranges:
   discount_rates: [0, 1.6, 2.0, 2.8]
   hist_emissions_startyears: [1850, 1950, 1990]
   convergence_years: [2040, 2050, 2080, 2100]
-  peak_temperature: [1.5, 1.56, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4]
+  peak_temperature: [1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4] # Only for computations, higher range is useful.
+  peak_temperature_saved: [1.5, 1.6, 1.7, 1.8, 1.9, 2.0] # This is what will be saved
   negative_emissions: [0.17, 0.33, 0.50, 0.67, 0.83]
   risk_of_exceedance: [0.17, 0.33, 0.50, 0.67, 0.83]
   non_co2_reduction: [0.17, 0.33, 0.5, 0.67, 0.83]
