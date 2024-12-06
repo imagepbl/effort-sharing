@@ -25,8 +25,9 @@ def compare_netcdf_files(file1, file2):
     ds2.close()
 
 # Example usage
-file_benchmark = r"K:\data\DataUpdate_08_2024\xr_alloc_USA.nc"
+# file_benchmark = r"K:\data\DataUpdate_08_2024\xr_alloc_USA.nc"
+benchmark_file = r"K:\Data\Data_effortsharing\DataUpdate_ongoing\startyear_2021\Allocations_GHG_incl\xr_alloc_USA_OG.nc"
 # file2 = r"K:\data\Data_old\xr_alloc_USA.nc"
 # file_new = r"K:\data\DataUpdate_ongoing\Allocations\xr_alloc_USA.nc"
-file_new = r"K:\data\DataUpdate_ongoing\Allocations\xr_alloc_USA_CO2.nc"
-compare_netcdf_files(file_benchmark, file_new)
+file_new = r"K:\Data\Data_effortsharing\DataUpdate_ongoing\startyear_2021\Allocations_GHG_incl\xr_alloc_USA_vector.nc"
+compare_netcdf_files(benchmark_file, file_new)
