@@ -154,6 +154,15 @@ class allocation_comb(object):
     # =========================================================== #
     # =========================================================== #
 
+    def pc(self):
+        '''
+        ECPC computation
+        '''
+        self.xr_pc = (self.emis_fut*self.xr_dataread.Population/ self.xr_dataread.Population.sel(Region='EARTH')).to_dataset(name='PC')
+
+    # =========================================================== #
+    # =========================================================== #
+
     def approach1gdp(self):
         '''
         Methods for Robiou et al. (2023), under review.
@@ -277,7 +286,8 @@ class allocation_comb(object):
                                   self.COMB2[self.varhist].to_dataset(name='Approach2'),
                                   self.COMB2t.rename({'Value': 'Approach2t'}),
                                   self.gf.to_dataset(name='GF'),
-                                  self.xr_ecpc])
+                                  self.xr_ecpc,
+                                  self.xr_pc])
 
     # =========================================================== #
     # =========================================================== #
@@ -311,11 +321,11 @@ class allocation_comb(object):
     # =========================================================== #
 
     def determine_tempoutcomes(self):
-        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'ECPC']
+        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'ECPC', 'PC']
         percs = (self.xr_combs[rules] / self.xr_combs.sel(Region=self.countries_iso).GF.sum(dim='Region')).mean(dim='Temperature')
         condition = percs < 0
         percs = percs.where(~condition, 1e-9)
-        ndc_globalversion_raw = self.xr_dataread.GHG_ndc_excl/percs
+        ndc_globalversion_raw = self.xr_dataread.GHG_ndc_excl_CR/percs
         condition = ndc_globalversion_raw < 10000
         mod_data = ndc_globalversion_raw.where(~condition, 10000)
         condition = mod_data > 75000

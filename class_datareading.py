@@ -887,7 +887,7 @@ class datareading(object):
 
     def read_ndc_climateresource(self):
         print('- Reading NDC data from Climate resource')        
-        ghg_data = np.zeros(shape=(len(self.countries_iso), 3, 2, 2, len(np.arange(2010, 2051))))
+        ghg_data = np.zeros(shape=(len(self.countries_iso)+1, 3, 2, 2, len(np.arange(2010, 2051))))
         for cty_i, cty in enumerate(self.countries_iso):
             for cond_i, cond in enumerate(['conditional', 'range', 'unconditional']):
                 for hot_i, hot in enumerate(['include', 'exclude']):
@@ -912,22 +912,45 @@ class datareading(object):
                                     #series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                         except:
                             continue
+        # Now also for EU
+        for cond_i, cond in enumerate(['conditional', 'range', 'unconditional']):
+            for hot_i, hot in enumerate(['include', 'exclude']):
+                for amb_i, amb in enumerate(['low', 'high']):
+                    params = self.settings['params']
+                    path = f'X:/user/dekkerm/Data/NDC/ClimateResource_{params["version_ndcs"]}/{cond}/{hot}/regions/groupeu27_ndc_{params["version_ndcs"]}_CR_{cond}_{hot}.json'
+                    try:
+                        with open(path, 'r') as file:
+                            json_data = json.load(file)
+                        country_name = json_data['results']['country']['name']
+                        series_items = json_data['results']['series']
+                        for item in series_items:
+                            columns = item['columns']
+                            if columns['variable'] == "Emissions|Total GHG excl. LULUCF" and columns['category'] == "Updated NDC" and columns['ambition'] == amb:
+                                data = item['data']
+                                time_values = [int(year) for year in data.keys()]
+                                ghg_values = np.array(list(item['data'].values()))
+                                ghg_values[ghg_values == 'None'] = np.nan
+                                ghg_values = ghg_values.astype(float)
+                                ghg_values = ghg_values[np.array(time_values) >= 2010]
+                                ghg_data[cty_i+1, cond_i, hot_i, amb_i] = ghg_values
+                                #series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
+                    except:
+                        continue
         coords = {
-            'Region': self.countries_iso,
+            'Region': list(self.countries_iso)+['EU'],
             'Conditionality': ['conditional', 'range', 'unconditional'],
             'Hot_air': ['include', 'exclude'],
-            'Ambition': ['low', 'high'],
+            'Ambition': ['min', 'max'],
             'Time': np.array(time_values)[np.array(time_values)>=2010],
         }
         data_vars = {
             'GHG_ndc_excl_CR': (['Region', 'Conditionality', 'Hot_air', 'Ambition', 'Time'], ghg_data),
         }
         xr_ndc = xr.Dataset(data_vars, coords=coords)
+        self.xr_ndc_CR = xr_ndc.sel(Time=2030)
 
-        #factors = xr_ndc.sel(Time=params['start_year_analysis']).GHG_ndc / self.xr_primap.sel(Time=params['start_year_analysis']).CO2_hist
-        self.xr_ndc_CR = xr_ndc.sel(Time=2030)#.assign(CO2_ndc = xr_ndc.GHG_ndc/factors)
-        # diff = self.xr_ndc_CR.sel(Time=np.arange(2010, 2021)).mean(dim='Time') - self.xr_primap_excl.GHG_hist_excl.sel(Time=np.arange(2010, 2021)).mean(dim='Time')
-        # self.xr_primap['GHG_hist_ndc_corr'] = (self.xr_primap_excl.GHG_hist_excl + diff).GHG_ndc
+    # =========================================================== #
+    # =========================================================== #
 
     def read_ndc(self):
         print('- Reading NDC data')
@@ -1053,7 +1076,6 @@ class datareading(object):
                     "GHG_ndc_excl_inv": df_inv}
         df_ndc = pd.DataFrame(dict_ndc)
         self.xr_ndc_excl = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
-
 
     # =========================================================== #
     # =========================================================== #
