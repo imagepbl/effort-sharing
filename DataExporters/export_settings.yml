@@ -1,0 +1,48 @@
+# ============================================== #
+# PARAMS
+# ============================================== #
+
+# This is the default 1.5 pathway (small overshoot allowed, hence 1.6, which links to the C1 IPCC category)
+default_15:
+  Temperature: 1.6
+  Risk: 0.5
+  NegEmis: 0.5
+  NonCO2red: 0.5
+  Timing: 'Immediate'
+
+# This is the default 2.0 pathway
+default_20:
+  Temperature: 2.0
+  Risk: 0.33
+  NegEmis: 0.5
+  NonCO2red: 0.5
+  Timing: 'Immediate'
+
+# These are default settings for allocation rules
+default_rules:
+  Discount_factor: 0
+  Historical_startyear: 1990
+  Convergence_year: 2050
+  Scenario: 'SSP2'
+  Capability_threshold: 'Th'
+  RCI_weight: 'Half'
+
+# This are the ranges used in the export files (subselection of what is used in the computations)
+dimensions_global:
+  Temperature: [1.5, 1.6, 2.0]
+  Risk: [0.33, 0.5]
+  NegEmis: [0.33, 0.5, 0.67]
+  NonCO2red: [0.33, 0.5, 0.67]
+  Timing: ['Immediate', 'Delayed']
+
+# Similar, but for parameters related to specific allocation rules
+dimension_rules:
+  Discount_factor: [0, 1.6, 2.0, 2.8]
+  Historical_startyear: [1850, 1950, 1990]
+  Convergence_year: [2040, 2050, 2080, 2100]
+  Scenario: ['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']
+  Capability_threshold: ['Th']
+  RCI_weight: ['Half']
+
+# Time axis for export files
+time_axis: [2021, 2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2065, 2070, 2075, 2080, 2085, 2090, 2095, 2100]

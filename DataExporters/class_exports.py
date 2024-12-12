@@ -13,8 +13,6 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 import xarray as xr
-import json
-from scipy.signal import savgol_filter
 
 # =========================================================== #
 # CLASS OBJECT
@@ -30,67 +28,139 @@ class dataexportcl(object):
         print("# DATAREADING class                    #")
         self.current_dir = Path.cwd()
 
-        # Read in Input YAML file
+        # Read in export settings YAML file and Input YAML file
+        with open(self.current_dir / 'export_settings.yml') as file:
+            self.export_settings = yaml.load(file, Loader=yaml.FullLoader)
         with open(self.current_dir / '../input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
+
+        # Set up main data objects
         self.savepath = self.settings['paths']['data']['export'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"
         self.xr_dataread =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/" + "xr_dataread.nc").load()
         self.countries_iso = np.load(self.settings['paths']['data']['datadrive'] + "all_countries.npy", allow_pickle=True)
-        self.xr_dataread_sub = self.xr_dataread.sel(Temperature=[1.5, 1.6, 2.0], Risk=[0.5, 0.33, 0.17], NegEmis=0.5, NonCO2red=0.5, Timing='Immediate', Scenario='SSP2')
-        self.settings_default =  {'Temperature': [1.6, 2.0],
-                   'Risk': [0.5, 0.33, 0.17],
-                   'NegEmis': 0.5,
-                   'NonCO2red': [0.33, 0.5, 0.67],
-                   'Timing': "Immediate"}
-        self.settings_specific = {'Convergence_year': [2040, 2050, 2060, 2070]}
-        self.xr_dataread_sub_broader = self.xr_dataread.sel(**self.settings_default)
         print("# startyear: ", self.settings['params']['start_year_analysis'])
         print("# ==================================== #")
 
-    # =========================================================== #
-    # =========================================================== #
+    # ====================================================================================================================== #
+    # GLOBAL EMISSION PATHWAYS EXPORTS
+    # ====================================================================================================================== #
 
     def global_default(self):
         '''
         Export default 1.5(6) and 2.0 pathways that roughly match the IPCC pathways
         '''
-        self.data_15 = self.xr_dataread.sel(Timing='Immediate', NegEmis=0.5, Risk=0.5, NonCO2red=0.5, Temperature=[1.6])[['GHG_globe', 'CO2_globe', 'NonCO2_globe']].drop_vars(['Timing', 'NegEmis', 'Risk', 'NonCO2red']) # Using 1.6 as default temperature to match small overshoot in IPCC
-        #self.data_15['Temperature'] = [1.5] # Not change temperature manually - that leads to confusion
-        self.data_20 = self.xr_dataread.sel(Timing='Immediate', Risk=0.33, NegEmis=0.5, NonCO2red=0.5, Temperature=[2.0])[['GHG_globe', 'CO2_globe', 'NonCO2_globe']].drop_vars(['Timing', 'NegEmis', 'Risk', 'NonCO2red'])
-        self.data = xr.merge([self.data_15, self.data_20]).sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-        self.data.to_dataframe().to_csv(self.savepath+'emissionspathways_default.csv')
+        dataframe = self.xr_dataread.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101),
+                                         **self.export_settings['dimensions_global'])[['GHG_globe',
+                                                                                       'CO2_globe',
+                                                                                       'NonCO2_globe']
+                                                                                        ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples( [['GHG_globe', 'Mt CO2e/yr'],
+                                                        ['CO2_globe', 'Mt CO2/yr'],
+                                                        ['NonCO2_globe', 'Mt CO2e/yr']])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'emissionspathways_default.csv', index=False)
 
     # =========================================================== #
     # =========================================================== #
 
     def negative_nonlulucf_emissions(self):
         '''
-        Export all pathways
+        Export negative emissions pathways
         '''
-        self.data = self.xr_dataread[['CO2_neg_globe']].sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).drop_vars(['Variable'])
-        self.data.sel(NegEmis=[0.4, 0.5, 0.6]).to_dataframe().to_csv(self.savepath+'neg_emissions_pathways.csv')
+        dataframe = self.xr_dataread.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101),
+                                         **self.export_settings['dimensions_global'])[['CO2_neg_globe']
+                                                                                        ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples([['CO2_neg_globe', 'Mt CO2/yr']])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'emissionspathways_co2neg.csv', index=False)
 
     # =========================================================== #
     # =========================================================== #
 
     def global_all(self):
         '''
-        Export all pathways
+        Export a large set of pathways (still a subset)
         '''
-        self.data = self.xr_dataread[['GHG_globe', 'CO2_globe', 'GHG_globe_excl', 'CO2_globe_excl']].sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)).drop_vars(['Variable'])
-        self.data.sel(Risk=[0.33, 0.5, 0.67], NonCO2red=[0.33, 0.5, 0.67], NegEmis=[0.4, 0.5, 0.6]).to_dataframe().to_csv(self.savepath+'emissionspathways_subset.csv')
+        dataframe = self.xr_dataread.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101),
+                                         )[['GHG_globe',
+                                            'CO2_globe',
+                                            'GHG_globe_excl',
+                                            'CO2_globe_excl']
+                                            ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples([['GHG_globe', 'Mt CO2e/yr'],
+                                                        ['CO2_globe', 'Mt CO2/yr'],
+                                                        ['GHG_globe_excl', 'Mt CO2e/yr'],
+                                                        ['CO2_globe_excl', 'Mt CO2/yr']])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'emissionspathways_all.csv', index=False)
+
+    # ====================================================================================================================== #
+    # INPUT DATA EXPORTS
+    # ====================================================================================================================== #
+
+    def ndcdata(self):
+        '''
+        Export NDC data
+        '''
+        dataframe = self.xr_dataread.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101),
+                                    )[['GHG_ndc']
+                                    ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples([('GHG_ndc', '(Mt CO2e/yr)')])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'inputdata_ndc.csv', index=False)
 
     # =========================================================== #
     # =========================================================== #
+
+    def sspdata(self):
+        '''
+        Export SSP data
+        '''
+        dataframe = self.xr_dataread.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101),
+                                    )[['Population',
+                                       'GDP']
+                                    ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples([('Population', 'Inhabitants'),
+                                                       ('GDP', 'PPP, billion USD_2017/yr')])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'inputdata_ssp.csv', index=False)
+
+    # =========================================================== #
+    # =========================================================== #
+
+    def emisdata(self):
+        '''
+        Export historical emission data
+        '''
+        dataframe = self.xr_dataread.sel(Time = np.arange(1850, 1+self.settings['params']['start_year_analysis']),
+                                    )[['GHG_hist', 'GHG_hist_excl', 'CO2_hist', 'CH4_hist', 'N2O_hist']
+                                    ].to_dataframe()
+        dataframe.columns = pd.MultiIndex.from_tuples([('GHG_hist', 'Mt CO2e/yr'),
+                                                       ('GHG_hist_excl', 'Mt CO2e/yr'),
+                                                       ('CO2_hist', 'Mt CO2/yr'),
+                                                       ('CH4_hist', 'Mt CO2e/yr'),
+                                                       ('N2O_hist', 'Mt CO2e/yr')])
+        dataframe.reset_index(inplace=True)
+        dataframe.to_csv(self.savepath+'inputdata_histemis.csv', index=False)
+
+    # ====================================================================================================================== #
+    # ALLOCATIONS DATA EXPORTS
+    # ====================================================================================================================== #
 
     def reduce_country_files(self):
         '''
-        Export all pathways
+        Get reduced-form country files, omitting some parameter settings that users won't use and reducing the file size through compression
         '''
+        path_toread = self.savepath + "../../DataUpdate_ongoing/startyear_2021/Allocations_GHG_incl/"
+        path_tosave = self.savepath + "Allocations_GHG_incl_reduced/"
+
         for cty_i, cty in tqdm(enumerate(np.array(self.xr_dataread.Region))):
-            ds = xr.open_dataset(self.savepath+ "Allocations/xr_alloc_"+cty+".nc").sel(Time=np.array([2021]+list(np.arange(2025, 2101,5)))).expand_dims(Region=[cty])
+            ds = xr.open_dataset(path_toread+"xr_alloc_"+cty+".nc").sel(Time=self.export_settings['time_axis'],
+                                                                        **self.export_settings['dimensions_global'],
+                                                                        **self.export_settings['dimension_rules']
+                                                                        ).expand_dims(Region=[cty]).load()
             ds = ds.drop_vars(['PCB'])
-            ds.to_netcdf(self.savepath+"Allocations/allocations_"+cty+".nc",
+            ds.to_netcdf(path_tosave+"/reduced_allocations_"+cty+".nc",
                         encoding={
                             "GF": {"zlib": True, "complevel": 9},
                             "PC": {"zlib": True, "complevel": 9},
@@ -109,78 +179,92 @@ class dataexportcl(object):
         '''
         Export default emission allocations and reductions
         '''
+        path_toread = self.savepath + "Allocations_GHG_incl_reduced/"
+
         for default_i in range(2):
             dss = []
             for cty in np.array(self.xr_dataread.Region):
-                ds = xr.open_dataset(self.settings['paths']['data']['datadrive']+"/Allocations/xr_alloc_"+cty+".nc")
-                ds2 = ds.sel(Discount_factor=0,
-                Historical_startyear=1990,
-                Capability_threshold='Th',
-                RCI_weight='Half',
-                Scenario='SSP2',
-                Convergence_year=2050,
-                Time=np.array([2021]+list(np.arange(2025, 2101,5))),
-                Risk=[0.5, 0.33][default_i],
-                NegEmis=0.5,
-                Temperature=[1.6, 2.0][default_i],
-                NonCO2red=0.5,
-                Timing='Immediate').drop_vars(['Scenario', 'Convergence_year', 'Discount_factor', 'Historical_startyear', 'Capability_threshold', 'RCI_weight', 'NegEmis', 'Temperature', 'Risk', 'NonCO2red', 'Timing', 'PCB'])
-                dss.append(ds2.expand_dims(Region=[cty]))
+                param_set = [self.export_settings['default_15'],
+                             self.export_settings['default_20']][default_i]
+                ds = xr.open_dataset(path_toread+"reduced_allocations_"+cty+".nc").sel(Time=self.export_settings['time_axis'],
+                                                                                       **param_set,
+                                                                                    #    Discount_factor=0,
+                                                                                    #    Historical_startyear=1990,
+                                                                                    #    Scenario='SSP2',
+                                                                                    #    Convergence_year=2050
+                                                                                       **self.export_settings['default_rules']
+
+                                    ).drop_vars(['Capability_threshold',
+                                                 'RCI_weight',
+                                                 'Scenario',
+                                                 'Convergence_year',
+                                                 'Discount_factor',
+                                                 'Historical_startyear',
+                                                 'NegEmis',
+                                                 'Temperature',
+                                                 'Risk',
+                                                 'NonCO2red',
+                                                 'Timing']) # Drop all constant variables that are not varied in this dataset
+                dss.append(ds)
                 ds.close()
             ds_total = xr.merge(dss)
+            allocations_df = ds_total.to_dataframe()
+            allocations_df.columns = pd.MultiIndex.from_tuples([('GF', 'Mt CO2e/yr'),
+                                                                ('PC', 'Mt CO2e/yr'),
+                                                                ('PCC', 'Mt CO2/yr'),
+                                                                ('PCB_lin', 'Mt CO2e/yr'),
+                                                                ('GDR', 'Mt CO2e/yr'),
+                                                                ('ECPC', 'Mt CO2e/yr'),
+                                                                ('AP', 'Mt CO2e/yr')])
+            allocations_df.reset_index(inplace=True)
+            allocations_df.to_csv(self.savepath+"allocations_default_"+['15overshoot', '20'][default_i]+".csv", index=False)
+
             cur = self.xr_dataread.GHG_hist.sel(Time=2015)
-            ds_total_red = -(cur-ds_total)/cur
-            ds_total.to_dataframe().to_csv(self.savepath+"allocations_default_"+['15overshoot', '20'][default_i]+".csv")
-            ds_total_red.to_dataframe().to_csv(self.savepath+"reductions_default_"+['15overshoot', '20'][default_i]+".csv")
+            reductions_df = (-(cur-ds_total)/cur).to_dataframe()
+            reductions_df.columns = pd.MultiIndex.from_tuples([('GF', '% w.r.t. 2015'),
+                                                                ('PC', '% w.r.t. 2015'),
+                                                                ('PCC', '% w.r.t. 2015'),
+                                                                ('PCB_lin', '% w.r.t. 2015'),
+                                                                ('GDR', '% w.r.t. 2015'),
+                                                                ('ECPC', '% w.r.t. 2015'),
+                                                                ('AP', '% w.r.t. 2015')])
+            reductions_df.reset_index(inplace=True)
+            reductions_df.to_csv(self.savepath+"reductions_default_"+['15overshoot', '20'][default_i]+".csv", index=False)
 
-    # =========================================================== #
-    # =========================================================== #
+    # ====================================================================================================================== #
+    # BUDGETS
+    # ====================================================================================================================== #
 
-    def ndcdata(self):
+    def budgets_key_variables(self, lulucf='incl'):
         '''
-        Export NDC data
+        Specify several key variables for the computation of budgets
+        Note that budgets are only in CO2, not in GHG (while most of the alloations are in GHG)
         '''
-        self.xr_dataread.GHG_ndc.to_dataframe().to_csv(self.settings['paths']['data']['export']+'inputdata_ndc.csv')
+        self.xr_dataread_forbudgets =  self.xr_dataread.sel(**self.export_settings['dimensions_global']
+                                                            )
+        if lulucf == 'incl':
+            self.emis_hist = self.xr_dataread_forbudgets.CO2_hist
+            self.emis_fut = self.xr_dataread_forbudgets.CO2_globe
+            self.emis_base = self.xr_dataread_forbudgets.CO2_base_incl
+            self.budgets = self.xr_dataread_forbudgets.Budget
+            self.xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"  + "xr_rbw_co2_incl.nc").load().sel(**self.export_settings['dimensions_global'])
+        elif lulucf == 'excl':
+            self.emis_hist = self.xr_dataread_forbudgets.CO2_hist_excl
+            self.emis_fut = self.xr_dataread_forbudgets.CO2_globe_excl
+            self.emis_base = self.xr_dataread_forbudgets.CO2_base_excl
+            temporalemis = self.xr_dataread_forbudgets.CO2_globe_excl
+            temporalemis = temporalemis.where(temporalemis > 0, 0)
+            self.budgets = temporalemis.sum(dim='Time')/1e3
+            self.xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"   + "xr_rbw_co2_excl.nc").load().sel(**self.export_settings['dimensions_global'])
 
     # =========================================================== #
     # =========================================================== #
 
-    def sspdata(self):
-        '''
-        Export SSP data
-        '''
-        xr_dataread_2021 =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_2021/" + "xr_dataread.nc").load()
-        xr_dataread_2021[['Population', 'GDP']].to_dataframe().to_csv(self.settings['paths']['data']['export']+'inputdata_ssp.csv')
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def emisdata(self):
-        '''
-        Export historical emission data
-        '''
-        xr_dataread_2021 =  xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_2021/" + "xr_dataread.nc").load()
-        xr_dataread_2021[['GHG_hist', 'GHG_hist_excl', 'CO2_hist', 'CH4_hist', 'N2O_hist']].sel(Time=np.arange(1850, 1+self.settings['params']['start_year_analysis'])).to_dataframe().to_csv(self.settings['paths']['data']['export']+'inputdata_histemis.csv')
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def co2_budgets_ap(self, lulucf='excl'):
+    def co2_budgets_ap(self):
         '''
         CO2 budgets AP
         '''
-        if lulucf == 'incl':
-            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist
-            self.emis_fut = self.xr_dataread_sub_broader.CO2_globe
-            self.emis_base = self.xr_dataread_sub_broader.CO2_base_incl
-            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"  + "xr_rbw_co2_incl.nc").load().sel(**self.settings_default)
-        elif lulucf == 'excl':
-            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist_excl
-            self.emis_fut = self.xr_dataread_sub_broader.CO2_globe_excl
-            self.emis_base = self.xr_dataread_sub_broader.CO2_base_excl
-            xr_rbw = xr.open_dataset(self.settings['paths']['data']['datadrive'] + "startyear_" + str(self.settings['params']['start_year_analysis']) + "/"   + "xr_rbw_co2_excl.nc").load().sel(**self.settings_default)
-
-        xrt = self.xr_dataread_sub_broader.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+        xrt = self.xr_dataread_forbudgets.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
         GDP_sum_w = xrt.GDP.sel(Region='EARTH')
         pop_sum_w = xrt.Population.sel(Region='EARTH')
         r1_nom = GDP_sum_w / pop_sum_w
@@ -191,7 +275,7 @@ class dataexportcl(object):
         rb = rb_part1 * rb_part2
 
         # Step 2: Correction factor
-        corr_factor = (1e-9+xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)))
+        corr_factor = (1e-9+self.xr_rbw.__xarray_dataarray_variable__)/(base_worldsum - self.emis_fut.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101)))
 
         # Step 3: Budget after correction factor
         ap = self.emis_base - rb/corr_factor
@@ -200,43 +284,27 @@ class dataexportcl(object):
     # =========================================================== #
     # =========================================================== #
 
-    def co2_budgets_pc(self, lulucf='excl'):
+    def co2_budgets_pc(self):
         '''
         CO2 budgets PC
-        '''
-        if lulucf == 'incl':
-            budget = self.xr_dataread_sub_broader.Budget
-        elif lulucf == 'excl':
-            temporalemis = self.xr_dataread_sub_broader.CO2_globe_excl
-            temporalemis = temporalemis.where(temporalemis > 0, 0)
-            budget = temporalemis.sum(dim='Time')/1e3
-        
-        pop_region = self.xr_dataread_sub_broader.sel(Time=self.settings['params']['start_year_analysis']).Population
-        pop_earth = self.xr_dataread_sub_broader.sel(Region='EARTH', 
+        '''        
+        pop_region = self.xr_dataread_forbudgets.sel(Time=self.settings['params']['start_year_analysis']).Population
+        pop_earth = self.xr_dataread_forbudgets.sel(Region='EARTH', 
                                                      Time=self.settings['params']['start_year_analysis']).Population
         pop_fraction =  pop_region / pop_earth
-        self.xr_pc = (pop_fraction*budget*1e3).to_dataset(name="PC")
+        self.xr_pc = (pop_fraction*self.budgets*1e3).to_dataset(name="PC")
 
     # =========================================================== #
     # =========================================================== #
 
-    def co2_budgets_ecpc(self, lulucf='excl'):
+    def co2_budgets_ecpc(self):
         '''
         CO2 budgets ECPC
         '''
-        if lulucf == 'incl':
-            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist
-            budget = self.xr_dataread_sub_broader.Budget
-        elif lulucf == 'excl':
-            self.emis_hist = self.xr_dataread_sub_broader.CO2_hist_excl
-            temporalemis = self.xr_dataread_sub_broader.CO2_globe_excl
-            temporalemis = temporalemis.where(temporalemis > 0, 0)
-            budget = temporalemis.sum(dim='Time')/1e3
-
-        hist_emissions_startyears = self.settings['params']['hist_emissions_startyears']
-        discount_rates = self.settings['params']['discount_rates']
+        hist_emissions_startyears = self.settings['dimension_ranges']['hist_emissions_startyears']
+        discount_rates = self.settings['dimension_ranges']['discount_rates']
         xrs = []
-        for focusregion in tqdm(np.array(self.xr_dataread_sub_broader.Region)):
+        for focusregion in tqdm(np.array(self.xr_dataread_forbudgets.Region)):
             # Defining the timeframes for historical and future emissions
             for startyear_i, startyear in enumerate(hist_emissions_startyears):
                 hist_emissions_timeframe = np.arange(startyear, 1 + self.settings['params']['start_year_analysis'])
@@ -255,11 +323,11 @@ class dataexportcl(object):
                     hist_emissions_r = float(hist_emissions_dc.sel(Region = focusregion))
 
                     # CO2 budget
-                    future_emissions_w = budget*1e3
+                    future_emissions_w = self.budgets*1e3
                     total_emissions_w = hist_emissions_w + future_emissions_w
 
                     # Calculating the cumulative population shares for region and world
-                    cum_pop = self.xr_dataread_sub_broader.Population.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
+                    cum_pop = self.xr_dataread_forbudgets.Population.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101)).sum(dim='Time')
                     cum_pop_r = cum_pop.sel(Region=focusregion)
                     cum_pop_w = cum_pop.sel(Region='EARTH')
                     share_cum_pop = cum_pop_r / cum_pop_w
@@ -272,17 +340,24 @@ class dataexportcl(object):
     # =========================================================== #
     # =========================================================== #
 
-    def concat_co2budgets(self, lulucf='excl'):
+    def concat_co2budgets(self, lulucf='incl'):
         '''
         CO2 budgets ECPC, AP and PC
         '''
         self.xr_budgets = xr.merge([self.xr_pc, self.xr_ecpc, self.xr_ap])
         self.xr_budgets = xr.merge([xr.where(self.xr_budgets.sel(Region='EARTH').expand_dims(['Region']), self.xr_budgets.sel(Region=self.countries_iso).sum(dim='Region'), 0), self.xr_budgets.drop_sel(Region='EARTH')])
         self.xr_budgets.to_netcdf(self.settings['paths']['data']['datadrive']+"CO2budgets_"+lulucf+".nc",format="NETCDF4", engine="netcdf4")
-        self.xr_budgets.drop_vars(['Time', 'Variable']).to_dataframe().to_csv(self.savepath + "CO2budgets_"+lulucf+".csv")
+        budgets_df = self.xr_budgets.drop_vars(['Time']).to_dataframe()
+        
+        budgets_df.columns = pd.MultiIndex.from_tuples([('PC', 'Mt CO2'),
+                                                        ('ECPC', 'Mt CO2'),
+                                                        ('AP', 'Mt CO2')])
+        budgets_df.reset_index(inplace=True)
+        budgets_df.to_csv(self.savepath + "CO2budgets_"+lulucf+".csv")
 
-    # =========================================================== #
-    # =========================================================== #
+    # ====================================================================================================================== #
+    # PROJECT-SPECIFIC ALLOCATIONS
+    # ====================================================================================================================== #
 
     def project_COMMITTED(self):
         '''
@@ -323,8 +398,9 @@ class dataexportcl(object):
         df3 = pd.concat([df, df2])
         df3.to_csv(self.savepath + "allocations_DGIS.csv", index=False)
 
-    # =========================================================== #
-    # =========================================================== #
+    # ====================================================================================================================== #
+    # COUNTRY-SPECIFIC ALLOCATIONS (through harmonization data)
+    # ====================================================================================================================== #
 
     def countr_to_csv(self, cty, adapt='', lulucf='incl', gas='GHG'):
         '''
