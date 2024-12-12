@@ -308,7 +308,7 @@ class allocation_comb(object):
         dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
         xr_ar6_2 = xr.Dataset.from_dataframe(dummy)
         x_data = xr_ar6_2.sel(Time=2030, Variable='Emissions|Kyoto Gases').Value # Technically, this is GHG incl LULUCF
-        y_data = xr_ar6_2.sel(Time=2100, Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value
+        y_data = xr_ar6_2.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time') # Peak temperature!
         mask = ~np.isnan(y_data)
         x_fit = x_data[mask]
         y_fit = y_data[mask]

@@ -63,7 +63,7 @@ class vardecomposing(object):
                                                                                 NonCO2red=[0.33, 0.5, 0.67],
                                                                                 Region=np.array(self.xr_year.Region),
                                                                                 Scenario=['SSP1', 'SSP2', 'SSP3'],
-                                                                                Convergence_year = [2040, 2050, 2060])
+                                                                                Convergence_year = [2050, 2080])
         array_dims = np.array(xr_globe.sel(Region = xr_globe.Region[0]).to_array().dims)
         array_inputs = [['PCC', 'ECPC', 'AP']]
         for dim_i, dim in enumerate(array_dims[1:]):
