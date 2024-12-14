@@ -213,12 +213,15 @@ class allocation():
             .sum(dim='Time') * pop_fraction
         ).sel(Region=focus_region)
 
+        co2_budget_left = (self.xr_total.Budget * pop_fraction
+        ).sel(Region=focus_region)*1e3
+
         budget_without_assumptions_prepeak = (
             path_scaled_0.where(path_scaled_0 > 0, 0)
             .sum(dim='Time')
         )
 
-        budget_surplus = (budget_left - budget_without_assumptions_prepeak)
+        budget_surplus = (co2_budget_left - budget_without_assumptions_prepeak)
         pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name='PCB')
 
         # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
@@ -229,7 +232,7 @@ class allocation():
             pcb_pos = pcb.where(pcb > 0, 0).sum(dim='Time')
 
             # Calculate the budget surplus
-            budget_surplus = (budget_left - pcb_pos).PCB
+            budget_surplus = (co2_budget_left - pcb_pos).PCB
 
             # Adjust the CO2 path based on the budget surplus
             pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name='PCB')
@@ -241,7 +244,8 @@ class allocation():
             co2_hist = self.xr_total.CO2_hist_excl.sel(Region=focus_region, Time=start_year)
         time_range = np.arange(start_year, 2101)
 
-        nz = (budget_left * 2 / co2_hist + start_year - 1)
+        self.co2_budget_left = co2_budget_left
+        nz = (co2_budget_left * 2 / co2_hist + start_year - 1)
         coef = co2_hist / (nz - start_year)
 
         linear_co2 = (
@@ -253,6 +257,7 @@ class allocation():
         )
 
         linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name='PCB_lin')
+        self.linear_co2 = linear_co2_pos
 
         # Now, if we want GHG, the non-CO2 part is added:
         if self.gas_indicator == '_GHG':
