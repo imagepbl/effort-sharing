@@ -188,11 +188,11 @@ class dataexportcl(object):
                              self.export_settings['default_20']][default_i]
                 ds = xr.open_dataset(path_toread+"reduced_allocations_"+cty+".nc").sel(Time=self.export_settings['time_axis'],
                                                                                        **param_set,
-                                                                                    #    Discount_factor=0,
-                                                                                    #    Historical_startyear=1990,
-                                                                                    #    Scenario='SSP2',
-                                                                                    #    Convergence_year=2050
-                                                                                       **self.export_settings['default_rules']
+                                                                                       Discount_factor=0,
+                                                                                       Historical_startyear=1990,
+                                                                                       Scenario='SSP2',
+                                                                                       Convergence_year=2050
+                                                                                       #**self.export_settings['default_rules']
 
                                     ).drop_vars(['Capability_threshold',
                                                  'RCI_weight',
@@ -208,26 +208,27 @@ class dataexportcl(object):
                 dss.append(ds)
                 ds.close()
             ds_total = xr.merge(dss)
-            allocations_df = ds_total.to_dataframe()
-            allocations_df.columns = pd.MultiIndex.from_tuples([('GF', 'Mt CO2e/yr'),
+            allocations_df = ds_total[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB_lin']].to_dataframe()
+            allocations_df.columns = pd.MultiIndex.from_tuples([('GF', 'Mt CO2e/yr'), # ALWAYS double check ordering -> it is not always the same. Maybe we should build in some automatic detection.
                                                                 ('PC', 'Mt CO2e/yr'),
                                                                 ('PCC', 'Mt CO2/yr'),
-                                                                ('PCB_lin', 'Mt CO2e/yr'),
-                                                                ('GDR', 'Mt CO2e/yr'),
                                                                 ('ECPC', 'Mt CO2e/yr'),
-                                                                ('AP', 'Mt CO2e/yr')])
+                                                                ('AP', 'Mt CO2e/yr'),
+                                                                ('GDR', 'Mt CO2e/yr'),
+                                                                ('PCB_lin', 'Mt CO2e/yr')])
             allocations_df.reset_index(inplace=True)
             allocations_df.to_csv(self.savepath+"allocations_default_"+['15overshoot', '20'][default_i]+".csv", index=False)
+            if default_i == 0: self.allocations_df = allocations_df
 
             cur = self.xr_dataread.GHG_hist.sel(Time=2015)
-            reductions_df = (-(cur-ds_total)/cur).to_dataframe()
+            reductions_df = (-(cur-ds_total)/cur)[['GF', 'PC', 'PCC', 'ECPC', 'AP', 'GDR', 'PCB_lin']].to_dataframe()
             reductions_df.columns = pd.MultiIndex.from_tuples([('GF', '% w.r.t. 2015'),
                                                                 ('PC', '% w.r.t. 2015'),
                                                                 ('PCC', '% w.r.t. 2015'),
-                                                                ('PCB_lin', '% w.r.t. 2015'),
-                                                                ('GDR', '% w.r.t. 2015'),
                                                                 ('ECPC', '% w.r.t. 2015'),
-                                                                ('AP', '% w.r.t. 2015')])
+                                                                ('AP', '% w.r.t. 2015'),
+                                                                ('GDR', '% w.r.t. 2015'),
+                                                                ('PCB_lin', '% w.r.t. 2015')])
             reductions_df.reset_index(inplace=True)
             reductions_df.to_csv(self.savepath+"reductions_default_"+['15overshoot', '20'][default_i]+".csv", index=False)
 
