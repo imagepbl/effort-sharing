@@ -193,8 +193,12 @@ class allocation():
         pop_fraction = (pop_region / pop_earth).mean(dim='Scenario')
         globalpath = self.emis_fut
 
-        emis_start_i = self.emis_hist.sel(Time=start_year)
-        emis_start_w = self.emis_hist.sel(Time=start_year, Region='EARTH')
+        if self.lulucf_indicator == 'incl':
+            emis_start_i = self.xr_total.CO2_hist.sel(Time=start_year)
+            emis_start_w = self.xr_total.CO2_hist.sel(Time=start_year, Region='EARTH')
+        elif self.lulucf_indicator == 'excl':
+            emis_start_i = self.xr_total.CO2_hist_excl.sel(Time=start_year)
+            emis_start_w = self.xr_total.CO2_hist_excl.sel(Time=start_year, Region='EARTH')
 
         time_range = np.arange(start_year, 2101)
         path_scaled_0 = (
@@ -210,12 +214,15 @@ class allocation():
             .sum(dim='Time') * pop_fraction
         ).sel(Region=focus_region)
 
+        co2_budget_left = (self.xr_total.Budget * pop_fraction
+        ).sel(Region=focus_region)*1e3
+
         budget_without_assumptions_prepeak = (
             path_scaled_0.where(path_scaled_0 > 0, 0)
             .sum(dim='Time')
         )
 
-        budget_surplus = (budget_left - budget_without_assumptions_prepeak)
+        budget_surplus = (co2_budget_left - budget_without_assumptions_prepeak)
         pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name='PCB')
 
         # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
@@ -226,16 +233,20 @@ class allocation():
             pcb_pos = pcb.where(pcb > 0, 0).sum(dim='Time')
 
             # Calculate the budget surplus
-            budget_surplus = (budget_left - pcb_pos).PCB
+            budget_surplus = (co2_budget_left - pcb_pos).PCB
 
             # Adjust the CO2 path based on the budget surplus
             pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name='PCB')
 
         # CO2, but now linear
-        co2_hist = self.emis_hist.sel(Region=focus_region, Time=start_year)
+        if self.lulucf_indicator == 'incl':
+            co2_hist = self.xr_total.CO2_hist.sel(Region=focus_region, Time=start_year)
+        elif self.lulucf_indicator == 'excl':
+            co2_hist = self.xr_total.CO2_hist_excl.sel(Region=focus_region, Time=start_year)
         time_range = np.arange(start_year, 2101)
 
-        nz = (budget_left * 2 / co2_hist + start_year - 1)
+        self.co2_budget_left = co2_budget_left
+        nz = (co2_budget_left * 2 / co2_hist + start_year - 1)
         coef = co2_hist / (nz - start_year)
 
         linear_co2 = (
@@ -247,47 +258,55 @@ class allocation():
         )
 
         linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name='PCB_lin')
+        self.linear_co2 = linear_co2_pos
 
-        # TODO: Is it correct to just leave non-co2 part out?
+        # Now, if we want GHG, the non-CO2 part is added:
+        if self.gas_indicator == '_GHG':
 
-        # # Non-co2 part
-        # nonco2_current = (
-        #     self.xr_total.GHG_hist.sel(Time=start_year) -
-        #     self.xr_total.CO2_hist.sel(Time=start_year)
-        # )
+            # Non-co2 part
+            if self.lulucf_indicator == 'incl':
+                nonco2_current = (
+                    self.xr_total.GHG_hist.sel(Time=start_year) -
+                    self.xr_total.CO2_hist.sel(Time=start_year)
+                )
+            elif self.lulucf_indicator == 'excl':
+                nonco2_current = (
+                    self.xr_total.GHG_hist_excl.sel(Time=start_year) -
+                    self.xr_total.CO2_hist_excl.sel(Time=start_year)
+                )
 
-        # nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
-        # nonco2_part_gf = nonco2_fraction * self.xr_total.NonCO2_globe
+            nonco2_fraction = nonco2_current / nonco2_current.sel(Region='EARTH')
+            nonco2_part_gf = nonco2_fraction * self.xr_total.NonCO2_globe
 
-        # pc_fraction = (
-        #     self.xr_total.Population.sel(Time=start_year) /
-        #     self.xr_total.Population.sel(Time=start_year, Region='EARTH')
-        # )
-        # nonco2_part_pc = pc_fraction * self.xr_total.NonCO2_globe
+            pc_fraction = (
+                self.xr_total.Population.sel(Time=start_year) /
+                self.xr_total.Population.sel(Time=start_year, Region='EARTH')
+            )
+            nonco2_part_pc = pc_fraction * self.xr_total.NonCO2_globe
 
-        # # Create an array that transitions linearly from 0 to 1 from start_year to 2039,
-        # # and then remains constant at 1 from 2040 to 2100.
-        # compensation_form = np.concatenate([
-        #     np.linspace(0, 1, len(np.arange(start_year, 2040))),
-        #     np.ones(len(np.arange(2040, 2101)))
-        # ])
+            # Create an array that transitions linearly from 0 to 1 from start_year to 2039,
+            # and then remains constant at 1 from 2040 to 2100.
+            compensation_form = np.concatenate([
+                np.linspace(0, 1, len(np.arange(start_year, 2040))),
+                np.ones(len(np.arange(2040, 2101)))
+            ])
 
-        # xr_comp = xr.DataArray(
-        #     compensation_form,
-        #     dims=['Time'],
-        #     coords={'Time': time_range}
-        # )
+            xr_comp = xr.DataArray(
+                compensation_form,
+                dims=['Time'],
+                coords={'Time': time_range}
+            )
 
-        # nonco2_part = nonco2_part_gf * (1 - xr_comp) + nonco2_part_pc * xr_comp
+            nonco2_part = nonco2_part_gf * (1 - xr_comp) + nonco2_part_pc * xr_comp
 
-        # # together:
-        # nonco2_focus_region = nonco2_part.sel(Region=focus_region)
-        # self.ghg_pcb = pcb + nonco2_focus_region
-        # self.ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
-
-        # together:
-        self.ghg_pcb = pcb
-        self.ghg_pcb_lin = linear_co2_pos
+            # together:
+            nonco2_focus_region = nonco2_part.sel(Region=focus_region)
+            self.ghg_pcb = pcb + nonco2_focus_region
+            self.ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
+        elif self.gas_indicator == '_CO2':
+            # together:
+            self.ghg_pcb = pcb
+            self.ghg_pcb_lin = linear_co2_pos
 
         self.xr_total = self.xr_total.assign(
             PCB = self.ghg_pcb.PCB,
@@ -368,7 +387,7 @@ class allocation():
         # Defining the timeframes for historical and future emissions
         population_data = self.xr_total.Population.sel(Time=self.analysis_timeframe)
         global_emissions_future = self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe)
-        GF_frac = self.xr_total.GHG_hist.sel(Time=2021, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=2021, Region='EARTH')
+        GF_frac = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region='EARTH')
         share_popt =  population_data / population_data.sel(Region='EARTH')
         share_popt_past =  self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
 
@@ -385,41 +404,39 @@ class allocation():
             for discount in self.dim_discountrates:
 
                 # Add discounting stuff
-                past_timeline = np.arange(startyear, self.start_year_analysis + 1)
                 discount_factor = (1 - discount / 100)
-                discount_period = self.start_year_analysis - past_timeline
+                discount_period = self.start_year_analysis - hist_emissions_timeframe
                 xr_discount = xr.DataArray(discount_factor ** discount_period, dims=['Time'],
-                                        coords={'Time': past_timeline})
+                                        coords={'Time': hist_emissions_timeframe})
                 hist_emissions_rt = (hist_emissions * xr_discount)
                 hist_emissions_wt = (hist_emissions * xr_discount).sel(Region='EARTH')
-                Var_H = (share_popt_past*hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020+1)).sum(dim='Time').sel(Region=self.focus_region)          # Historical leftover (or debt if negative)
-
+                historical_leftover = (share_popt_past*hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020+1)).sum(dim='Time').sel(Region=self.focus_region)          # Historical leftover (or debt if negative)
 
                 for conv_year in self.dim_convyears:
 
                     # Set up starting variables that will change over iteration
-                    Var_E = (global_emissions_future.sel(Time=2021)*GF_frac)
-                    globe_new = global_emissions_future.sel(Time=2021)
-                    Var_As = (global_emissions_future*population_data.sel(Region=self.focus_region) / population_data.sel(Region='EARTH'))     # Additional allocation because of per capita in that year
-                    Var_L = Var_H - Var_E + Var_As.sel(Time=[2021]).sum(dim='Time')                                                                                 # Current leftover / debt
-                    es = [Var_E]
+                    emissions_ecpc = (global_emissions_future.sel(Time=self.start_year_analysis)*GF_frac)
+                    globe_new = global_emissions_future.sel(Time=self.start_year_analysis)
+                    emissions_rightful_at_year = (global_emissions_future*population_data.sel(Region=self.focus_region) / population_data.sel(Region='EARTH'))     # Additional allocation because of per capita in that year
+                    historical_leftover_updated = historical_leftover - emissions_ecpc + emissions_rightful_at_year.sel(Time=[self.start_year_analysis]).sum(dim='Time')                                                                                 # Current leftover / debt
+                    es = [emissions_ecpc]
 
-                    max_time_steps = conv_year-2021
-
+                    max_time_steps = conv_year-self.start_year_analysis
 
                     for t in range(2100-self.start_year_analysis):
-                        globe_new = global_emissions_future.sel(Time=2022+t)
-                        pop_frac = share_popt.sel(Time=2022+t, Region=self.focus_region)
+                        globe_new = global_emissions_future.sel(Time=self.start_year_analysis+1+t)
+                        pop_frac = share_popt.sel(Time=self.start_year_analysis+1+t, Region=self.focus_region)
                         if t < max_time_steps-1:
-                            Delta_L = Var_L / (max_time_steps - t)
+                            Delta_L = historical_leftover_updated / (max_time_steps - t)
 
                             # Update variables
-                            Var_E = Delta_L*np.sin((t+1) / max_time_steps*np.pi)*3 + globe_new*(GF_frac*(1-(t+1)/(max_time_steps)) + pop_frac*((t+1)/(max_time_steps)))
-                            Var_L = Var_L-Var_E + Var_As.sel(Time=2022+t)
-                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
+                            emissions_ecpc = (Delta_L*np.sin((t+1) / max_time_steps*np.pi)*3 + # This is the part based on the historical leftover (i.e., 'Delta')
+                                              globe_new*(GF_frac*(1-(t+1)/(max_time_steps)) + pop_frac*((t+1)/(max_time_steps)))) # This is the PCC part
+                            historical_leftover_updated = historical_leftover_updated-emissions_ecpc + emissions_rightful_at_year.sel(Time=self.start_year_analysis+1+t)
+                            es.append(emissions_ecpc.expand_dims({'Time':[self.start_year_analysis+1+t]}))
                         elif t == max_time_steps-1:                                                                                                                 # TO DO somehow there is a small discontinuity at the convergence year. Not a big problem. For now a simple solution like this worked. We can make it better later.
-                            Var_E = pop_frac*globe_new*0.67 + es[-1].sel(Time=2022+t-1)*0.33
-                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
+                            emissions_ecpc = pop_frac*globe_new*0.67 + es[-1].sel(Time=self.start_year_analysis+1+t-1)*0.33
+                            es.append(emissions_ecpc.expand_dims({'Time':[self.start_year_analysis+1+t]}))
                         elif t > max_time_steps-1:
                             Var_E = pop_frac*globe_new
                             es.append(Var_E.expand_dims({'Time':[2022+t]}))

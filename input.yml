@@ -21,6 +21,7 @@ params:
   start_year_analysis: 2021 # 1 Jan of this year
   harmonization_year: 2030
   polynomial_fit_2030relation: 5
+  version_ndcs: 13Mar2023a
 
 dimension_ranges:
   discount_rates: [0, 1.6, 2.0, 2.8]

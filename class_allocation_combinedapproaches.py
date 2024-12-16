@@ -154,6 +154,15 @@ class allocation_comb(object):
     # =========================================================== #
     # =========================================================== #
 
+    def pc(self):
+        '''
+        ECPC computation
+        '''
+        self.xr_pc = (self.emis_fut*self.xr_dataread.Population/ self.xr_dataread.Population.sel(Region='EARTH')).to_dataset(name='PC')
+
+    # =========================================================== #
+    # =========================================================== #
+
     def approach1gdp(self):
         '''
         Methods for Robiou et al. (2023), under review.
@@ -277,7 +286,8 @@ class allocation_comb(object):
                                   self.COMB2[self.varhist].to_dataset(name='Approach2'),
                                   self.COMB2t.rename({'Value': 'Approach2t'}),
                                   self.gf.to_dataset(name='GF'),
-                                  self.xr_ecpc])
+                                  self.xr_ecpc,
+                                  self.xr_pc])
 
     # =========================================================== #
     # =========================================================== #
@@ -298,7 +308,7 @@ class allocation_comb(object):
         dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
         xr_ar6_2 = xr.Dataset.from_dataframe(dummy)
         x_data = xr_ar6_2.sel(Time=2030, Variable='Emissions|Kyoto Gases').Value # Technically, this is GHG incl LULUCF
-        y_data = xr_ar6_2.sel(Time=2100, Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value
+        y_data = xr_ar6_2.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time') # Peak temperature!
         mask = ~np.isnan(y_data)
         x_fit = x_data[mask]
         y_fit = y_data[mask]
@@ -311,11 +321,11 @@ class allocation_comb(object):
     # =========================================================== #
 
     def determine_tempoutcomes(self):
-        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'ECPC']
+        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'ECPC', 'PC']
         percs = (self.xr_combs[rules] / self.xr_combs.sel(Region=self.countries_iso).GF.sum(dim='Region')).mean(dim='Temperature')
         condition = percs < 0
         percs = percs.where(~condition, 1e-9)
-        ndc_globalversion_raw = self.xr_dataread.GHG_ndc_excl/percs
+        ndc_globalversion_raw = self.xr_dataread.GHG_ndc_excl_CR/percs
         condition = ndc_globalversion_raw < 10000
         mod_data = ndc_globalversion_raw.where(~condition, 10000)
         condition = mod_data > 75000
