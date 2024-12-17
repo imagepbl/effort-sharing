@@ -315,70 +315,6 @@ class allocation():
 
     # =========================================================== #
     # =========================================================== #
-    # def ecpc(self):
-    #     '''
-    #     Equal Cumulative per Capita: Uses historical emissions, discount factors and
-    #     population shares to allocate the global budget
-    #     '''
-    #     # Defining the timeframes for historical and future emissions
-    #     population_data = self.xr_total.Population.sel(Time=self.analysis_timeframe)
-    #     global_emissions_future = self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe)
-    #     GF_frac = self.xr_total.GHG_hist.sel(Time=2021, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=2021, Region='EARTH')
-    #     share_popt = population_data / population_data.sel(Region='EARTH')
-    #     share_popt_past = self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
-
-    #     xr_ecpc_all_list = []
-
-    #     # Precompute reusable variables
-    #     hist_emissions_timeframes = [np.arange(startyear, 1 + self.start_year_analysis) for startyear in self.dim_histstartyear]
-    #     past_timelines = [np.arange(startyear, self.start_year_analysis + 1) for startyear in self.dim_histstartyear]
-    #     discount_factors = 1 - np.array(self.dim_discountrates) / 100
-
-    #     for startyear, hist_emissions_timeframe, past_timeline in zip(self.dim_histstartyear, hist_emissions_timeframes, past_timelines):
-    #         hist_emissions = self.emis_hist.sel(Time=hist_emissions_timeframe)
-    #         discount_period = self.start_year_analysis - past_timeline
-
-    #         # Vectorize discount factor application
-    #         xr_discount = xr.DataArray(discount_factors[:, None] ** discount_period, dims=['Discount_factor', 'Time'], coords={'Discount_factor': discount_factors, 'Time': past_timeline})
-    #         hist_emissions_rt = hist_emissions * xr_discount
-    #         hist_emissions_wt = hist_emissions_rt.sel(Region='EARTH')
-    #         Var_H = (share_popt_past * hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020 + 1)).sum(dim='Time').sel(Region=self.focus_region)
-
-    #         for conv_year in self.dim_convyears:
-    #             max_time_steps = conv_year - 2021
-    #             Var_E = global_emissions_future.sel(Time=2021) * GF_frac
-    #             Var_As = global_emissions_future * population_data.sel(Region=self.focus_region) / population_data.sel(Region='EARTH')
-    #             Var_L = Var_H - Var_E + Var_As.sel(Time=[2021]).sum(dim='Time')
-
-    #             # Precompute sine values and time steps
-    #             time_steps = np.arange(2022, 2101)
-    #             sine_values = np.sin(np.arange(1, max_time_steps) / max_time_steps * np.pi) * 3
-
-    #             # Initialize list to store emissions
-    #             es = [Var_E]
-
-    #             # Vectorize the emissions calculation
-    #             for t in range(2100 - self.start_year_analysis):
-    #                 time_step = 2022 + t
-    #                 globe_new = global_emissions_future.sel(Time=time_step)
-    #                 pop_frac = share_popt.sel(Time=time_step, Region=self.focus_region)
-    #                 if t < max_time_steps - 1:
-    #                     Delta_L = Var_L / (max_time_steps - t)
-    #                     Var_E = Delta_L * sine_values[t] + globe_new * (GF_frac * (1 - (t + 1) / max_time_steps) + pop_frac * ((t + 1) / max_time_steps))
-    #                     Var_L = Var_L - Var_E + Var_As.sel(Time=time_step)
-    #                     es.append(Var_E.expand_dims({'Time': [time_step]}))
-    #                 elif t == max_time_steps - 1:
-    #                     Var_E = pop_frac * globe_new * 0.67 + es[-1].sel(Time=time_step - 1) * 0.33
-    #                     es.append(Var_E.expand_dims({'Time': [time_step]}))
-    #                 else:
-    #                     Var_E = pop_frac * globe_new
-    #                     es.append(Var_E.expand_dims({'Time': [time_step]}))
-
-    #             xr_ecpc_alloc = xr.concat(es, dim='Time')
-    #             xr_ecpc_all_list.append(xr_ecpc_alloc.expand_dims({'Historical_startyear': [startyear], 'Convergence_year': [conv_year]}).to_dataset(name="ECPC"))
-
-    #     xr_ecpc_all = xr.merge(xr_ecpc_all_list)
-    #     self.xr_total = self.xr_total.assign(ECPC=xr_ecpc_all.ECPC)
     def ecpc(self):
         '''
         Equal Cumulative per Capita: Uses historical emissions, discount factors and
@@ -387,65 +323,65 @@ class allocation():
         # Defining the timeframes for historical and future emissions
         population_data = self.xr_total.Population.sel(Time=self.analysis_timeframe)
         global_emissions_future = self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe)
-        GF_frac = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region='EARTH')
-        share_popt =  population_data / population_data.sel(Region='EARTH')
-        share_popt_past =  self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
+        GF_frac = self.xr_total.GHG_hist.sel(Time=2021, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=2021, Region='EARTH')
+        share_popt = population_data / population_data.sel(Region='EARTH')
+        share_popt_past = self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
 
         xr_ecpc_all_list = []
 
+        # Precompute reusable variables
+        hist_emissions_timeframes = [np.arange(startyear, 1 + self.start_year_analysis) for startyear in self.dim_histstartyear]
+        past_timelines = [np.arange(startyear, self.start_year_analysis + 1) for startyear in self.dim_histstartyear]
+        discount_factors = np.array(self.dim_discountrates)
 
-        for startyear in self.dim_histstartyear:
-            hist_emissions_timeframe = np.arange(startyear, 1 + self.start_year_analysis)
+        for startyear, hist_emissions_timeframe, past_timeline in zip(self.dim_histstartyear, hist_emissions_timeframes, past_timelines):
+            hist_emissions = self.emis_hist.sel(Time=hist_emissions_timeframe)
+            discount_period = self.start_year_analysis - past_timeline
 
-            # Summing all historical CO2 emissions over the hist_emissions_timeframe
-            hist_emissions = self.emis_hist.sel(Time = hist_emissions_timeframe)
+            # Vectorize discount factor application
+            xr_discount = xr.DataArray((1-discount_factors[:, None] / 100) ** discount_period, dims=['Discount_factor', 'Time'], coords={'Discount_factor': discount_factors, 'Time': past_timeline})
+            hist_emissions_rt = hist_emissions * xr_discount
+            hist_emissions_wt = hist_emissions_rt.sel(Region='EARTH')
+            historical_leftover = (share_popt_past * hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020 + 1)).sum(dim='Time').sel(Region=self.focus_region)
 
-            # Discounting -> We only do past discounting here
-            for discount in self.dim_discountrates:
+            for conv_year in self.dim_convyears:
+                max_time_steps = conv_year - 2021
+                emissions_ecpc = global_emissions_future.sel(Time=2021) * GF_frac
+                emissions_rightful_at_year = global_emissions_future * population_data.sel(Region=self.focus_region) / population_data.sel(Region='EARTH')
+                historical_leftover_updated = historical_leftover - emissions_ecpc + emissions_rightful_at_year.sel(Time=[2021]).sum(dim='Time')
 
-                # Add discounting stuff
-                discount_factor = (1 - discount / 100)
-                discount_period = self.start_year_analysis - hist_emissions_timeframe
-                xr_discount = xr.DataArray(discount_factor ** discount_period, dims=['Time'],
-                                        coords={'Time': hist_emissions_timeframe})
-                hist_emissions_rt = (hist_emissions * xr_discount)
-                hist_emissions_wt = (hist_emissions * xr_discount).sel(Region='EARTH')
-                historical_leftover = (share_popt_past*hist_emissions_wt - hist_emissions_rt).sel(Time=np.arange(startyear, 2020+1)).sum(dim='Time').sel(Region=self.focus_region)          # Historical leftover (or debt if negative)
+                # Precompute sine values
+                sine_values = np.sin(np.arange(1, max_time_steps) / max_time_steps * np.pi) * 3
 
-                for conv_year in self.dim_convyears:
+                # Initialize list to store emissions
+                es = [emissions_ecpc]
 
-                    # Set up starting variables that will change over iteration
-                    emissions_ecpc = (global_emissions_future.sel(Time=self.start_year_analysis)*GF_frac)
-                    globe_new = global_emissions_future.sel(Time=self.start_year_analysis)
-                    emissions_rightful_at_year = (global_emissions_future*population_data.sel(Region=self.focus_region) / population_data.sel(Region='EARTH'))     # Additional allocation because of per capita in that year
-                    historical_leftover_updated = historical_leftover - emissions_ecpc + emissions_rightful_at_year.sel(Time=[self.start_year_analysis]).sum(dim='Time')                                                                                 # Current leftover / debt
-                    es = [emissions_ecpc]
+                # Emissions calculation
+                for t in range(2100 - self.start_year_analysis):
+                    time_step = 2022 + t
+                    globe_new = global_emissions_future.sel(Time=time_step)
+                    pop_frac = share_popt.sel(Time=time_step, Region=self.focus_region)
+                    if t < max_time_steps - 1:
+                        Delta_L = historical_leftover_updated / (max_time_steps - t)
+                        emissions_ecpc = Delta_L * sine_values[t] + globe_new * (GF_frac * (1 - (t + 1) / max_time_steps) + pop_frac * ((t + 1) / max_time_steps))
+                        historical_leftover_updated = historical_leftover_updated - emissions_ecpc + emissions_rightful_at_year.sel(Time=time_step)
+                        es.append(emissions_ecpc.expand_dims({'Time': [time_step]}))
+                    elif t == max_time_steps - 1:
+                        emissions_ecpc = pop_frac * globe_new * 0.67 + es[-1].sel(Time=time_step - 1) * 0.33
+                        es.append(emissions_ecpc.expand_dims({'Time': [time_step]}))
+                    else:
+                        emissions_ecpc = pop_frac * globe_new
+                        es.append(emissions_ecpc.expand_dims({'Time': [time_step]}))
 
-                    max_time_steps = conv_year-self.start_year_analysis
-
-                    for t in range(2100-self.start_year_analysis):
-                        globe_new = global_emissions_future.sel(Time=self.start_year_analysis+1+t)
-                        pop_frac = share_popt.sel(Time=self.start_year_analysis+1+t, Region=self.focus_region)
-                        if t < max_time_steps-1:
-                            Delta_L = historical_leftover_updated / (max_time_steps - t)
-
-                            # Update variables
-                            emissions_ecpc = (Delta_L*np.sin((t+1) / max_time_steps*np.pi)*3 + # This is the part based on the historical leftover (i.e., 'Delta')
-                                              globe_new*(GF_frac*(1-(t+1)/(max_time_steps)) + pop_frac*((t+1)/(max_time_steps)))) # This is the PCC part
-                            historical_leftover_updated = historical_leftover_updated-emissions_ecpc + emissions_rightful_at_year.sel(Time=self.start_year_analysis+1+t)
-                            es.append(emissions_ecpc.expand_dims({'Time':[self.start_year_analysis+1+t]}))
-                        elif t == max_time_steps-1:                                                                                                                 # TO DO somehow there is a small discontinuity at the convergence year. Not a big problem. For now a simple solution like this worked. We can make it better later.
-                            emissions_ecpc = pop_frac*globe_new*0.67 + es[-1].sel(Time=self.start_year_analysis+1+t-1)*0.33
-                            es.append(emissions_ecpc.expand_dims({'Time':[self.start_year_analysis+1+t]}))
-                        elif t > max_time_steps-1:
-                            Var_E = pop_frac*globe_new
-                            es.append(Var_E.expand_dims({'Time':[2022+t]}))
-
-                    xr_ecpc_alloc= xr.concat(es, dim='Time')
-                    xr_ecpc_all_list.append(xr_ecpc_alloc.expand_dims({'Discount_factor': [discount], 'Historical_startyear': [startyear], 'Convergence_year': [conv_year]}).to_dataset(name="ECPC"))
+                xr_ecpc_alloc = xr.concat(es, dim='Time')
+                xr_ecpc_all_list.append(xr_ecpc_alloc.expand_dims({'Historical_startyear': [startyear], 'Convergence_year': [conv_year]}).to_dataset(name="ECPC"))
 
         xr_ecpc_all = xr.merge(xr_ecpc_all_list)
-        self.xr_total = self.xr_total.assign(ECPC = xr_ecpc_all.ECPC)
+        # Create the correct order of dimensions
+        xr_ecpc_all = xr_ecpc_all.transpose('Discount_factor', 'Historical_startyear', 'Convergence_year',
+                                            'NegEmis', 'NonCO2red', 'Temperature', 'Risk', 'Timing', 'Time', 'Scenario')
+
+        self.xr_total = self.xr_total.assign(ECPC=xr_ecpc_all.ECPC)
 
     # =========================================================== #
     # =========================================================== #
