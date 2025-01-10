@@ -12,7 +12,6 @@ import yaml
 import numpy as np
 import pandas as pd
 import xarray as xr
-import ipdb
 
 # =========================================================== #
 # CLASS OBJECT
@@ -323,7 +322,7 @@ class allocation():
         # Defining the timeframes for historical and future emissions
         population_data = self.xr_total.Population.sel(Time=self.analysis_timeframe)
         global_emissions_future = self.xr_total.GHG_globe.sel(Time=self.analysis_timeframe)
-        GF_frac = self.xr_total.GHG_hist.sel(Time=2021, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=2021, Region='EARTH')
+        GF_frac = self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region=self.focus_region) / self.xr_total.GHG_hist.sel(Time=self.start_year_analysis, Region='EARTH')
         share_popt = population_data / population_data.sel(Region='EARTH')
         share_popt_past = self.xr_total.Population / self.xr_total.Population.sel(Region='EARTH')
 
