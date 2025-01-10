@@ -591,6 +591,7 @@ class datareading(object):
 
         xr_bud_co2 = xr.Dataset.from_dataframe(dummy)
         xr_bud_co2 = xr_bud_co2.rename({'dT_targets': "Temperature"})#.sel(Temperature = [1.5, 1.7, 2.0])
+        self.xr_bud_co2 = xr_bud_co2
 
         def ms_temp(T):
             peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
