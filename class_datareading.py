@@ -609,6 +609,7 @@ class datareading(object):
         tot_2020 = n2o_2020+ch4_2020
 
         Blist = np.zeros(shape=(len(self.dim_temp), len(self.dim_prob), len(self.dim_nonco2)))+np.nan
+
         for p_i, p in enumerate(self.dim_prob):
             a, b = np.polyfit(xr_bud_co2.Temperature, xr_bud_co2.sel(Probability = np.round(p, 2)).Budget, 1)
             for t_i, t in enumerate(self.dim_temp):
@@ -955,7 +956,8 @@ class datareading(object):
 
     def read_ndc(self):
         print('- Reading NDC data')
-        df_ndc_raw = pd.read_excel(self.settings['paths']['data']['external']+ "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx", sheet_name='Reduction All_GHG_incl', header=[0, 1])
+        df_ndc_raw = pd.read_excel(self.settings['paths']['data']['external']+ "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
+                                   sheet_name='Reduction All_GHG_incl', header=[0, 1])
         regs = df_ndc_raw['(Mt CO2 equivalent)']['Country name']
         regs_iso = []
         for r in regs:
