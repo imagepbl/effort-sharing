@@ -445,6 +445,22 @@ class datareading(object):
         self.xr_ar6_landuse = self.xr_ar6_landuse.rename({'Value': 'GHG_LULUCF'})
         self.xr_ar6_landuse = self.xr_ar6_landuse.assign(CO2_LULUCF = self.xr_ar6.sel(Variable='Emissions|CO2|AFOLU|Land').Value)
 
+        # Take averages of GHG excluding land use for the C-categories (useful for the Robiou paper)
+        xr_both = xr.merge([self.xr_ar6, self.xr_ar6_landuse])
+        xr_ar6_nozeros = xr_both.where(xr_both > -1e9, np.nan).where(xr_both != 0, np.nan)
+        xr_averages = []
+        for i in range(4):
+            C = [['C1', 'C2'], ['C3'], ['C6'], ['C7']][i]
+            Cname = ['C1+C2', 'C3', 'C6', 'C7'][i]
+            C_cat = np.intersect1d(np.array(xr_ar6_nozeros.ModelScenario),
+                                   np.array(df_ar6_meta[df_ar6_meta.Category.isin(C)].ModelScenario))
+            xr_averages.append(xr_ar6_nozeros.sel(ModelScenario=C_cat).mean(dim='ModelScenario').expand_dims(Category=[Cname]))
+        xr_av = xr.merge(xr_averages)
+        self.xr_ar6_C = xr.merge([(xr_av.Value.sel(Variable='Emissions|Kyoto Gases') - xr_av.GHG_LULUCF).to_dataset(name="GHG_excl_C").drop_vars('Variable'),
+                                  (xr_av.Value.sel(Variable='Emissions|CO2') - xr_av.CO2_LULUCF).to_dataset(name="CO2_excl_C").drop_vars('Variable'),
+                                  (xr_av.Value.sel(Variable=['Carbon Sequestration|CCS', 'Carbon Sequestration|Direct Air Capture']).sum(dim='Variable', skipna=False)).to_dataset(name="CO2_neg_C")
+        ])
+
     # =========================================================== #
     # =========================================================== #
 
@@ -1085,7 +1101,17 @@ class datareading(object):
 
     def merge_xr(self):
         print('- Merging xrarray object')
-        xr_total = xr.merge([self.xr_ssp, self.xr_hist, self.xr_unp, self.xr_hdish, self.xr_co2_budgets, self.all_projected_gases, self.xr_base, self.xr_ndc, self.xr_ndc_excl, self.xr_ndc_CR])
+        xr_total = xr.merge([self.xr_ssp,
+                             self.xr_hist,
+                             self.xr_unp,
+                             self.xr_hdish,
+                             self.xr_co2_budgets,
+                             self.all_projected_gases,
+                             self.xr_base,
+                             self.xr_ndc,
+                             self.xr_ndc_excl,
+                             self.xr_ndc_CR,
+                             self.xr_ar6_C])
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
@@ -1182,6 +1208,10 @@ class datareading(object):
                 "GHG_base_excl": {"zlib": True, "complevel": 9},
                 "CO2_base_incl": {"zlib": True, "complevel": 9},
                 "CO2_base_excl": {"zlib": True, "complevel": 9},
+
+                "GHG_excl_C": {"zlib": True, "complevel": 9},
+                "CO2_excl_C": {"zlib": True, "complevel": 9},
+                "CO2_neg_C": {"zlib": True, "complevel": 9},
 
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},                      
@@ -1292,6 +1322,10 @@ class datareading(object):
                         "GHG_base_excl": {"zlib": True, "complevel": 9},
                         "CO2_base_incl": {"zlib": True, "complevel": 9},
                         "CO2_base_excl": {"zlib": True, "complevel": 9},
+
+                        "GHG_excl_C": {"zlib": True, "complevel": 9},
+                        "CO2_excl_C": {"zlib": True, "complevel": 9},
+                        "CO2_neg_C": {"zlib": True, "complevel": 9},
 
                         "GHG_ndc": {"zlib": True, "complevel": 9},
                         "GHG_ndc_inv": {"zlib": True, "complevel": 9},

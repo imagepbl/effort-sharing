@@ -24,7 +24,7 @@ class allocation_comb(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, lulucf='incl', dataread_file="xr_dataread.nc", gas = 'GHG'):
+    def __init__(self, dataread_file="xr_dataread.nc"):
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
@@ -43,31 +43,12 @@ class allocation_comb(object):
         self.start_year_analysis = self.settings['params']['start_year_analysis']
         self.analysis_timeframe = np.arange(self.start_year_analysis, 2101)
 
-        # Historical emissions
-        if lulucf == 'incl' and gas == 'CO2':
-            self.emis_hist = self.xr_dataread.CO2_hist
-            self.emis_fut = self.xr_dataread.CO2_globe
-            self.emis_base = self.xr_dataread.CO2_base_incl
-            self.varhist = 'CO2_hist_incl'
-        elif lulucf == 'incl' and gas == 'GHG':
-            self.emis_hist = self.xr_dataread.GHG_hist
-            self.emis_fut = self.xr_dataread.GHG_globe
-            self.emis_base = self.xr_dataread.GHG_base_incl
-            self.varhist = 'GHG_hist_incl'
-        elif lulucf == 'excl' and gas == 'CO2':
-            self.emis_hist = self.xr_dataread.CO2_hist_excl
-            self.emis_fut = self.xr_dataread.CO2_globe_excl
-            self.emis_base = self.xr_dataread.CO2_base_excl
-            self.varhist = 'CO2_hist_excl'
-        elif lulucf == 'excl' and gas == 'GHG':
-            self.emis_hist = self.xr_dataread.GHG_hist_excl
-            self.emis_fut = self.xr_dataread.GHG_globe_excl
-            self.emis_base = self.xr_dataread.GHG_base_excl
-            self.varhist = 'GHG_hist_excl'
-        self.rbw = xr.open_dataset(self.savepath + "xr_rbw_"+gas+"_"+lulucf+".nc").load()
-        self.lulucf_indicator = lulucf
-        self.gas_indicator = "_"+gas
-
+        # Set emission variables -> There is a single default because of the link to Robiou paper
+        self.emis_hist = self.xr_dataread.GHG_hist_excl
+        self.emis_fut = self.xr_dataread.GHG_excl_C
+        self.varhist = 'GHG_hist_excl'
+        self.CO2_neg = self.xr_dataread.CO2_neg_C
+        self.rbw = xr.open_dataset(self.savepath + "xr_rbw_GHG_excl.nc").load()
         self.all_future_years = np.arange(self.settings['params']['start_year_analysis'], 2101)
         self.start_year_analysis = self.settings['params']['start_year_analysis']
 
@@ -84,8 +65,12 @@ class allocation_comb(object):
         xrs = []
         for hist_emissions_startyear in hist_emissions_startyears:
             for discount_rate in discount_rates:
-                hist_emissions = self.emis_hist.sel(Time = np.arange(hist_emissions_startyear, self.settings['params']['start_year_analysis']))
-                hist_emissions_discounted = (hist_emissions * ((1-discount_rate/100)**(1+np.arange(0, self.settings['params']['start_year_analysis']-hist_emissions_startyear)))[::-1]).expand_dims(Discount_factor=[discount_rate], Historical_startyear=[hist_emissions_startyear])
+                hist_emissions = self.emis_hist.sel(Time = np.arange(hist_emissions_startyear,
+                                                                     self.settings['params']['start_year_analysis']))
+                hist_emissions_discounted = (hist_emissions * ((1-discount_rate/100
+                                                                )**(1+np.arange(0, self.settings['params']['start_year_analysis']-hist_emissions_startyear
+                                                                                )))[::-1]).expand_dims(Discount_factor=[discount_rate],
+                                                                                                       Historical_startyear=[hist_emissions_startyear])
                 xrs.append(hist_emissions_discounted)
         self.historical_emissions_discounted = xr.merge(xrs)
 
@@ -168,7 +153,7 @@ class allocation_comb(object):
         Methods for Robiou et al. (2023), under review.
         '''
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
-        yearly_neg = self.xr_dataread.CO2_neg_globe.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
+        yearly_neg = self.CO2_neg.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
         yearly_pos = yearly_neg + yearly_netto
 
         app1_gdp = self.xr_dataread.sel(Time = self.all_future_years).GDP
@@ -186,7 +171,7 @@ class allocation_comb(object):
         Methods for Robiou et al. (2023), under review.
         '''
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
-        yearly_neg = self.xr_dataread.CO2_neg_globe.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
+        yearly_neg = self.CO2_neg.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
         yearly_pos = yearly_neg + yearly_netto
 
         app1_hdi = self.xr_dataread.sel(Time = self.all_future_years).HDIsh
@@ -204,7 +189,7 @@ class allocation_comb(object):
         Methods for Robiou et al. (2023), under review.
         '''
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
-        yearly_neg = self.xr_dataread.CO2_neg_globe.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
+        yearly_neg = self.CO2_neg.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
         yearly_pos = yearly_neg + yearly_netto
 
         pop2gdp = (self.xr_dataread.Population**2 / self.xr_dataread.GDP).sel(Time=self.all_future_years)
@@ -233,7 +218,7 @@ class allocation_comb(object):
         Methods for Robiou et al. (2023), under review.
         '''
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
-        yearly_neg = self.xr_dataread.CO2_neg_globe.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
+        yearly_neg = self.CO2_neg.sel(Time=self.all_future_years) # This should be hard-coded CO2_neg_globe
         yearly_pos = yearly_neg + yearly_netto
 
         self.gf = self.emis_hist.sel(Time=self.settings['params']['start_year_analysis']) / self.emis_hist.sel(Time=self.settings['params']['start_year_analysis'], Region='EARTH') * yearly_netto
@@ -320,9 +305,9 @@ class allocation_comb(object):
     # =========================================================== #
     # =========================================================== #
 
-    def determine_tempoutcomes(self):
-        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'ECPC', 'PC']
-        percs = (self.xr_combs[rules] / self.xr_combs.sel(Region=self.countries_iso).GF.sum(dim='Region')).mean(dim='Temperature')
+    def determine_tempoutcomes_regression(self):
+        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'PC']
+        percs = (self.xr_combs[rules] / self.xr_combs.sel(Region=self.countries_iso).GF.sum(dim='Region'))
         condition = percs < 0
         percs = percs.where(~condition, 1e-9)
         ndc_globalversion_raw = self.xr_dataread.GHG_ndc_excl_CR/percs
@@ -336,10 +321,30 @@ class allocation_comb(object):
             else:
                 xr_temps +=  ndc_globalversion**n*self.coef_ghg_2030[self.settings['params']['polynomial_fit_2030relation']-n]
         self.xr_temps = xr_temps
-        
+
+    # =========================================================== #
+    # =========================================================== #
+
+    def determine_tempoutcomes_discrete(self):
+        rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'PC']
+        results = self.xr_combs[rules]
+        xr_eval = results.where(results > self.xr_dataread.GHG_ndc_excl_CR.sel(Conditionality='unconditional',
+                                                                               Hot_air='include').mean(dim='Ambition'), np.nan)
+        xr_eval = xr_eval.where(xr_eval > -1e9, other=0)
+        xr_eval = xr_eval.where(xr_eval == 0, other=1)
+        xr_eval = xr_eval.sum(dim='Category')
+
+        # Change # categories that NDC falls in line with to the temperature implication it has
+        xr_eval = xr_eval.where(xr_eval != 4, other=1.01)
+        xr_eval = xr_eval.where(xr_eval != 3, other=2.01)
+        xr_eval = xr_eval.where(xr_eval != 2, other=3.01)
+        xr_eval = xr_eval.where(xr_eval != 1, other=4.01)
+        xr_eval = xr_eval.where(xr_eval != 0, other=5.01)
+        self.xr_temps = xr_eval
+                
     # =========================================================== #
     # =========================================================== #
 
     def save(self):        
-        self.xr_combs.to_netcdf(self.savepath+'xr_comb'+self.gas_indicator+'_'+self.lulucf_indicator+'.nc', format='NETCDF4')
-        self.xr_temps.to_netcdf(self.savepath+'xr_combtemps'+self.gas_indicator+'_'+self.lulucf_indicator+'.nc', format='NETCDF4')
+        self.xr_combs.to_netcdf(self.savepath+'xr_comb.nc', format='NETCDF4')
+        self.xr_temps.to_netcdf(self.savepath+'xr_combtemps.nc', format='NETCDF4')
