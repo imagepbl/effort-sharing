@@ -449,9 +449,9 @@ class datareading(object):
         xr_both = xr.merge([self.xr_ar6, self.xr_ar6_landuse])
         xr_ar6_nozeros = xr_both.where(xr_both > -1e9, np.nan).where(xr_both != 0, np.nan)
         xr_averages = []
-        for i in range(4):
-            C = [['C1', 'C2'], ['C3'], ['C6'], ['C7']][i]
-            Cname = ['C1+C2', 'C3', 'C6', 'C7'][i]
+        for i in range(6):
+            C = [['C1'], ['C1', 'C2'], ['C2'], ['C3'], ['C6'], ['C7']][i]
+            Cname = ['C1', 'C1+C2', 'C2', 'C3', 'C6', 'C7'][i]
             C_cat = np.intersect1d(np.array(xr_ar6_nozeros.ModelScenario),
                                    np.array(df_ar6_meta[df_ar6_meta.Category.isin(C)].ModelScenario))
             xr_averages.append(xr_ar6_nozeros.sel(ModelScenario=C_cat).mean(dim='ModelScenario').expand_dims(Category=[Cname]))
@@ -460,6 +460,8 @@ class datareading(object):
                                   (xr_av.Value.sel(Variable='Emissions|CO2') - xr_av.CO2_LULUCF).to_dataset(name="CO2_excl_C").drop_vars('Variable'),
                                   (xr_av.Value.sel(Variable=['Carbon Sequestration|CCS', 'Carbon Sequestration|Direct Air Capture']).sum(dim='Variable', skipna=False)).to_dataset(name="CO2_neg_C")
         ])
+        self.xr_ar6_C = self.xr_ar6_C.reindex(Time = np.arange(2000, 2101, 10))
+        self.xr_ar6_C = self.xr_ar6_C.reindex(Time = np.arange(2000, 2101))
 
     # =========================================================== #
     # =========================================================== #

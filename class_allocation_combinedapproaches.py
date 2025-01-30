@@ -328,19 +328,29 @@ class allocation_comb(object):
     def determine_tempoutcomes_discrete(self):
         rules = ['Approach1_gdp', 'Approach1_hdi', 'Approach2', 'Approach2t', 'GF', 'PC']
         results = self.xr_combs[rules]
-        xr_eval = results.where(results > self.xr_dataread.GHG_ndc_excl_CR.sel(Conditionality='unconditional',
+        xr_eval_raw = results.where(results > self.xr_dataread.GHG_ndc_excl_CR.sel(Conditionality='unconditional',
                                                                                Hot_air='include').mean(dim='Ambition'), np.nan)
-        xr_eval = xr_eval.where(xr_eval > -1e9, other=0)
-        xr_eval = xr_eval.where(xr_eval == 0, other=1)
-        xr_eval = xr_eval.sum(dim='Category')
+        xr_eval_raw = xr_eval_raw.where(xr_eval_raw > -1e9, other=0)
+        xr_eval_raw = xr_eval_raw.where(xr_eval_raw == 0, other=1)
 
-        # Change # categories that NDC falls in line with to the temperature implication it has
+        # Now without C1+C2:
+        xr_eval = xr_eval_raw.sel(Category=['C1', 'C2', 'C3', 'C6', 'C7']).sum(dim='Category')
+        xr_eval = xr_eval.where(xr_eval != 5, other=0.01)
         xr_eval = xr_eval.where(xr_eval != 4, other=1.01)
         xr_eval = xr_eval.where(xr_eval != 3, other=2.01)
         xr_eval = xr_eval.where(xr_eval != 2, other=3.01)
         xr_eval = xr_eval.where(xr_eval != 1, other=4.01)
         xr_eval = xr_eval.where(xr_eval != 0, other=5.01)
         self.xr_temps = xr_eval
+
+        # And with C1+C2:
+        xr_eval = xr_eval_raw.sel(Category=['C1+C2', 'C3', 'C6', 'C7']).sum(dim='Category')
+        xr_eval = xr_eval.where(xr_eval != 4, other=1.01)
+        xr_eval = xr_eval.where(xr_eval != 3, other=2.01)
+        xr_eval = xr_eval.where(xr_eval != 2, other=3.01)
+        xr_eval = xr_eval.where(xr_eval != 1, other=4.01)
+        xr_eval = xr_eval.where(xr_eval != 0, other=5.01)
+        self.xr_temps_c12 = xr_eval
                 
     # =========================================================== #
     # =========================================================== #
@@ -348,3 +358,4 @@ class allocation_comb(object):
     def save(self):        
         self.xr_combs.to_netcdf(self.savepath+'xr_comb.nc', format='NETCDF4')
         self.xr_temps.to_netcdf(self.savepath+'xr_combtemps.nc', format='NETCDF4')
+        self.xr_temps_c12.to_netcdf(self.savepath+'xr_combtemps_c12.nc', format='NETCDF4')
