@@ -463,6 +463,61 @@ class datareading(object):
         self.xr_ar6_C = self.xr_ar6_C.reindex(Time = np.arange(2000, 2101, 10))
         self.xr_ar6_C = self.xr_ar6_C.reindex(Time = np.arange(2000, 2101))
 
+        # Bunker subtraction
+        df_elevate_bunkers = pd.read_csv("X:/user/dekkerm/Data/Bunkers/elevate-internal_snapshot_1739887620.csv")[:-1]
+        mods = np.array(df_elevate_bunkers.Model)
+        scens = np.array(df_elevate_bunkers.Scenario)
+        modscens = np.array([mods[i]+'|'+scens[i] for i in range(len(scens))])
+        df_elevate_bunkers['ModelScenario'] = modscens
+        df_elevate_bunkers = df_elevate_bunkers.drop(['Model', 'Scenario', 'Region', 'Unit'], axis=1)
+        dummy = df_elevate_bunkers.melt(id_vars=["ModelScenario", "Variable"], var_name="Time", value_name="Value")
+        dummy['Time'] = np.array(dummy['Time'].astype(int))
+        dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
+        xr_elevate_bunkers = xr.Dataset.from_dataframe(dummy)
+        xr_elevate_bunkers = xr_elevate_bunkers.reindex({'Time': np.arange(2010, 2101, 10)})
+
+        modscens = np.array(xr_elevate_bunkers.ModelScenario)
+        categories = []
+        for ms in modscens:
+            if xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value < 1.5:
+                categories.append('C1')
+            elif xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value < 1.7:
+                categories.append('C2')
+            elif xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value < 2.0:
+                categories.append('C3')
+            elif xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value < 3.0:
+                categories.append('C6')
+            elif xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value < 4.0:
+                categories.append('C7')
+            elif xr_elevate_bunkers.sel(ModelScenario = ms, Variable = 'AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').max().Value > 4.0:
+                categories.append('C8')
+            else:
+                categories.append('C9') # Fictuous category to show that for these mds, there is no temperature assessment
+        categories = np.array(categories)
+
+        xrs = []
+        for temp in [1.7, 2.0, 3.0]:
+            if temp == 1.7: cat = 'C2'
+            elif temp == 2.0: cat = 'C3'
+            elif temp == 3.0: cat = 'C6'
+            xrs.append((xr_elevate_bunkers.sel(Variable = 'Emissions|CO2|Energy|Demand|Bunkers', ModelScenario=modscens[categories==cat]).median(dim='ModelScenario')).expand_dims(Temperature=[temp]))
+        xr_all = xr.concat(xrs, dim='Temperature')
+        xr_all = xr_all.reindex(Temperature=[1.5, 1.6, 1.7, 2.0, 3.0, 4.0, 4.5])
+
+        # Extrapolation
+        vals = xr_all.loc[dict(Temperature=3.0)]-xr_all.loc[dict(Temperature=1.7)]
+        vals = vals.where(vals>0, 0)
+        xr_all.loc[dict(Temperature=1.5)] = xr_all.loc[dict(Temperature=1.7)]-vals*(0.2/1.3)
+        xr_all.loc[dict(Temperature=1.6)] = xr_all.loc[dict(Temperature=1.7)]-vals*(0.1/1.3)
+        xr_all.loc[dict(Temperature=4.0)] = xr_all.loc[dict(Temperature=3.0)]+vals*(1.0/1.3)
+        xr_all.loc[dict(Temperature=4.5)] = xr_all.loc[dict(Temperature=3.0)]+vals*(1.5/1.3)
+
+        xr_all = xr_all.rename({'Temperature': "Category"}).drop_vars('Variable').rename({"Value": "CO2_bunkers_C"})
+
+        # Rename ticks of temperature
+        xr_all = xr_all.assign_coords(Category=['C1', 'C1+C2', 'C2', 'C3', 'C6', 'C7', 'C8'])
+        self.xr_ar6_C_bunkers = xr_all
+
     # =========================================================== #
     # =========================================================== #
 
@@ -1113,7 +1168,8 @@ class datareading(object):
                              self.xr_ndc,
                              self.xr_ndc_excl,
                              self.xr_ndc_CR,
-                             self.xr_ar6_C])
+                             self.xr_ar6_C,
+                             self.xr_ar6_C_bunkers])
         xr_total = xr_total.reindex(Region = self.regions_iso)
         xr_total = xr_total.reindex(Time = np.arange(1850, 2101))
         xr_total['GHG_globe'] = xr_total['GHG_globe'].astype(float)
@@ -1214,6 +1270,7 @@ class datareading(object):
                 "GHG_excl_C": {"zlib": True, "complevel": 9},
                 "CO2_excl_C": {"zlib": True, "complevel": 9},
                 "CO2_neg_C": {"zlib": True, "complevel": 9},
+                "CO2_bunkers_C": {"zlib": True, "complevel": 9},
 
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},                      

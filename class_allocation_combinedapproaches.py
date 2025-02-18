@@ -45,7 +45,7 @@ class allocation_comb(object):
 
         # Set emission variables -> There is a single default because of the link to Robiou paper
         self.emis_hist = self.xr_dataread.GHG_hist_excl
-        self.emis_fut = self.xr_dataread.GHG_excl_C
+        self.emis_fut = self.xr_dataread.GHG_excl_C - self.xr_dataread.CO2_bunkers_C
         self.varhist = 'GHG_hist_excl'
         self.CO2_neg = self.xr_dataread.CO2_neg_C
         self.rbw = xr.open_dataset(self.savepath + "xr_rbw_GHG_excl.nc").load()
