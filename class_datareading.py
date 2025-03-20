@@ -169,16 +169,13 @@ class datareading(object):
         reg[reg == 'OWID_WRL'] = 'EARTH'
         df_pop.Region = reg
         self.xr_unp = xr.Dataset.from_dataframe(df_pop[df_pop.Region.isin(list(self.countries_iso)+['EARTH'])].set_index(['Region', 'Time'])).sel(Time = np.arange(1850, 2000))/1e6
+        self.xr_unp_long = xr.Dataset.from_dataframe(df_pop[df_pop.Region.isin(list(self.countries_iso)+['EARTH'])].set_index(['Region', 'Time']))/1e6
 
     # =========================================================== #
     # =========================================================== #
 
     def read_hdi(self):
         print('- Read Human Development Index data')
-        xr_interpop = xr.merge([self.xr_ssp.Population, self.xr_unp.Population])
-        xr_interpop = xr_interpop.reindex(Time = np.arange(1850, 2101))
-        xr_interpop = xr_interpop.interpolate_na(dim="Time", method="linear")
-
         df_regions = pd.read_excel(self.settings['paths']['data']['external'] + "AR6_regionclasses.xlsx")
         df_regions = df_regions.sort_values(by=['name'])
         df_regions = df_regions.sort_index()
@@ -297,7 +294,7 @@ class datareading(object):
             else:
                 hdi_values[r_i] = np.nan
             try:
-                pop = float(xr_interpop.sel(Region=r, Time=2019, Scenario='SSP2').Population)
+                pop = float(self.xr_unp_long.sel(Region=r, Time=2019).Population)
             except:
                 pop = np.nan
             hdi_sh_values[r_i] = hdi_values[r_i]*pop
