@@ -36,7 +36,18 @@ conda env update --name K:\environments\effortsharing_env --file K:\<FILEPATH>\e
 #### pip
 
 ```shell
-pip install -r /path/to/requirements_pip.txt
+# First install the requirements
+pip install -r /path/to/requirements.txt
+
+# Then install the effortsharing package in editable mode
+pip install -e .
+
+# To update the requirements file for full reproducibility
+pip freeze > requirements-lock.txt
+
+# To install from the lock file
+pip install -r /path/to/requirements.txt
+pip install -e .
 ```
 
 ### Setting up required folder structure
