@@ -7,14 +7,13 @@
 # Put in packages that we need
 # =========================================================== #
 
+import json
 from pathlib import Path
-import yaml
+
 import numpy as np
-from scipy.signal import savgol_filter
-from scipy.optimize import curve_fit
 import pandas as pd
 import xarray as xr
-import json
+import yaml
 
 # =========================================================== #
 # CLASS OBJECT
