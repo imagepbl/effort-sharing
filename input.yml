@@ -8,6 +8,7 @@ paths:
     internal: Data/
     datadrive: K:/Data/Data_effortsharing/DataUpdate_ongoing/
     export: K:/Data/Data_effortsharing/EffortSharingExports/
+    lambollrepo: K:/Code/AR6CarbonBudgetCalc/
 
 # ============================================== #
 # PARAMS
