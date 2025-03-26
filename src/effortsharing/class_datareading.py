@@ -70,6 +70,7 @@ class datareading(object):
             + str(self.settings["params"]["start_year_analysis"])
             + "/"
         )
+        Path(self.savepath).mkdir(exist_ok=True, parents=True)
         self.recent_increment = int(
             np.floor(self.settings["params"]["start_year_analysis"] / 5) * 5
         )
@@ -1836,7 +1837,7 @@ class datareading(object):
                                     ghg_data[cty_i, cond_i, hot_i, amb_i] = ghg_values
                                     # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                         except:
-                            continue
+                            raise
         # Now also for EU
         for cond_i, cond in enumerate(["conditional", "range", "unconditional"]):
             for hot_i, hot in enumerate(["include", "exclude"]):
@@ -1865,7 +1866,7 @@ class datareading(object):
                                 ghg_data[cty_i + 1, cond_i, hot_i, amb_i] = ghg_values
                                 # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                     except:
-                        continue
+                        raise
         coords = {
             "Region": list(self.countries_iso) + ["EU"],
             "Conditionality": ["conditional", "range", "unconditional"],
@@ -1889,7 +1890,7 @@ class datareading(object):
         print("- Reading NDC data")
         df_ndc_raw = pd.read_excel(
             self.settings["paths"]["data"]["external"]
-            + "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
+            + "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
             sheet_name="Reduction All_GHG_incl",
             header=[0, 1],
         )
@@ -1960,7 +1961,7 @@ class datareading(object):
         # Now for GHG excluding LULUCF
         df_ndc_raw = pd.read_excel(
             self.settings["paths"]["data"]["external"]
-            + "NDC/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
+            + "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
             sheet_name="Reduction All_GHG_excl",
             header=[0, 1],
         )
@@ -2044,7 +2045,7 @@ class datareading(object):
                 self.xr_base,
                 self.xr_ndc,
                 self.xr_ndc_excl,
-                self.xr_ndc_CR,
+                # self.xr_ndc_CR,
                 self.xr_ar6_C,
                 self.xr_ar6_C_bunkers,
             ]
@@ -2142,7 +2143,7 @@ class datareading(object):
                             "GHG_ndc_inv",
                             "GHG_ndc_excl",
                             "GHG_ndc_excl_inv",
-                            "GHG_ndc_excl_CR",
+                            # "GHG_ndc_excl_CR",
                         ]
                     ]
                     .groupby(group_coord)
@@ -2236,7 +2237,7 @@ class datareading(object):
                 "CO2_bunkers_C": {"zlib": True, "complevel": 9},
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
@@ -2461,7 +2462,7 @@ class datareading(object):
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl_inv": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl_red": {"zlib": True, "complevel": 9},
-                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
@@ -2566,7 +2567,7 @@ class datareading(object):
                 "CO2_base_excl": {"zlib": True, "complevel": 9},
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
