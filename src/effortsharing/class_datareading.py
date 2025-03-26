@@ -1812,7 +1812,7 @@ class datareading(object):
                 for hot_i, hot in enumerate(["include", "exclude"]):
                     for amb_i, amb in enumerate(["low", "high"]):
                         params = self.settings["params"]
-                        path = f"/home/peter/pbl/effort-sharing/data/input/{cty.lower()}_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
+                        path = f"/home/peter/pbl/effort-sharing/data/input/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/{cty.lower()}_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                         try:
                             with open(path, "r") as file:
                                 json_data = json.load(file)
@@ -1837,13 +1837,13 @@ class datareading(object):
                                     ghg_data[cty_i, cond_i, hot_i, amb_i] = ghg_values
                                     # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                         except:
-                            raise
+                            continue
         # Now also for EU
         for cond_i, cond in enumerate(["conditional", "range", "unconditional"]):
             for hot_i, hot in enumerate(["include", "exclude"]):
                 for amb_i, amb in enumerate(["low", "high"]):
                     params = self.settings["params"]
-                    path = f"/home/peter/pbl/effort-sharing/data/input/groupeu27_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
+                    path = f"/home/peter/pbl/effort-sharing/data/input/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/regions/groupeu27_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                     try:
                         with open(path, "r") as file:
                             json_data = json.load(file)
@@ -1866,7 +1866,7 @@ class datareading(object):
                                 ghg_data[cty_i + 1, cond_i, hot_i, amb_i] = ghg_values
                                 # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                     except:
-                        raise
+                        continue
         coords = {
             "Region": list(self.countries_iso) + ["EU"],
             "Conditionality": ["conditional", "range", "unconditional"],
@@ -2045,7 +2045,7 @@ class datareading(object):
                 self.xr_base,
                 self.xr_ndc,
                 self.xr_ndc_excl,
-                # self.xr_ndc_CR,
+                self.xr_ndc_CR,
                 self.xr_ar6_C,
                 self.xr_ar6_C_bunkers,
             ]
@@ -2237,7 +2237,7 @@ class datareading(object):
                 "CO2_bunkers_C": {"zlib": True, "complevel": 9},
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
@@ -2462,7 +2462,7 @@ class datareading(object):
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl_inv": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl_red": {"zlib": True, "complevel": 9},
-                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
@@ -2567,7 +2567,7 @@ class datareading(object):
                 "CO2_base_excl": {"zlib": True, "complevel": 9},
                 "GHG_ndc": {"zlib": True, "complevel": 9},
                 "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-                # "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+                "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
             },
             format="NETCDF4",
             engine="netcdf4",
