@@ -68,7 +68,10 @@ class datareading(object):
     def read_ssps(self):
         print('- Reading GDP and population data from SSPs')
         for i in range(6):
-            df_ssp = pd.read_excel(self.settings['paths']['data']['external']+"SSPs/SSPs_v2023.xlsx", sheet_name='data')
+            df_ssp = pd.read_excel(
+                self.settings["paths"]["data"]["external"] + "SSPs_v2023.xlsx",
+                sheet_name="data",
+            )
             if i >= 1: df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023'])) & (df_ssp.Scenario == 'Historical Reference')]
             else: df_ssp = df_ssp[(df_ssp.Model.isin(['OECD ENV-Growth 2023', 'IIASA-WiC POP 2023'])) & (df_ssp.Scenario.isin(['SSP1', 'SSP2', 'SSP3', 'SSP4', 'SSP5']))]
             region_full = np.array(df_ssp.Region)
@@ -164,7 +167,13 @@ class datareading(object):
 
     def read_undata(self):
         print('- Reading UN population data and gapminder, processed by OWID (for past population)')
-        df_pop = pd.read_csv(self.settings['paths']['data']['external']+"UN Population/population_HYDE_UNP_Gapminder.csv")[['Code', 'Year', 'Population (historical)']].rename({'Code': "Region", 'Population (historical)': 'Population', 'Year': "Time"}, axis=1)
+        df_pop = pd.read_csv(
+            self.settings["paths"]["data"]["external"]
+            + "population_HYDE_UNP_Gapminder.csv"
+        )[["Code", "Year", "Population (historical)"]].rename(
+            {"Code": "Region", "Population (historical)": "Population", "Year": "Time"},
+            axis=1,
+        )
         reg = np.array(df_pop.Region)
         reg[reg == 'OWID_WRL'] = 'EARTH'
         df_pop.Region = reg
@@ -180,7 +189,11 @@ class datareading(object):
         df_regions = df_regions.sort_values(by=['name'])
         df_regions = df_regions.sort_index()
 
-        self.df_hdi_raw = pd.read_excel(self.settings['paths']['data']['external'] + "HDI" + "/HDR21-22_Statistical_Annex_HDI_Table.xlsx", sheet_name='Rawdata')
+        self.df_hdi_raw = pd.read_excel(
+            self.settings["paths"]["data"]["external"]
+            + "/HDR21-22_Statistical_Annex_HDI_Table.xlsx",
+            sheet_name="Rawdata",
+        )
         hdi_countries_raw = np.array(self.df_hdi_raw.Country)
         hdi_values_raw = np.array(self.df_hdi_raw.HDI).astype(str)
         hdi_values_raw[hdi_values_raw == ".."] = "nan"
@@ -321,9 +334,15 @@ class datareading(object):
     # =========================================================== #
 
     def read_historicalemis_jones(self):
-        print('- Reading historical emissions (jones)') # No harmonization with the KEV anymore, but it's also much closer now
-        xr_primap2 = xr.open_dataset("X:/user/dekkerm/Data/PRIMAP/Guetschow_et_al_2024-PRIMAP-hist_v2.5.1_final_no_rounding_27-Feb-2024.nc")
-        df_nwc = pd.read_csv('X:/user/dekkerm/Data/NationalWarningContributions/EMISSIONS_ANNUAL_1830-2022.csv')
+        print(
+            "- Reading historical emissions (jones)"
+        )  # No harmonization with the KEV anymore, but it's also much closer now
+        xr_primap2 = xr.open_dataset(
+            "/home/peter/pbl/effort-sharing/data/input/Guetschow_et_al_2024-PRIMAP-hist_v2.5.1_final_no_rounding_27-Feb-2024.nc"
+        )
+        df_nwc = pd.read_csv(
+            "/home/peter/pbl/effort-sharing/data/input/EMISSIONS_ANNUAL_1830-2022.csv"
+        )
         xr_nwc = xr.Dataset.from_dataframe(df_nwc.drop(columns=['CNTR_NAME', 'Unit']).set_index(['ISO3', 'Gas', 'Component', 'Year']))
         regs = np.array(xr_nwc.ISO3)
         regs[regs == 'GLOBAL'] = 'EARTH'
@@ -352,7 +371,14 @@ class datareading(object):
         self.xr_ghg_agri = xr_primap_agri/1e6
 
         # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
-        df_edgar = pd.read_excel('X:/user/dekkerm/Data/EDGAR/EDGARv8.0_FT2022_GHG_booklet_2023.xlsx', sheet_name='GHG_totals_by_country').drop(['Country'], axis=1).set_index('EDGAR Country Code')
+        df_edgar = (
+            pd.read_excel(
+                "/home/peter/pbl/effort-sharing/data/input/EDGARv8.0_FT2022_GHG_booklet_2023.xlsx",
+                sheet_name="GHG_totals_by_country",
+            )
+            .drop(["Country"], axis=1)
+            .set_index("EDGAR Country Code")
+        )
         df_edgar.columns = df_edgar.columns.astype(int)
 
         # drop second-to-last row
@@ -371,7 +397,10 @@ class datareading(object):
         self.xr_primap = self.xr_primap.assign_coords(time=self.xr_primap.time.dt.year)
 
         # Add EU (this is required for the NDC data reading)
-        df = pd.read_excel("X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name = "Country groups")
+        df = pd.read_excel(
+            "/home/peter/pbl/effort-sharing/data/input/UNFCCC_Parties_Groups_noeu.xlsx",
+            sheet_name="Country groups",
+        )
         countries_iso = np.array(df["Country ISO Code"])
         group_eu = countries_iso[np.array(df["EU"]) == 1]
         self.xr_hist.GHG_hist.loc[dict(Region='EU')] = self.xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
@@ -381,7 +410,10 @@ class datareading(object):
 
     def read_ar6(self):
         print('- Read AR6 data')
-        df_ar6raw = pd.read_csv(self.settings['paths']['data']['external']+"IPCC/AR6_Scenarios_Database_World_v1.1.csv")
+        df_ar6raw = pd.read_csv(
+            self.settings["paths"]["data"]["external"]
+            + "AR6_Scenarios_Database_World_v1.1.csv"
+        )
         df_ar6 = df_ar6raw[df_ar6raw.Variable.isin(['Emissions|CO2',
                                                     'Emissions|CO2|AFOLU',
                                                     'Emissions|Kyoto Gases',
@@ -410,8 +442,11 @@ class datareading(object):
         idx = (df_ar6[(df_ar6.Variable == 'Emissions|CH4') & (df_ar6['2100'] > 1e5)]).index # Removing erroneous CH4 scenarios
         df_ar6 = df_ar6[~df_ar6.index.isin(idx)]
         df_ar6 = df_ar6.reset_index(drop=True)
-        df_ar6_meta = pd.read_excel(self.settings['paths']['data']['external']+"IPCC/AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx",
-                                    sheet_name='meta_Ch3vetted_withclimate')
+        df_ar6_meta = pd.read_excel(
+            self.settings["paths"]["data"]["external"]
+            + "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx",
+            sheet_name="meta_Ch3vetted_withclimate",
+        )
         mods = np.array(df_ar6_meta.Model)
         scens = np.array(df_ar6_meta.Scenario)
         modscens_meta = np.array([mods[i]+'|'+scens[i] for i in range(len(scens))])
@@ -461,7 +496,9 @@ class datareading(object):
         self.xr_ar6_C = self.xr_ar6_C.reindex(Time = np.arange(2000, 2101))
 
         # Bunker subtraction
-        df_elevate_bunkers = pd.read_csv("X:/user/dekkerm/Data/Bunkers/elevate-internal_snapshot_1739887620.csv")[:-1]
+        df_elevate_bunkers = pd.read_csv(
+            "/home/peter/pbl/effort-sharing/data/input/elevate-internal_snapshot_1739887620.csv"
+        )[:-1]
         mods = np.array(df_elevate_bunkers.Model)
         scens = np.array(df_elevate_bunkers.Scenario)
         modscens = np.array([mods[i]+'|'+scens[i] for i in range(len(scens))])
@@ -520,7 +557,9 @@ class datareading(object):
 
     def relation_budget_nonco2(self):
         print('- Get relationship between CO2 budgets and non-co2 reduction in 2050')
-        df_nonco2 = pd.read_excel("X:/user/dekkerm/Data/Budgets_Rogelj/NonCO2.xlsx", sheet_name='Sheet1')
+        df_nonco2 = pd.read_excel(
+            "/home/peter/pbl/effort-sharing/data/input/NonCO2.xlsx", sheet_name="Sheet1"
+        )
         df_nonco2 = df_nonco2[['Temperature', 'Reduction', 'Total']]
         dummy = df_nonco2.rename(columns={'Total': "EffectOnRCB"})
         dummy = dummy.rename(columns={'Reduction': "NonCO2red"})
@@ -636,7 +675,9 @@ class datareading(object):
     def determine_global_budgets(self):
         print('- Get global CO2 budgets')
         # CO2 budgets from Forster
-        df_budgets = pd.read_csv("X:/user/dekkerm/Data/Budgets_Forster2023/ClimateIndicator-data-ed37002/data/carbon_budget/update_MAGICC_and_scenarios-budget.csv") # Now without the warming update in Forster, to link to IPCC AR6 
+        df_budgets = pd.read_csv(
+            "/home/peter/pbl/effort-sharing/data/input/update_MAGICC_and_scenarios-budget.csv"
+        )  # Now without the warming update in Forster, to link to IPCC AR6
         df_budgets = df_budgets[["dT_targets", "0.1", "0.17", "0.33", "0.5", "0.66", "0.83", '0.9']]
         dummy = df_budgets.melt(id_vars=["dT_targets"], var_name="Probability", value_name="Budget")
         ar = np.array(dummy['Probability'])
@@ -965,7 +1006,7 @@ class datareading(object):
                 for hot_i, hot in enumerate(['include', 'exclude']):
                     for amb_i, amb in enumerate(['low', 'high']):
                         params = self.settings['params']
-                        path = f'X:/user/dekkerm/Data/NDC/ClimateResource_{params["version_ndcs"]}/{cond}/{hot}/{cty.lower()}_ndc_{params["version_ndcs"]}_CR_{cond}_{hot}.json'
+                        path = f"/home/peter/pbl/effort-sharing/data/input/{cty.lower()}_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                         try:
                             with open(path, 'r') as file:
                                 json_data = json.load(file)
@@ -989,7 +1030,7 @@ class datareading(object):
             for hot_i, hot in enumerate(['include', 'exclude']):
                 for amb_i, amb in enumerate(['low', 'high']):
                     params = self.settings['params']
-                    path = f'X:/user/dekkerm/Data/NDC/ClimateResource_{params["version_ndcs"]}/{cond}/{hot}/regions/groupeu27_ndc_{params["version_ndcs"]}_CR_{cond}_{hot}.json'
+                    path = f"/home/peter/pbl/effort-sharing/data/input/groupeu27_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                     try:
                         with open(path, 'r') as file:
                             json_data = json.load(file)
@@ -1177,7 +1218,10 @@ class datareading(object):
 
     def add_country_groups(self):
         print('- Add country groups')
-        path_ctygroups = "X:/user/dekkerm/Data/" + "UNFCCC_Parties_Groups_noeu.xlsx"
+        path_ctygroups = (
+            "/home/peter/pbl/effort-sharing/data/input/"
+            + "UNFCCC_Parties_Groups_noeu.xlsx"
+        )
         df = pd.read_excel(path_ctygroups, sheet_name = "Country groups")
         countries_iso = np.array(df["Country ISO Code"])
         list_of_regions = list(np.array(self.regions_iso).copy())
