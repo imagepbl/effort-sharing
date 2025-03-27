@@ -34,7 +34,6 @@ class datareading(object):
         # Read in Input YAML file
         with open(self.current_dir / 'input.yml') as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        
 
         # Get dimension lists
         self.dim_temp = np.array(self.settings['dimension_ranges']['peak_temperature']).astype(float).round(2)
@@ -518,20 +517,103 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
-    def relation_budget_nonco2(self):
-        print('- Get relationship between CO2 budgets and non-co2 reduction in 2050')
-        df_nonco2 = pd.read_excel("X:/user/dekkerm/Data/Budgets_Rogelj/NonCO2.xlsx", sheet_name='Sheet1')
-        df_nonco2 = df_nonco2[['Temperature', 'Reduction', 'Total']]
-        dummy = df_nonco2.rename(columns={'Total': "EffectOnRCB"})
-        dummy = dummy.rename(columns={'Reduction': "NonCO2red"})
-        dummy = dummy.set_index(['Temperature', 'NonCO2red'])
-        xr_nonco2effects = xr.Dataset.from_dataframe(dummy)
-        xr_nonco2effects = xr_nonco2effects.reindex(NonCO2red = np.arange(0, 0.8001, 0.01).round(2))
-        xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="NonCO2red", method="linear")
-        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.dim_temp)+[2.5])
-        xr_nonco2effects = xr_nonco2effects.interpolate_na(dim="Temperature", method="linear")
-        xr_nonco2effects = xr_nonco2effects.reindex(Temperature = list(self.dim_temp))
-        self.xr_nonco2effects = xr_nonco2effects
+    def nonco2variation(self):
+        path_file = self.settings['paths']['data']['lambollrepo'] + "InputData/MAGICCAR6emWG3scen/" + "job-20211019-ar6-nonco2_Raw-GSAT-Non-CO2.csv"
+        df = pd.read_csv(path_file)
+        df = df[['model',
+                'scenario',
+                'Category',
+                'variable',
+                'permafrost',
+                'median peak warming (MAGICCv7.5.3)',
+                'p33 peak warming (MAGICCv7.5.3)',
+                'p67 peak warming (MAGICCv7.5.3)',
+                'median year of peak warming (MAGICCv7.5.3)',
+                'p33 year of peak warming (MAGICCv7.5.3)',
+                'p67 year of peak warming (MAGICCv7.5.3)',
+                ] + list(df.keys()[28:])]
+
+        for i in range(1995, 2101):
+            df.rename(columns={str(i)+"-01-01 00:00:00": str(i)}, inplace=True)
+        df.rename(columns={'variable': 'NonCO2WarmingQuantile',
+                        'permafrost' : 'Permafrost',
+                        "median peak warming (MAGICCv7.5.3)": "T(0.5)",
+                        "p33 peak warming (MAGICCv7.5.3)": "T(0.33)",
+                        "p67 peak warming (MAGICCv7.5.3)": "T(0.67)",
+                        "median year of peak warming (MAGICCv7.5.3)": "Y(0.50)",
+                        "p33 year of peak warming (MAGICCv7.5.3)": "Y(0.33)",
+                        "p67 year of peak warming (MAGICCv7.5.3)": "Y(0.67)"}, inplace=True)
+
+        # ModelScenario
+        modscen = []
+        for i in range(len(df)):
+            modscen.append(df.model[i] + '|' + df.scenario[i])
+        df['ModelScenario'] = np.array(modscen).astype(str)
+        df = df.drop(columns=['model', 'scenario'])
+
+        # Rename warming quantiles
+        arvar = np.array(df.NonCO2WarmingQuantile)
+        for i in ['10.0', '16.7', '33.0', '5.0', '50.0', '67.0', '83.3', '90.0', '95.0']:
+            arvar[arvar == 'AR6 climate diagnostics|Raw Surface Temperature (GSAT)|Non-CO2|MAGICCv7.5.3|'+i+'th Percentile'] = str(float(i)/100)
+        arvar = arvar.astype(float).round(2)
+        df.NonCO2WarmingQuantile = arvar
+
+        # Only consider excluding permafrost
+        df = df[df.Permafrost == False]
+        df = df.drop(columns=['Permafrost'])
+
+        # Xarray for time-varying data
+        df_dummy = df[['ModelScenario', 'NonCO2WarmingQuantile']+list(np.arange(1995, 2101).astype(str))].melt(id_vars=['ModelScenario', 'NonCO2WarmingQuantile'], var_name='Time', value_name='NonCO2warming')
+        df_dummy['Time'] = df_dummy['Time'].astype(int)
+        df_dummy = df_dummy.set_index(['ModelScenario', 'NonCO2WarmingQuantile', 'Time'])
+        xr_lamboll = xr.Dataset.from_dataframe(df_dummy)
+
+        # Xarray for peak warming years
+        df_peakyears = df[['ModelScenario', 'NonCO2WarmingQuantile', 'Y(0.50)', 'Y(0.33)', 'Y(0.67)']]
+        df_peakyears = df_peakyears.rename(columns={'Y(0.50)': 0.5,
+                                                    'Y(0.33)': 0.33,
+                                                    'Y(0.67)': 0.67})
+        df_peakyears = df_peakyears.melt(id_vars=['ModelScenario', 'NonCO2WarmingQuantile'], var_name='TCRE', value_name='PeakYear')
+        df_dummy = df_peakyears.set_index(['ModelScenario', 'NonCO2WarmingQuantile', 'TCRE'])
+        xr_peakyears = xr.Dataset.from_dataframe(df_dummy)
+
+        # Xarray for full peak warming
+        # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
+        df_peaktemps = df[['ModelScenario', 'T(0.5)', 'T(0.33)', 'T(0.67)']].drop_duplicates()
+        df_peaktemps = df_peaktemps.rename(columns={'T(0.5)': 0.5,
+                                                    'T(0.33)': 0.33,
+                                                    'T(0.67)': 0.67})
+        df_peaktemps = df_peaktemps.melt(id_vars=['ModelScenario'], var_name='TCRE', value_name='Temperature')
+        df_dummy = df_peaktemps.set_index(['ModelScenario', 'TCRE'])
+        xr_temperatures = xr.Dataset.from_dataframe(df_dummy)
+        xr_temperatures17 = (xr_temperatures.sel(TCRE=0.33) - 1*(xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))).drop_vars("TCRE").expand_dims({'TCRE': [0.17]})
+        xr_temperatures83 = (xr_temperatures.sel(TCRE=0.67) + 1*(xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))).drop_vars("TCRE").expand_dims({'TCRE': [0.83]})
+        xr_temperatures = xr.merge([xr_temperatures, xr_temperatures17, xr_temperatures83])
+
+        # Peak warming -> at the peak year.
+        xr_peaknonco2warming_all = xr_lamboll.sel(Time = xr_peakyears.PeakYear).rename({'NonCO2warming': 'PeakWarming'})
+
+        # Now we assume that nonco2 warming quantiles are the same as the peak warming quantiles
+        # That is: climate sensitivity for the full picture (TCRE) is directly related to climate sensitivity to only non-CO2
+        # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
+        # relation nonco2 peak warming to TCRE is not trivial, because the peakyears are also dependent on TCRE!
+        # However, as it turns out, higher TCRE implies in practically all cases a higher nonCO2 warming at the peak year
+        xr_peaknonco2warming_all = xr_peaknonco2warming_all.drop_vars('Time')
+        peak50 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.5, TCRE=[0.5]).drop_vars("NonCO2WarmingQuantile")
+        peak33 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=[0.33]).drop_vars("NonCO2WarmingQuantile")
+        peak67 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=[0.67]).drop_vars("NonCO2WarmingQuantile")
+        peak17 = (xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33)-1*(xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)-xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33))).drop_vars("NonCO2WarmingQuantile").drop_vars("TCRE").expand_dims({'TCRE': [0.17]})
+        peak83 = (xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)+1*(xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)-xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33))).drop_vars("NonCO2WarmingQuantile").drop_vars("TCRE").expand_dims({'TCRE': [0.83]})
+        xr_peaknonco2warming = xr.merge([peak50, peak33, peak67, peak17, peak83])
+
+        # Invert axis for Risk coordinate
+        xr_peaknonco2warming = xr_peaknonco2warming.assign_coords(TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]).rename({'TCRE': "Risk"})
+        xr_temperatures = xr_temperatures.assign_coords(TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]).rename({'TCRE': "Risk"})
+
+        # Save for later use
+        self.xr_temperatures = xr_temperatures
+        self.xr_nonco2warmings = xr_peaknonco2warming
+        self.xr_nonco2warming_wrt_start = xr_peaknonco2warming - xr_lamboll.rename({'NonCO2WarmingQuantile': 'Risk'}).sel(Time=self.settings['params']['start_year_analysis']).NonCO2warming
 
     # =========================================================== #
     # =========================================================== #
@@ -555,9 +637,8 @@ class datareading(object):
         xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=self.settings['params']['start_year_analysis'])
         xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
 
-        def ms_temp(T):
-            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
-            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.05) & (peaktemp > T-0.05))[0]]
+        def ms_temp(T, R):
+            return self.xr_temperatures.ModelScenario[np.where(np.abs(T-self.xr_temperatures.Temperature.sel(Risk=R)) < 0.2)[0]].values
 
         def check_monotomy(traj):
             vec = [traj[0]]
@@ -576,42 +657,57 @@ class datareading(object):
         xr_reductions = (xr_nonco2_raw.sel(Time=2040)-xr_nonco2_raw_start) / xr_nonco2_raw_start
 
         temps = []
+        risks = []
         times = []
         nonco2 = []
         vals = []
+        timings = []
         for temp_i, temp in enumerate(self.dim_temp):
-            ms = ms_temp(temp)
-            if len(ms) == 0:
-                for n_i, n in enumerate(self.dim_nonco2):
-                    times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
-                    vals = vals+[np.nan]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
-                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
-                    temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
-            else:
-                reductions = xr_reductions.sel(ModelScenario=ms)
-                reds = reductions.Value.quantile(self.dim_nonco2[::-1])
-                for n_i, n in enumerate(self.dim_nonco2):
-                    red = reds[n_i]
-                    ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
-                    trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
-                    trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
+            for p_i, p in enumerate(self.dim_prob):
+                ms1 = ms_temp(temp, p)
+                for timing_i, timing in enumerate(self.dim_timing):
+                    if timing == 'Immediate' or temp in [1.5, 1.56, 1.6] and timing == 'Delayed':
+                        mslist = self.ms_immediate
+                    else:
+                        mslist = self.ms_delayed
+                    ms2 = np.intersect1d(ms1, mslist)
+                    if len(ms2) == 0:
+                        for n_i, n in enumerate(self.dim_nonco2):
+                            times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
+                            vals = vals+[np.nan]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            risks = risks + [p]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            timings = timings + [timing]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                    else:
+                        reductions = xr_reductions.sel(ModelScenario=np.intersect1d(xr_reductions.ModelScenario, ms2))
+                        reds = reductions.Value.quantile(self.dim_nonco2[::-1])
+                        for n_i, n in enumerate(self.dim_nonco2):
+                            red = reds[n_i]
+                            ms2 = reductions.ModelScenario[np.where(np.abs(reductions.Value - red) < 0.1)]
+                            trajs = xr_nonco2_raw.sel(ModelScenario = ms2, Time=np.arange(self.settings['params']['start_year_analysis'], 2101))
+                            trajectory_mean = rescale(trajs.Value.mean(dim='ModelScenario'))
 
-                    # Harmonize reduction
-                    red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
-                    traj2 = -(1-xr_comp)*(red_traj-red)*xr_nonco2_raw_start.mean().Value+trajectory_mean # 1.5*red has been removed -> check effect
-                    trajectory_mean2 = check_monotomy(np.array(traj2))
-                    times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
-                    vals = vals+list(trajectory_mean2)
-                    nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
-                    temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            # Harmonize reduction
+                            red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
+                            traj2 = -(1-xr_comp)*(red_traj-red)*xr_nonco2_raw_start.mean().Value+trajectory_mean # 1.5*red has been removed -> check effect
+                            trajectory_mean2 = check_monotomy(np.array(traj2))
+                            times = times + list(np.arange(self.settings['params']['start_year_analysis'], 2101))
+                            vals = vals+list(trajectory_mean2)
+                            nonco2 = nonco2+[n]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            temps = temps + [temp]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            risks = risks + [p]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
+                            timings = timings + [timing]*len(list(np.arange(self.settings['params']['start_year_analysis'], 2101)))
 
         dict_nonco2 = {}
         dict_nonco2['Time'] = times
         dict_nonco2['NonCO2red'] = nonco2
         dict_nonco2['NonCO2_globe'] = vals
         dict_nonco2['Temperature'] = temps
+        dict_nonco2['Risk'] = risks
+        dict_nonco2['Timing'] = timings
         df_nonco2 = pd.DataFrame(dict_nonco2)
-        dummy = df_nonco2.set_index(["NonCO2red", "Time", 'Temperature'])
+        dummy = df_nonco2.set_index(["NonCO2red", "Time", 'Temperature', 'Risk', 'Timing'])
         self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
 
         # Post-processing: making temperature dependence smooth
@@ -620,13 +716,12 @@ class datareading(object):
         self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim='Temperature')
         self.xr_traj_nonco2_2 = self.xr_traj_nonco2.copy()
 
-        # change time coordinate in self.xr_traj_nonco2
+        # change time coordinate in self.xr_traj_nonco2 if needed (different starting year than 2021)
         difyears = 2020+1-self.settings['params']['start_year_analysis']
         if difyears > 0:
             self.xr_traj_nonco2_adapt = self.xr_traj_nonco2.assign_coords({'Time': self.xr_traj_nonco2.Time-(difyears-1)}).reindex({'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
             for t in np.arange(0, difyears):
                 self.xr_traj_nonco2_adapt.NonCO2_globe.loc[{'Time': 2101 - difyears + t}] = (self.xr_traj_nonco2.sel(Time=2101 - difyears + t).NonCO2_globe - self.xr_traj_nonco2.NonCO2_globe.sel(Time=2101 - difyears + t - 1)) + self.xr_traj_nonco2_adapt.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
-
             fr = (self.xr_traj_nonco2.NonCO2_globe.sum(dim='Time') - self.xr_traj_nonco2_adapt.NonCO2_globe.sum(dim='Time')) * (1-xr_comp)/np.sum(1-xr_comp)
             self.xr_traj_nonco2 = self.xr_traj_nonco2_adapt + fr
 
@@ -663,41 +758,38 @@ class datareading(object):
         xr_bud_co2 = xr_bud_co2.rename({'dT_targets': "Temperature"})#.sel(Temperature = [1.5, 1.7, 2.0])
         self.xr_bud_co2 = xr_bud_co2
 
-        def ms_temp(T):
-            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
-            return self.xr_ar6.ModelScenario[np.where((peaktemp < T+0.1) & (peaktemp > T-0.1))[0]]
-
         # Determine bunker emissions to subtract from global budget
         bunker_subtraction = []
         for t_i, t in enumerate(self.dim_temp):
-            ms = ms_temp(t)
-            bunker_subtraction += [3.3/100] # Assuming bunker emissions keep constant (3.3% of global emissions) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
-
-        # Interpolate
-        n2o_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).N2O_hist
-        ch4_2020 = self.xr_hist.sel(Region='EARTH').sel(Time=2020).CH4_hist
-        tot_2020 = n2o_2020+ch4_2020
+            bunker_subtraction += [3.3/100] # Assuming bunker emissions have a constant fraction of global emissions (3.3%) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
 
         Blist = np.zeros(shape=(len(self.dim_temp), len(self.dim_prob), len(self.dim_nonco2)))+np.nan
+
+        def ms_temp(T, R): # 0.2 is quite wide, but useful for studying nonCO2 variation among scenarios (is a relatively metric anyway)
+            return self.xr_temperatures.ModelScenario[np.where(np.abs(T-self.xr_temperatures.Temperature.sel(Risk=R)) < 0.2)[0]].values
 
         for p_i, p in enumerate(self.dim_prob):
             a, b = np.polyfit(xr_bud_co2.Temperature, xr_bud_co2.sel(Probability = np.round(p, 2)).Budget, 1)
             for t_i, t in enumerate(self.dim_temp):
-                median_budget = (a*t+b)*(1-bunker_subtraction[t_i])  # relation may slightly deviate from Forster
+                ms = ms_temp(t, round(1-p, 2))
+
+                # This assumes that the budget from Forster implicitly includes the median nonCO2 warming among scenarios that meet that Temperature target
+                # Hence, only deviation (dT) from this median is interesting to assess here
+                dT = self.xr_nonco2warming_wrt_start.sel(ModelScenario=ms,
+                                                         Risk=round(1-p,2)) - self.xr_nonco2warming_wrt_start.sel(ModelScenario=ms,
+                                                                                                                  Risk=round(1-p,2)).median(dim='ModelScenario')
+                median_budget = (a*t+b)*(1-bunker_subtraction[t_i])
                 for n_i, n in enumerate(self.dim_nonco2):
-                    nonco2_reduction_given_quantile = np.array((((self.xr_traj_nonco2.sel(NonCO2red=n, Time=2040, Temperature=t)-tot_2020) / tot_2020).round(2)).NonCO2_globe)
-                    nonco2_reduction_given_quantile = nonco2_reduction_given_quantile[~np.isnan(nonco2_reduction_given_quantile)]
-                    nonco2_reduction_given_quantile[nonco2_reduction_given_quantile > 0] =0
-                    nonco2_reduction_given_quantile[nonco2_reduction_given_quantile < -0.8] = -0.8
-                    nonco2effect = self.xr_nonco2effects.sel(Temperature=t, NonCO2red=-nonco2_reduction_given_quantile.round(2)).EffectOnRCB # Effect on RCB based on how different non-CO2 paths are than they are in Forster
-                    Blist[t_i, p_i, n_i] = median_budget+nonco2effect
+                    dT_quantile = dT.quantile(n, dim='ModelScenario').PeakWarming # Assuming relation between T and B also holds around the T-value
+                    dB_quantile = a*dT_quantile
+                    Blist[t_i, p_i, n_i] = median_budget+dB_quantile
         data2 = xr.DataArray(Blist,
                             coords={'Temperature': self.dim_temp,
                                     'Risk': (1-self.dim_prob).astype(float).round(2),
                                     'NonCO2red': self.dim_nonco2},
                             dims=['Temperature', 'Risk', 'NonCO2red'])
         self.xr_co2_budgets = xr.Dataset({'Budget': data2})
-        
+
     # =========================================================== #
     # =========================================================== #
 
@@ -766,7 +858,7 @@ class datareading(object):
         emis_all = xr_scen2_use.sel(Time=np.arange(self.settings['params']['start_year_analysis'], 2101))/1e3 + offsets*(1-xr_comp)
         emis2100 = emis_all.sel(Time=2100)
 
-        # Bend IAM curves to start in 2015 (only shape is relevant)
+        # Bend IAM curves to start in the correct starting year (only shape is relevant)
         difyears = 2020+1-self.settings['params']['start_year_analysis']
         if difyears > 0:
             emis_all_adapt = emis_all.assign_coords({'Time': emis_all.Time-(difyears-1)}).reindex({'Time': np.arange(self.settings['params']['start_year_analysis'], 2101)})
@@ -795,12 +887,11 @@ class datareading(object):
         difyear = 2021 - self.settings['params']['start_year_analysis']
         dt = difyear/6*0.1
 
-        def ms_temp(T):
-            peaktemp = self.xr_ar6.sel(Variable='AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile').Value.max(dim='Time')
-            return self.xr_ar6.ModelScenario[np.where((peaktemp < dt+T+0.) & (peaktemp > dt+T-0.3))[0]] # This is the core functional form. Temp ranges are chosen based on fitting with IPCC WGIII pathways from C1 and C3 (SYR AR6, table 3.1)
+        def ms_temp_shape(T, R): # Different temperature domain because this is purely for the shape, not for the nonCO2 variation or so
+            return self.xr_temperatures.ModelScenario[np.where((self.xr_temperatures.Temperature.sel(Risk=R) < dt+T+0.) & (self.xr_temperatures.Temperature.sel(Risk=R) > dt+T-0.3))[0]].values
 
         for temp_i, temp in enumerate(self.dim_temp):
-            ms1 = ms_temp(temp)
+            ms1 = ms_temp_shape(temp, 0.5)
             # Shape impacted by timing of action
             for timing_i, timing in enumerate(self.dim_timing):
                 if timing == 'Immediate' or temp in [1.5, 1.56, 1.6] and timing == 'Delayed':
