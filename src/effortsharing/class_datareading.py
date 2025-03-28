@@ -107,12 +107,6 @@ class datareading(object):
         non_country_regions = {"European Union": "EU", "Earth": "EARTH"}
         regions = {**countries, **non_country_regions}
 
-        # TODO remove this (rather return them and pass to other functions explicitly)
-        self.regions_name = np.array(list(regions.keys()))
-        self.regions_iso = np.array(list(regions.values()))
-        self.countries_name = np.array(list(countries.keys()))
-        self.countries_iso = np.array(list(countries.values()))
-
         return countries, regions
 
     # =========================================================== #
@@ -198,8 +192,12 @@ class datareading(object):
 
         return ds
 
-    def read_ssps(self):
+    def read_ssps(self, regions):
         print("- Reading GDP and population data from SSPs")
+
+        self.regions_name = np.array(list(regions.keys()))
+        self.regions_iso = np.array(list(regions.values()))
+
         for i in range(6):
             df_ssp = pd.read_excel(
                 self.settings["paths"]["data"]["external"] + "SSPs_v2023.xlsx",
@@ -218,10 +216,9 @@ class datareading(object):
             region_full = np.array(df_ssp.Region)
             region_iso = []
             for r_i, r in enumerate(region_full):
-                wh = np.where(self.regions_name == r)[0]
-                if len(wh) > 0:
-                    # TODO: read from self.regions_iso instead ?!
-                    iso = self.countries_iso[wh[0]]
+                iso = regions.get(r, None)
+                if iso is not None:
+                    pass
                 elif r == "Aruba":
                     iso = "ABW"
                 elif r == "Bahamas":
@@ -310,9 +307,9 @@ class datareading(object):
                         values="Value",
                     )
                 ).sel(Time=[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015])
-                self.xr_ssp = xr.merge([self.xr_ssp, xr_hist_gdp_i])
+                xr_ssp = xr.merge([self.xr_ssp, xr_hist_gdp_i])
             else:
-                self.xr_ssp = (
+                xr_ssp = (
                     xr.Dataset.from_dataframe(
                         dummy.pivot(
                             index=["Scenario", "Region", "Time"],
@@ -324,12 +321,12 @@ class datareading(object):
                     .reindex({"Time": np.arange(1980, 2101, 5)})
                 )
 
-            return self.xr_ssp
+            return xr_ssp
 
     # =========================================================== #
     # =========================================================== #
 
-    def read_undata(self):
+    def read_un_population(self, countries):
         print(
             "- Reading UN population data and gapminder, processed by OWID (for past population)"
         )
@@ -343,22 +340,17 @@ class datareading(object):
         reg = np.array(df_pop.Region)
         reg[reg == "OWID_WRL"] = "EARTH"
         df_pop.Region = reg
-        self.xr_unp = (
+
+        xr_unp_long = (
             xr.Dataset.from_dataframe(
                 df_pop[
-                    df_pop.Region.isin(list(self.countries_iso) + ["EARTH"])
-                ].set_index(["Region", "Time"])
-            ).sel(Time=np.arange(1850, 2000))
-            / 1e6
-        )
-        self.xr_unp_long = (
-            xr.Dataset.from_dataframe(
-                df_pop[
-                    df_pop.Region.isin(list(self.countries_iso) + ["EARTH"])
+                    df_pop.Region.isin(list(countries.values()) + ["EARTH"])
                 ].set_index(["Region", "Time"])
             )
             / 1e6
         )
+        xr_unp = xr_unp_long.sel(Time=np.arange(1850, 2000))
+        return xr_unp, xr_unp_long
 
     # =========================================================== #
     # =========================================================== #
@@ -2165,6 +2157,7 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
+    # TODO: combine this with read_general? As they both parse UNFCCC data sheet
     def add_country_groups(self):
         print("- Add country groups")
         path_ctygroups = (
