@@ -118,6 +118,86 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
+    def read_ssps_refactor(self, regions):
+        """Read GDP and population data from SSPs."""
+        print("- Reading GDP and population data from SSPs")
+
+        # Define input
+        data_root = Path(self.settings["paths"]["data"]["external"])
+        filename = "SSPs_v2023.xlsx"
+
+        # Read data
+        df = pd.read_excel(data_root / filename, sheet_name="data")
+
+        # Filter for relevant models
+        df = df[(df.Model.isin(["OECD ENV-Growth 2023", "IIASA-WiC POP 2023"]))].drop(
+            columns=["Model", "Unit"]
+        )
+
+        # Convert year columns into row indexes
+        melted = df.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time")
+        melted["Time"] = melted["Time"].astype(int)
+
+        # Transform to xarray dataset
+        ds = melted.pivot(
+            index=["Scenario", "Region", "Time"], columns="Variable", values="value"
+        ).to_xarray()
+
+        # Split historical from future scenarios
+        hist = ds.sel(Scenario="Historical Reference", Time=slice(1980, 2020))
+        ds = ds.drop_sel(Scenario="Historical Reference")
+
+        # Substitute historical data into the corresponding years of each scenario
+        historical_expanded = hist.expand_dims(Scenario=ds.Scenario)
+        ds.loc[dict(Time=slice(1980, 2020))] = historical_expanded
+
+        # Rename variable
+        ds = ds.rename_vars({"GDP|PPP": "GDP"})
+
+        # Replace region names with ISO codes
+        # TODO: consider moving this lookup table outside the function
+        additional_regions = {
+            "Aruba": "ABW",
+            "Bahamas": "BHS",
+            "Democratic Republic of the Congo": "COD",
+            "Cabo Verde": "CPV",
+            "C?te d'Ivoire": "CIV",
+            "Western Sahara": "ESH",
+            "Gambia": "GMB",
+            "Czechia": "CZE",
+            "French Guiana": "GUF",
+            "Guam": "GUM",
+            "Hong Kong": "HKG",
+            "Iran": "IRN",
+            "Macao": "MAC",
+            "Moldova": "MDA",
+            "Mayotte": "MYT",
+            "New Caledonia": "NCL",
+            "Puerto Rico": "PRI",
+            "French Polynesia": "PYF",
+            "Turkey": "TUR",
+            "Taiwan": "TWN",
+            "Tanzania": "TZA",
+            "United States": "USA",
+            "United States Virgin Islands": "VIR",
+            "Viet Nam": "VNM",
+            "Cura?ao": "CUW",
+            "Guadeloupe": "GLP",
+            "Martinique": "MTQ",
+            "Palestine": "PSE",
+            "R?union": "REU",
+            "Syria": "SYR",
+            "Venezuela": "VEN",
+            "World": "EARTH",
+        }
+        region_lookup_table = {**regions, **additional_regions}
+        ds["Region"] = list(
+            map(lambda name: region_lookup_table.get(name, "oeps"), ds.Region.values)
+        )
+        ds = ds.sortby(ds.Region)
+
+        return ds
+
     def read_ssps(self):
         print("- Reading GDP and population data from SSPs")
         for i in range(6):
@@ -140,6 +220,7 @@ class datareading(object):
             for r_i, r in enumerate(region_full):
                 wh = np.where(self.regions_name == r)[0]
                 if len(wh) > 0:
+                    # TODO: read from self.regions_iso instead ?!
                     iso = self.countries_iso[wh[0]]
                 elif r == "Aruba":
                     iso = "ABW"
@@ -242,6 +323,8 @@ class datareading(object):
                     .reindex({"Time": np.arange(2020, 2101, 5)})
                     .reindex({"Time": np.arange(1980, 2101, 5)})
                 )
+
+            return self.xr_ssp
 
     # =========================================================== #
     # =========================================================== #
