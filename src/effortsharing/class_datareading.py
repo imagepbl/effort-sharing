@@ -81,17 +81,39 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
-    def read_general(self):
-        print("- Reading general data")
-        df_gen = pd.read_excel(
-            self.settings["paths"]["data"]["external"]
-            + "UNFCCC_Parties_Groups_noeu.xlsx",
-            sheet_name="Country groups",
+    def read_unfccc_countries(self):
+        """Read country names and ISO from UNFCCC table."""
+        print("- Reading unfccc country data")
+
+        # Define input
+        data_root = Path(self.settings["paths"]["data"]["external"])
+        filename = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+        # Read and transform countries
+        columns = {"Name": "name", "Country ISO Code": "iso"}
+        countries = (
+            pd.read_excel(
+                data_root / filename,
+                sheet_name="Country groups",
+                usecols=columns.keys(),
+            )
+            .rename(columns=columns)
+            .set_index("name")["iso"]
+            .to_dict()
         )
-        self.countries_iso = np.array(list(df_gen["Country ISO Code"]))
-        self.countries_name = np.array(list(df_gen["Name"]))
-        self.regions_iso = np.array(list(df_gen["Country ISO Code"]) + ["EU", "EARTH"])
-        self.regions_name = np.array(list(df_gen["Name"]) + ["European Union", "Earth"])
+
+        # Extend countries with non-country regions
+        # TODO: maybe move to outer scope?
+        non_country_regions = {"European Union": "EU", "Earth": "EARTH"}
+        regions = {**countries, **non_country_regions}
+
+        # TODO remove this (rather return them and pass to other functions explicitly)
+        self.regions_name = np.array(list(regions.keys()))
+        self.regions_iso = np.array(list(regions.values()))
+        self.countries_name = np.array(list(countries.keys()))
+        self.countries_iso = np.array(list(countries.values()))
+
+        return countries, regions
 
     # =========================================================== #
     # =========================================================== #
