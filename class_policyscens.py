@@ -21,7 +21,7 @@ import yaml
 
 class policyscenadding(object):
     """
-    Class that adds the policy scenarios from ENGAGE to xr_total
+    Class that adds the policy scenarios from ELEVATE to xr_total
     """
 
     # =========================================================== #
@@ -50,15 +50,16 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
-    def read_engage_data(self):
+    def read_scenario_data(self):
         """
-        Read in the ENGAGE data and change region names to match the ones used in the model
+        Read in the ELEVATE data and change region names to match names used in the model
+        Data can be downloaded from: https://zenodo.org/records/15114066
         """
 
-        print("- Read ENGAGE scenarios and change region namings")
+        print("- Read ELEVATE scenarios and change region namings")
         df_eng_raw = pd.read_csv(
             self.settings["paths"]["data"]["external"]
-            + "ENGAGE/PolicyScenarios/ENGAGE_internal_2610_onlyemis.csv"
+            + "ELEVATE/ELEVATE_scenarios_2025_emis_only.csv", sep=";", header=0
         )
 
         df_eng = df_eng_raw[df_eng_raw.Variable == "Emissions|Kyoto Gases"]
@@ -82,15 +83,16 @@ class policyscenadding(object):
         regions_df[regions_df == "United States of America"] = "USA"
         regions_df[regions_df == "Viet Nam "] = "VNM"
         df_eng.Region = regions_df
-        df_new = df_eng[
-            ~df_eng.index.isin(
-                np.where(
-                    (df_eng.Scenario == "GP_CurPol_T45")
-                    & (df_eng.Model == "COFFEE 1.5")
-                )[0]
-            )
-        ]
-        self.df_eng = df_new
+        # COFFEE does not have a CurPol scen anymore so we can leave this out?
+        # df_new = df_eng[
+        #     ~df_eng.index.isin(
+        #         np.where(
+        #             (df_eng.Scenario == "GP_CurPol_T45")
+        #             & (df_eng.Model == "COFFEE 1.5")
+        #         )[0]
+        #     )
+        # ]
+        self.df_eng = df_eng
 
         # CO2 version
         df_eng_co2 = df_eng_raw[df_eng_raw.Variable == "Emissions|CO2"]
@@ -114,14 +116,14 @@ class policyscenadding(object):
         regions_df[regions_df == "United States of America"] = "USA"
         regions_df[regions_df == "Viet Nam "] = "VNM"
         df_eng_co2.Region = regions_df
-        df_eng_co2 = df_eng_co2[
-            ~df_eng_co2.index.isin(
-                np.where(
-                    (df_eng_co2.Scenario == "GP_CurPol_T45")
-                    & (df_eng_co2.Model == "COFFEE 1.5")
-                )[0]
-            )
-        ]
+        # df_eng_co2 = df_eng_co2[
+        #     ~df_eng_co2.index.isin(
+        #         np.where(
+        #             (df_eng_co2.Scenario == "GP_CurPol_T45")
+        #             & (df_eng_co2.Model == "COFFEE 1.5")
+        #         )[0]
+        #     )
+        # ]
         self.df_eng_co2 = df_eng_co2
 
     # =========================================================== #
@@ -132,9 +134,9 @@ class policyscenadding(object):
         Filter the scenarios and convert to xarray object
         """
         print("- Filter correct scenarios and convert to xarray object")
-        curpol = "GP_CurPol_T45"
-        ndc = "GP_NDC2030_T45"
-        nz = "GP_Glasgow"
+        curpol = "ELV-SSP2-CP-D0"
+        ndc = "ELV-SSP2-NDC-D0"
+        nz = "ELV-SSP2-LTS"
 
         df_eng_ref = self.df_eng[
             ["Model", "Scenario", "Region"] + list(self.df_eng.keys()[5:])
@@ -222,6 +224,6 @@ if __name__ == "__main__":
     policyscen = policyscenadding()
 
     # Call the methods in the class
-    policyscen.read_engage_data()
+    policyscen.read_scenario_data()
     policyscen.filter_and_convert()
     policyscen.add_to_xr()
