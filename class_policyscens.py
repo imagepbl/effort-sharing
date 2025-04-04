@@ -20,18 +20,27 @@ import yaml
 
 
 class policyscenadding(object):
+    """
+    Class that adds the policy scenarios from ENGAGE to xr_total
+    """
+
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, startyear=2021):
+    def __init__(self):
         print("# ==================================== #")
         print("# Initializing policyscenadding class  #")
         print("# ==================================== #")
 
         self.current_dir = Path.cwd()
+        self.df_eng = None
+        self.df_eng_co2 = None
+        self.xr_eng = None
+        self.xr_eng_co2 = None
+        self.xr_total_co2 = None
 
         # Read in Input YAML file
-        with open(self.current_dir / "input.yml") as file:
+        with open(self.current_dir / "input.yml", encoding="utf-8") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.xr_total = xr.open_dataset(
             self.settings["paths"]["data"]["datadrive"]
@@ -42,6 +51,10 @@ class policyscenadding(object):
     # =========================================================== #
 
     def read_engage_data(self):
+        """
+        Read in the ENGAGE data and change region names to match the ones used in the model
+        """
+
         print("- Read ENGAGE scenarios and change region namings")
         df_eng_raw = pd.read_csv(
             self.settings["paths"]["data"]["external"]
@@ -115,6 +128,9 @@ class policyscenadding(object):
     # =========================================================== #
 
     def filter_and_convert(self):
+        """
+        Filter the scenarios and convert to xarray object
+        """
         print("- Filter correct scenarios and convert to xarray object")
         curpol = "GP_CurPol_T45"
         ndc = "GP_NDC2030_T45"
@@ -167,6 +183,9 @@ class policyscenadding(object):
     # =========================================================== #
 
     def add_to_xr(self):
+        """'
+        Add the policy scenarios to the xarray object'
+        """
         print("- Add to overall xrobject")
         xr_total = self.xr_total.assign(NDC=self.xr_eng["Value"].sel(Scenario="NDC"))
         xr_total = xr_total.assign(CurPol=self.xr_eng["Value"].sel(Scenario="CurPol"))
@@ -196,3 +215,13 @@ class policyscenadding(object):
         )
 
         self.xr_total.close()
+
+
+if __name__ == "__main__":
+    # Create an instance of the class
+    policyscen = policyscenadding()
+
+    # Call the methods in the class
+    policyscen.read_engage_data()
+    policyscen.filter_and_convert()
+    policyscen.add_to_xr()
