@@ -33,8 +33,8 @@ class policyscenadding(object):
         print("# ==================================== #")
 
         self.current_dir = Path.cwd()
-        self.df_eng = None
-        self.df_eng_co2 = None
+        self.df_scenarios_kyoto = None
+        self.df_scenarios_co2 = None
         self.xr_eng = None
         self.xr_eng_co2 = None
         self.xr_total_co2 = None
@@ -50,6 +50,33 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
+
+    def rename_regions(self, df, column_name="Region"):
+        """
+        Helper method to rename regions in a DataFrame.
+        """
+        region_mapping = {
+            "Argentine Republic": "ARG",
+            "Canada": "CAN",
+            "Commonwealth of Australia": "AUS",
+            "Federative Republic of Brazil": "BRA",
+            "People's Repulic of China": "CHN",
+            "European Union (28 member countries)": "EU",
+            "Republic of India": "IND",
+            "Republic of Indonesia": "IDN",
+            "State of Japan": "JPN",
+            "Russian Federation": "RUS",
+            "Kingdom of Saudi Arabia": "SAU",
+            "Republic of South Africa": "ZAF",
+            "Republic of Korea (South Korea)": "KOR",
+            "United Mexican States": "MEX",
+            "Republic of Turkey": "TUR",
+            "United States of America": "USA",
+            "Viet Nam ": "VNM",
+        }
+        df[column_name] = df[column_name].replace(region_mapping)
+        return df
+
     def read_scenario_data(self):
         """
         Read in the ELEVATE data and change region names to match names used in the model
@@ -57,74 +84,24 @@ class policyscenadding(object):
         """
 
         print("- Read ELEVATE scenarios and change region namings")
-        df_eng_raw = pd.read_csv(
+        # Read the raw data
+        df_scenarios_raw = pd.read_csv(
             self.settings["paths"]["data"]["external"]
-            + "ELEVATE/ELEVATE_scenarios_2025_emis_only.csv", sep=";", header=0
+            + "/ELEVATE/ELEVATE_scenarios_2025_emis_only.csv", sep=";", header=0
         )
 
-        df_eng = df_eng_raw[df_eng_raw.Variable == "Emissions|Kyoto Gases"]
-        df_eng = df_eng.reset_index(drop=True)
-        regions_df = np.array(df_eng.Region)
-        regions_df[regions_df == "Argentine Republic"] = "ARG"
-        regions_df[regions_df == "Canada"] = "CAN"
-        regions_df[regions_df == "Commonwealth of Australia"] = "AUS"
-        regions_df[regions_df == "Federative Republic of Brazil"] = "BRA"
-        regions_df[regions_df == "People's Repulic of China"] = "CHN"
-        regions_df[regions_df == "European Union (28 member countries)"] = "EU"
-        regions_df[regions_df == "Republic of India"] = "IND"
-        regions_df[regions_df == "Republic of Indonesia"] = "IDN"
-        regions_df[regions_df == "State of Japan"] = "JPN"
-        regions_df[regions_df == "Russian Federation"] = "RUS"
-        regions_df[regions_df == "Kingdom of Saudi Arabia"] = "SAU"
-        regions_df[regions_df == "Republic of South Africa"] = "ZAF"
-        regions_df[regions_df == "Republic of Korea (South Korea)"] = "KOR"
-        regions_df[regions_df == "United Mexican States"] = "MEX"
-        regions_df[regions_df == "Republic of Turkey"] = "TUR"
-        regions_df[regions_df == "United States of America"] = "USA"
-        regions_df[regions_df == "Viet Nam "] = "VNM"
-        df_eng.Region = regions_df
-        # COFFEE does not have a CurPol scen anymore so we can leave this out?
-        # df_new = df_eng[
-        #     ~df_eng.index.isin(
-        #         np.where(
-        #             (df_eng.Scenario == "GP_CurPol_T45")
-        #             & (df_eng.Model == "COFFEE 1.5")
-        #         )[0]
-        #     )
-        # ]
-        self.df_eng = df_eng
+        # Rename regions for the entire DataFrame
+        df_scenarios_raw = self.rename_regions(df_scenarios_raw, column_name="Region")
 
-        # CO2 version
-        df_eng_co2 = df_eng_raw[df_eng_raw.Variable == "Emissions|CO2"]
-        df_eng_co2 = df_eng_co2.reset_index(drop=True)
-        regions_df = np.array(df_eng_co2.Region)
-        regions_df[regions_df == "Argentine Republic"] = "ARG"
-        regions_df[regions_df == "Canada"] = "CAN"
-        regions_df[regions_df == "Commonwealth of Australia"] = "AUS"
-        regions_df[regions_df == "Federative Republic of Brazil"] = "BRA"
-        regions_df[regions_df == "People's Repulic of China"] = "CHN"
-        regions_df[regions_df == "European Union (28 member countries)"] = "EU"
-        regions_df[regions_df == "Republic of India"] = "IND"
-        regions_df[regions_df == "Republic of Indonesia"] = "IDN"
-        regions_df[regions_df == "State of Japan"] = "JPN"
-        regions_df[regions_df == "Russian Federation"] = "RUS"
-        regions_df[regions_df == "Kingdom of Saudi Arabia"] = "SAU"
-        regions_df[regions_df == "Republic of South Africa"] = "ZAF"
-        regions_df[regions_df == "Republic of Korea (South Korea)"] = "KOR"
-        regions_df[regions_df == "United Mexican States"] = "MEX"
-        regions_df[regions_df == "Republic of Turkey"] = "TUR"
-        regions_df[regions_df == "United States of America"] = "USA"
-        regions_df[regions_df == "Viet Nam "] = "VNM"
-        df_eng_co2.Region = regions_df
-        # df_eng_co2 = df_eng_co2[
-        #     ~df_eng_co2.index.isin(
-        #         np.where(
-        #             (df_eng_co2.Scenario == "GP_CurPol_T45")
-        #             & (df_eng_co2.Model == "COFFEE 1.5")
-        #         )[0]
-        #     )
-        # ]
-        self.df_eng_co2 = df_eng_co2
+        # Process Kyoto Gases
+        df_scenarios_kyoto = df_scenarios_raw[df_scenarios_raw.Variable == "Emissions|Kyoto Gases"]
+        df_scenarios_kyoto = df_scenarios_kyoto.reset_index(drop=True)
+        self.df_scenarios_kyoto = df_scenarios_kyoto
+
+        # Process CO2 Emissions
+        df_scenarios_co2 = df_scenarios_raw[df_scenarios_raw.Variable == "Emissions|CO2"]
+        df_scenarios_co2 = df_scenarios_co2.reset_index(drop=True)
+        self.df_scenarios_co2 = df_scenarios_co2
 
     # =========================================================== #
     # =========================================================== #
