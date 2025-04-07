@@ -112,7 +112,9 @@ class policyscenadding(object):
             region_mapping
         )
 
-        return df_scenarios_filtered
+        df_scenarios_renamed = df_scenarios_filtered.copy()
+
+        return df_scenarios_renamed
 
     # =========================================================== #
     # =========================================================== #
@@ -153,14 +155,24 @@ class policyscenadding(object):
             subset=["Model", "Scenario", "Variable", "2025", "2100"], keep="first"
         )
 
-        # Remove all rows that are Is_Duplicated = True
+        # Remove all rows that are Is_Duplicate = True
         df_scenarios_deduplicated = df_scenarios_renamed[
             ~df_scenarios_renamed["Is_Duplicate"]
         ]
 
+        # TODO: Adapt in the future
+        # For GEM-E3_V2023 there are several India results
+        # Becomes an issue later when converting to xarray so removing for now
+        df_scenarios_deduplicated = df_scenarios_deduplicated[
+            ~(
+                (df_scenarios_deduplicated["Model"] == "GEM-E3_V2023")
+                & (df_scenarios_deduplicated["Region_cleaned"] == "India")
+            )
+        ]
+
         # Drop helper columns and reorder the DataFrame
         df_scenarios_deduplicated.drop(
-            columns=["Model_2", "Region_2", "Is_Duplicated", "Region"], inplace=True
+            columns=["Model_2", "Region_2", "Is_Duplicate", "Region"], inplace=True
         )
         df_scenarios_deduplicated.rename(
             columns={"Region_cleaned": "Region"}, inplace=True
@@ -178,84 +190,73 @@ class policyscenadding(object):
 
         return df_scenarios_deduplicated
 
-    def filter_and_convert(self):
+    def format_to_xarray(self, df_co2_or_kyoto):
         """
-        Filter the scenarios and convert to xarray object
+        Convert a DataFrame to an xarray object
         """
-        print("- Filter correct scenarios and convert to xarray object")
-        # curpol = "ELV-SSP2-CP-D0"
-        # ndc = "ELV-SSP2-NDC-D0"
-        # nz = "ELV-SSP2-LTS"
+        # Melt the DataFrame to long format
+        df_co2_or_kyoto.drop_duplicates(inplace=True)
 
-        # # Filter for relevant scenarios
-        # relevant_scenarios = [curpol, ndc, nz]
-        # df_filtered = self.df_scenarios_kyoto.append(
-        #     self.df_scenarios_co2, ignore_index=True
-        # )
-        # df_filtered = df_filtered[df_filtered.Scenario.isin(relevant_scenarios)].copy()
-
-        # # Rename scenarios and regions
-        # df_filtered["Scenario"] = df_filtered["Scenario"].replace(
-        #     {curpol: "CurPol", ndc: "NDC", nz: "NetZero"}
-        # )
-        # df_filtered["Region"] = df_filtered["Region"].replace({"World": "EARTH"})
-
-        ###
-
-        df_eng_ref = self.df_eng[
-            ["Model", "Scenario", "Region"] + list(self.df_eng.keys()[5:])
-        ]
-        df_eng_ref = df_eng_ref[df_eng_ref.Scenario.isin([curpol, ndc, nz])]
-        scen = np.array(df_eng_ref.Scenario)
-        scen[scen == ndc] = "NDC"
-        scen[scen == curpol] = "CurPol"
-        scen[scen == nz] = "NetZero"
-        reg = np.array(df_eng_ref.Region)
-        reg[reg == "World"] = "EARTH"
-        df_eng_ref["Scenario"] = scen
-        df_eng_ref["Region"] = reg
-        dummy = df_eng_ref.melt(
-            id_vars=["Scenario", "Model", "Region"], var_name="Time", value_name="Value"
+        df_melted = df_co2_or_kyoto.melt(
+            id_vars=["Scenario", "Model", "Region"],
+            var_name="Time",
+            value_name="Value",
         )
-        dummy["Time"] = np.array(dummy["Time"].astype(int))
-        dummy = dummy.set_index(["Scenario", "Model", "Region", "Time"])
-        xr_eng = xr.Dataset.from_dataframe(dummy)
-        xr_eng = xr_eng.reindex(Time=np.arange(1850, 2101))
-        self.xr_eng = xr_eng.interpolate_na(dim="Time", method="linear")
 
-        # CO2 version
-        df_eng_ref_co2 = self.df_eng_co2[
-            ["Model", "Scenario", "Region"] + list(self.df_eng_co2.keys()[5:])
-        ]
-        df_eng_ref_co2 = df_eng_ref_co2[df_eng_ref_co2.Scenario.isin([curpol, ndc, nz])]
-        scen = np.array(df_eng_ref_co2.Scenario)
-        scen[scen == ndc] = "NDC"
-        scen[scen == curpol] = "CurPol"
-        scen[scen == nz] = "NetZero"
-        reg = np.array(df_eng_ref_co2.Region)
-        reg[reg == "World"] = "EARTH"
-        df_eng_ref_co2["Scenario"] = scen
-        df_eng_ref_co2["Region"] = reg
-        dummy = df_eng_ref_co2.melt(
-            id_vars=["Scenario", "Model", "Region"], var_name="Time", value_name="Value"
-        )
-        dummy["Time"] = np.array(dummy["Time"].astype(int))
-        dummy = dummy.set_index(["Scenario", "Model", "Region", "Time"])
-        xr_eng_co2 = xr.Dataset.from_dataframe(dummy)
-        xr_eng_co2 = xr_eng_co2.reindex(Time=np.arange(1850, 2101))
-        self.xr_eng_co2 = xr_eng_co2.interpolate_na(dim="Time", method="linear")
+        # Convert the 'Time' column to integers
+        df_melted["Time"] = np.array(df_melted["Time"].astype(int))
+
+        # Set the index for the xarray object
+        df_melted.set_index(["Scenario", "Model", "Region", "Time"], inplace=True)
+
+        df_melted = df_melted.drop_duplicates()
+        duplicates = df_melted[df_melted.duplicated()]
+        if not duplicates.empty:
+            print("Duplicate rows found:")
+            print(duplicates)
+        # Convert to xarray Dataset
+        xr_dataset = xr.Dataset.from_dataframe(df_melted)
+        xr_dataset = xr_dataset.reindex(Time=np.arange(1850, 2101))
+
+        return xr_dataset.interpolate_na(dim="Time", method="linear")
+
+    def filter_and_convert(self, df_scenarios_deduplicated):
+        """
+        Split the dataframe into co2 and kyoto gas and convert to xarray objects
+        """
+        print("- Split dataframe and convert to xarray object")
+
+        # Split df_scenarios_deduplicated into two DataFrames
+        df_scenarios_co2 = df_scenarios_deduplicated[
+            df_scenarios_deduplicated["Variable"] == "Emissions|CO2"
+        ].copy()
+        df_scenarios_kyoto = df_scenarios_deduplicated[
+            df_scenarios_deduplicated["Variable"] == "Emissions|Kyoto Gases"
+        ].copy()
+
+        # Drop the 'Variable' column from both DataFrames
+        df_scenarios_co2.drop(columns=["Variable", "Unit"], inplace=True)
+        df_scenarios_kyoto.drop(columns=["Variable", "Unit"], inplace=True)
+        df_scenarios_co2.reset_index(drop=True, inplace=True)
+        df_scenarios_kyoto.reset_index(drop=True, inplace=True)
+
+        # Convert to xarray objects
+        xr_kyoto = self.format_to_xarray(df_scenarios_kyoto)
+        xr_co2 = self.format_to_xarray(df_scenarios_co2)
+
+        return xr_kyoto, xr_co2
 
     # =========================================================== #
     # =========================================================== #
 
-    def add_to_xr(self):
+    def add_to_xr(self, xr_kyoto, xr_co2):
         """'
         Add the policy scenarios to the xarray object'
         """
         print("- Add to overall xrobject")
-        xr_total = self.xr_total.assign(NDC=self.xr_eng["Value"].sel(Scenario="NDC"))
-        xr_total = xr_total.assign(CurPol=self.xr_eng["Value"].sel(Scenario="CurPol"))
-        xr_total = xr_total.assign(NetZero=self.xr_eng["Value"].sel(Scenario="NetZero"))
+        xr_total = self.xr_total.assign(NDC=xr_kyoto["Value"].sel(Scenario="NDC"))
+        xr_total = xr_total.assign(CurPol=xr_kyoto["Value"].sel(Scenario="CurPol"))
+        xr_total = xr_total.assign(NetZero=xr_kyoto["Value"].sel(Scenario="NetZero"))
         xr_total = xr_total.reindex(Time=np.arange(1850, 2101))
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
         xr_total_onlyalloc = self.xr_total[["NDC", "CurPol", "NetZero"]]
@@ -264,15 +265,9 @@ class policyscenadding(object):
         )
 
         # CO2 version
-        xr_total2 = self.xr_total.assign(
-            NDC=self.xr_eng_co2["Value"].sel(Scenario="NDC")
-        )
-        xr_total2 = xr_total2.assign(
-            CurPol=self.xr_eng_co2["Value"].sel(Scenario="CurPol")
-        )
-        xr_total2 = xr_total2.assign(
-            NetZero=self.xr_eng_co2["Value"].sel(Scenario="NetZero")
-        )
+        xr_total2 = self.xr_total.assign(NDC=xr_co2["Value"].sel(Scenario="NDC"))
+        xr_total2 = xr_total2.assign(CurPol=xr_co2["Value"].sel(Scenario="CurPol"))
+        xr_total2 = xr_total2.assign(NetZero=xr_co2["Value"].sel(Scenario="NetZero"))
         xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
         self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
         xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
@@ -288,6 +283,8 @@ if __name__ == "__main__":
     policyscen = policyscenadding()
 
     # Call the methods in the class
-    policyscen.read_filter_scenario_data()
-    policyscen.filter_and_convert()
-    policyscen.add_to_xr()
+    df_filtered = policyscen.read_filter_scenario_data()
+    df_renamed = policyscen.rename_and_preprocess(df_filtered)
+    df_deduplicated = policyscen.deduplicate_regions(df_renamed)
+    xr_kyoto, xr_co2 = policyscen.filter_and_convert(df_deduplicated)
+    policyscen.add_to_xr(xr_kyoto, xr_co2)
