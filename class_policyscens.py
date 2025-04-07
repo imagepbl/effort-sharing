@@ -39,6 +39,15 @@ class policyscenadding(object):
         self.xr_eng_co2 = None
         self.xr_total_co2 = None
 
+        # Scenario names
+        self.scenarios = {
+            "ELV-SSP2-CP-D0": "CurPol",
+            "ELV-SSP2-CP-D0-N": "CurPol",
+            "Current Policies": "CurPol",
+            "ELV-SSP2-NDC-D0": "NDC",
+            "ELV-SSP2-LTS": "NetZero",
+        }
+
         # Read in Input YAML file
         with open(self.current_dir / "input.yml", encoding="utf-8") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
@@ -50,70 +59,148 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
-
-    def rename_regions(self, df, column_name="Region"):
+    def read_filter_scenario_data(self):
         """
-        Helper method to rename regions in a DataFrame.
-        """
-        region_mapping = {
-            "Argentine Republic": "ARG",
-            "Canada": "CAN",
-            "Commonwealth of Australia": "AUS",
-            "Federative Republic of Brazil": "BRA",
-            "People's Repulic of China": "CHN",
-            "European Union (28 member countries)": "EU",
-            "Republic of India": "IND",
-            "Republic of Indonesia": "IDN",
-            "State of Japan": "JPN",
-            "Russian Federation": "RUS",
-            "Kingdom of Saudi Arabia": "SAU",
-            "Republic of South Africa": "ZAF",
-            "Republic of Korea (South Korea)": "KOR",
-            "United Mexican States": "MEX",
-            "Republic of Turkey": "TUR",
-            "United States of America": "USA",
-            "Viet Nam ": "VNM",
-        }
-        df[column_name] = df[column_name].replace(region_mapping)
-        return df
-
-    def read_scenario_data(self):
-        """
-        Read in the ELEVATE data and change region names to match names used in the model
+        Read in the ELEVATE data and filter for relevant scenarios and variables.
         Data can be downloaded from: https://zenodo.org/records/15114066
         """
 
-        print("- Read ELEVATE scenarios and change region namings")
+        print("- Read ELEVATE scenarios and filter for relevant data")
+
         # Read the raw data
         df_scenarios_raw = pd.read_csv(
             self.settings["paths"]["data"]["external"]
-            + "/ELEVATE/ELEVATE_scenarios_2025_emis_only.csv", sep=";", header=0
+            + "/ELEVATE/ELEVATE_Data_D2.3_vetted_20250211.csv",
+            header=0,
         )
 
-        # Rename regions for the entire DataFrame
-        df_scenarios_raw = self.rename_regions(df_scenarios_raw, column_name="Region")
+        # Filter for scenarios and variables
+        variables = ["Emissions|Kyoto Gases", "Emissions|CO2"]
 
-        # Process Kyoto Gases
-        df_scenarios_kyoto = df_scenarios_raw[df_scenarios_raw.Variable == "Emissions|Kyoto Gases"]
-        df_scenarios_kyoto = df_scenarios_kyoto.reset_index(drop=True)
-        self.df_scenarios_kyoto = df_scenarios_kyoto
+        df_scenarios_filtered = df_scenarios_raw[
+            df_scenarios_raw.Scenario.isin(self.scenarios.keys())
+            & df_scenarios_raw.Variable.isin(variables)
+        ].copy()
+        df_scenarios_filtered = df_scenarios_filtered.reset_index(drop=True)
 
-        # Process CO2 Emissions
-        df_scenarios_co2 = df_scenarios_raw[df_scenarios_raw.Variable == "Emissions|CO2"]
-        df_scenarios_co2 = df_scenarios_co2.reset_index(drop=True)
-        self.df_scenarios_co2 = df_scenarios_co2
+        return df_scenarios_filtered
+
+    def rename_and_preprocess(self, df_scenarios_filtered):
+        """
+        Rename columns, regions and scenarios
+        """
+
+        # Rename columns: Remove leading 'X' from year columns
+        df_scenarios_filtered.columns = [
+            col[1:] if col.startswith("X") and col[1:].isdigit() else col
+            for col in df_scenarios_filtered.columns
+        ]
+
+        # Rename scenarios
+        df_scenarios_filtered["Scenario"] = df_scenarios_filtered["Scenario"].replace(
+            self.scenarios
+        )
+
+        # Rename regions
+        region_mapping = {
+            "World": "EARTH",
+            "United States of America": "USA",
+            "South-East Asia": "Southeast Asia",
+            "South East Asia": "Southeast Asia",
+        }
+        df_scenarios_filtered["Region"] = df_scenarios_filtered["Region"].replace(
+            region_mapping
+        )
+
+        return df_scenarios_filtered
 
     # =========================================================== #
     # =========================================================== #
+
+    def deduplicate_regions(self, df_scenarios_renamed):
+        """
+        Some regions are written as model|region, some only as region. Models often reported
+        both versions, but these are often duplicates and need to be removed.
+        More info on the AR9 and AR10 regions here:
+        https://github.com/IAMconsortium/common-definitions/blob/main/definitions/region/common.yaml
+        """
+        # Split the region column by '|' and expand into new columns
+        split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
+        split_columns.columns = ["Model_2", "Region_2"]
+
+        # Add the new columns to the original DataFrame
+        df_scenarios_renamed = pd.concat([df_scenarios_renamed, split_columns], axis=1)
+
+        # If a region was Model|Region, we don't need the model name twice so replace with NaN
+        df_scenarios_renamed["Model_2"] = np.where(
+            df_scenarios_renamed["Model_2"] == df_scenarios_renamed["Model"],
+            np.nan,
+            df_scenarios_renamed["Model_2"],
+        )
+
+        # Merge the data on region into a new column 'Region_cleaned'
+        df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed[
+            "Model_2"
+        ].combine_first(df_scenarios_renamed["Region_2"])
+
+        # Sort the dataframe by 'Region_cleaned' and reset the index
+        # Sorting it to give preference to e.g. "India" over "India (AR10)"
+        df_scenarios_renamed.sort_values(by=["Region_cleaned"], inplace=True)
+        df_scenarios_renamed.reset_index(drop=True, inplace=True)
+
+        # Add a new column 'Is_Duplicate' to indicate subsequent duplicates
+        df_scenarios_renamed["Is_Duplicate"] = df_scenarios_renamed.duplicated(
+            subset=["Model", "Scenario", "Variable", "2025", "2100"], keep="first"
+        )
+
+        # Remove all rows that are Is_Duplicated = True
+        df_scenarios_deduplicated = df_scenarios_renamed[
+            ~df_scenarios_renamed["Is_Duplicate"]
+        ]
+
+        # Drop helper columns and reorder the DataFrame
+        df_scenarios_deduplicated.drop(
+            columns=["Model_2", "Region_2", "Is_Duplicated", "Region"], inplace=True
+        )
+        df_scenarios_deduplicated.rename(
+            columns={"Region_cleaned": "Region"}, inplace=True
+        )
+
+        # Reorder the columns
+        columns_to_keep = [
+            "Model",
+            "Scenario",
+            "Region",
+            "Variable",
+            "Unit",
+        ] + [col for col in df_scenarios_deduplicated.columns if col.isdigit()]
+        df_scenarios_deduplicated = df_scenarios_deduplicated[columns_to_keep]
+
+        return df_scenarios_deduplicated
 
     def filter_and_convert(self):
         """
         Filter the scenarios and convert to xarray object
         """
         print("- Filter correct scenarios and convert to xarray object")
-        curpol = "ELV-SSP2-CP-D0"
-        ndc = "ELV-SSP2-NDC-D0"
-        nz = "ELV-SSP2-LTS"
+        # curpol = "ELV-SSP2-CP-D0"
+        # ndc = "ELV-SSP2-NDC-D0"
+        # nz = "ELV-SSP2-LTS"
+
+        # # Filter for relevant scenarios
+        # relevant_scenarios = [curpol, ndc, nz]
+        # df_filtered = self.df_scenarios_kyoto.append(
+        #     self.df_scenarios_co2, ignore_index=True
+        # )
+        # df_filtered = df_filtered[df_filtered.Scenario.isin(relevant_scenarios)].copy()
+
+        # # Rename scenarios and regions
+        # df_filtered["Scenario"] = df_filtered["Scenario"].replace(
+        #     {curpol: "CurPol", ndc: "NDC", nz: "NetZero"}
+        # )
+        # df_filtered["Region"] = df_filtered["Region"].replace({"World": "EARTH"})
+
+        ###
 
         df_eng_ref = self.df_eng[
             ["Model", "Scenario", "Region"] + list(self.df_eng.keys()[5:])
@@ -201,6 +288,6 @@ if __name__ == "__main__":
     policyscen = policyscenadding()
 
     # Call the methods in the class
-    policyscen.read_scenario_data()
+    policyscen.read_filter_scenario_data()
     policyscen.filter_and_convert()
     policyscen.add_to_xr()
