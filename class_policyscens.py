@@ -7,20 +7,24 @@
 # Put in packages that we need
 # =========================================================== #
 
+import logging
 from pathlib import Path
 
+import country_converter as coco
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
-import logging
 
 # Configure the logger
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+coco_logger = coco.logging.getLogger()
+coco_logger.setLevel(logging.CRITICAL)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -113,6 +117,7 @@ class policyscenadding(object):
             "United States of America": "USA",
             "South-East Asia": "Southeast Asia",
             "South East Asia": "Southeast Asia",
+            "European Union": "EU",
         }
         df_scenarios_filtered["Region"] = df_scenarios_filtered["Region"].replace(
             region_mapping
@@ -186,6 +191,30 @@ class policyscenadding(object):
             columns={"Region_cleaned": "Region"}, inplace=True
         )
 
+        # # Convert countries to ISO3 codes and leave regions as is
+        logger.info("Converting country names to ISO3 codes")
+        cc = coco.CountryConverter()
+        df_scenarios_deduplicated["Region"] = cc.pandas_convert(
+            series=df_scenarios_deduplicated["Region"], to="ISO3", not_found=None
+        )
+
+        # # Check if there are any lists in the 'Region' column
+        # for col in ["Scenario", "Model", "Region"]:
+        #     print(
+        #         f"Column '{col}' contains lists: {df_scenarios_deduplicated[col].apply(lambda x: isinstance(x, list)).any()}"
+        #     )
+
+        # Take the lists in "Region" and convert them to text divided by comma
+        df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(
+            lambda x: ", ".join(x) if isinstance(x, list) else x
+        )
+        # # Check if there are any lists in the 'Region' column again
+        # for col in ["Scenario", "Model", "Region"]:
+        #     print(
+        #         f"Column '{col}' contains lists: {df_scenarios_deduplicated[col].apply(lambda x: isinstance(x, list)).any()}"
+        #     )
+
+
         # Reorder the columns
         columns_to_keep = [
             "Model",
@@ -205,7 +234,7 @@ class policyscenadding(object):
         logger.info("Converting DataFrame to xarray objects")
 
         # Melt the DataFrame to long format
-        df_co2_or_kyoto.drop_duplicates(inplace=True)
+        # df_co2_or_kyoto.drop_duplicates(inplace=True)
 
         df_melted = df_co2_or_kyoto.melt(
             id_vars=["Scenario", "Model", "Region"],
@@ -216,14 +245,19 @@ class policyscenadding(object):
         # Convert the 'Time' column to integers
         df_melted["Time"] = np.array(df_melted["Time"].astype(int))
 
+        # for col in ["Scenario", "Model", "Region", "Time"]:
+        #     print(
+        #         f"Column '{col}' contains lists: {df_melted[col].apply(lambda x: isinstance(x, list)).any()}"
+        #     )
+
         # Set the index for the xarray object
         df_melted.set_index(["Scenario", "Model", "Region", "Time"], inplace=True)
 
         df_melted = df_melted.drop_duplicates()
-        duplicates = df_melted[df_melted.duplicated()]
-        if not duplicates.empty:
-            print("Duplicate rows found:")
-            print(duplicates)
+        # duplicates = df_melted[df_melted.duplicated()]
+        # if not duplicates.empty:
+        #     print("Duplicate rows found:")
+        #     print(duplicates)
         # Convert to xarray Dataset
         xr_dataset = xr.Dataset.from_dataframe(df_melted)
         xr_dataset = xr_dataset.reindex(Time=np.arange(1850, 2101))
