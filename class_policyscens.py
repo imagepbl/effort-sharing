@@ -13,6 +13,14 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
+import logging
+
+# Configure the logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -28,9 +36,7 @@ class policyscenadding(object):
     # =========================================================== #
 
     def __init__(self):
-        print("# ==================================== #")
-        print("# Initializing policyscenadding class  #")
-        print("# ==================================== #")
+        logger.info("Initializing policyscenadding class")
 
         self.current_dir = Path.cwd()
         self.df_scenarios_kyoto = None
@@ -64,8 +70,7 @@ class policyscenadding(object):
         Read in the ELEVATE data and filter for relevant scenarios and variables.
         Data can be downloaded from: https://zenodo.org/records/15114066
         """
-
-        print("- Read ELEVATE scenarios and filter for relevant data")
+        logger.info("Reading and filtering ELEVATE scenario data")
 
         # Read the raw data
         df_scenarios_raw = pd.read_csv(
@@ -89,6 +94,7 @@ class policyscenadding(object):
         """
         Rename columns, regions and scenarios
         """
+        logger.info("Renaming columns, regions and scenarios")
 
         # Rename columns: Remove leading 'X' from year columns
         df_scenarios_filtered.columns = [
@@ -126,6 +132,8 @@ class policyscenadding(object):
         More info on the AR9 and AR10 regions here:
         https://github.com/IAMconsortium/common-definitions/blob/main/definitions/region/common.yaml
         """
+        logger.info("Deduplicating regions")
+
         # Split the region column by '|' and expand into new columns
         split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
         split_columns.columns = ["Model_2", "Region_2"]
@@ -194,6 +202,8 @@ class policyscenadding(object):
         """
         Convert a DataFrame to an xarray object
         """
+        logger.info("Converting DataFrame to xarray objects")
+
         # Melt the DataFrame to long format
         df_co2_or_kyoto.drop_duplicates(inplace=True)
 
@@ -224,7 +234,7 @@ class policyscenadding(object):
         """
         Split the dataframe into co2 and kyoto gas and convert to xarray objects
         """
-        print("- Split dataframe and convert to xarray object")
+        logger.info("Splitting and converting DataFrame to xarray objects")
 
         # Split df_scenarios_deduplicated into two DataFrames
         df_scenarios_co2 = df_scenarios_deduplicated[
@@ -253,7 +263,8 @@ class policyscenadding(object):
         """'
         Add the policy scenarios to the xarray object'
         """
-        print("- Add to overall xrobject")
+        logger.info("Adding policy scenarios to xarray object")
+
         xr_total = self.xr_total.assign(NDC=xr_kyoto["Value"].sel(Scenario="NDC"))
         xr_total = xr_total.assign(CurPol=xr_kyoto["Value"].sel(Scenario="CurPol"))
         xr_total = xr_total.assign(NetZero=xr_kyoto["Value"].sel(Scenario="NetZero"))
