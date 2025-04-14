@@ -545,9 +545,7 @@ class datareading(object):
 
         # ModelScenario
         modscen = []
-        for i in range(len(df)):
-            modscen.append(df.model[i] + '|' + df.scenario[i])
-        df['ModelScenario'] = np.array(modscen).astype(str)
+        df['ModelScenario'] = df['model'] + '|' + df['scenario']
         df = df.drop(columns=['model', 'scenario'])
 
         # Rename warming quantiles
