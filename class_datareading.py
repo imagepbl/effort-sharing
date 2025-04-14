@@ -884,8 +884,8 @@ class datareading(object):
         difyear = 2021 - self.settings['params']['start_year_analysis']
         dt = difyear/6*0.1
 
-        def ms_temp_shape(T, R): # Different temperature domain because this is purely for the shape, not for the nonCO2 variation or so
-            return self.xr_temperatures.ModelScenario[np.where((self.xr_temperatures.Temperature.sel(Risk=R) < dt+T+0.) & (self.xr_temperatures.Temperature.sel(Risk=R) > dt+T-0.3))[0]].values
+        def ms_temp_shape(temp, risk): # Different temperature domain because this is purely for the shape, not for the nonCO2 variation or so
+            return self.xr_temperatures.ModelScenario[np.where((self.xr_temperatures.Temperature.sel(Risk=risk) < dt+temp+0.) & (self.xr_temperatures.Temperature.sel(Risk=risk) > dt+temp-0.3))[0]].values
 
         for temp_i, temp in enumerate(self.dim_temp):
             ms1 = ms_temp_shape(temp, 0.5)
