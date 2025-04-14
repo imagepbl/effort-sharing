@@ -533,8 +533,7 @@ class datareading(object):
                 'p67 year of peak warming (MAGICCv7.5.3)',
                 ] + list(df.keys()[28:])]
 
-        for i in range(1995, 2101):
-            df.rename(columns={str(i)+"-01-01 00:00:00": str(i)}, inplace=True)
+        df.columns = df.columns.str.replace(r"(\d{4})-01-01 00:00:00", r"\1", regex=True)
         df.rename(columns={'variable': 'NonCO2WarmingQuantile',
                         'permafrost' : 'Permafrost',
                         "median peak warming (MAGICCv7.5.3)": "T(0.5)",
