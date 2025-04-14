@@ -549,11 +549,11 @@ class datareading(object):
         df = df.drop(columns=['model', 'scenario'])
 
         # Rename warming quantiles
-        arvar = np.array(df.NonCO2WarmingQuantile)
-        for i in ['10.0', '16.7', '33.0', '5.0', '50.0', '67.0', '83.3', '90.0', '95.0']:
-            arvar[arvar == 'AR6 climate diagnostics|Raw Surface Temperature (GSAT)|Non-CO2|MAGICCv7.5.3|'+i+'th Percentile'] = str(float(i)/100)
-        arvar = arvar.astype(float).round(2)
-        df.NonCO2WarmingQuantile = arvar
+        quantiles_map = {
+            f'AR6 climate diagnostics|Raw Surface Temperature (GSAT)|Non-CO2|MAGICCv7.5.3|{i}th Percentile': float(i) / 100
+            for i in ['10.0', '16.7', '33.0', '5.0', '50.0', '67.0', '83.3', '90.0', '95.0']
+            }
+        df['NonCO2WarmingQuantile'] = df['NonCO2WarmingQuantile'].replace(quantiles_map).astype(float).round(2)
 
         # Only consider excluding permafrost
         df = df[df.Permafrost == False]
