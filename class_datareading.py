@@ -762,8 +762,8 @@ class datareading(object):
 
         Blist = np.zeros(shape=(len(self.dim_temp), len(self.dim_prob), len(self.dim_nonco2)))+np.nan
 
-        def ms_temp(T, R): # 0.2 is quite wide, but useful for studying nonCO2 variation among scenarios (is a relatively metric anyway)
-            return self.xr_temperatures.ModelScenario[np.where(np.abs(T-self.xr_temperatures.Temperature.sel(Risk=R)) < 0.2)[0]].values
+        def ms_temp(temp, risk): # 0.2 is quite wide, but useful for studying nonCO2 variation among scenarios (is a relatively metric anyway)
+            return self.xr_temperatures.ModelScenario[np.where(np.abs(temp-self.xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]].values
 
         for p_i, p in enumerate(self.dim_prob):
             a, b = np.polyfit(xr_bud_co2.Temperature, xr_bud_co2.sel(Probability = np.round(p, 2)).Budget, 1)
