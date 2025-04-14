@@ -634,8 +634,8 @@ class datareading(object):
         xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=self.settings['params']['start_year_analysis'])
         xr_nonco2_raw = xr_nonco2_raw.sel(Time = np.arange(self.settings['params']['start_year_analysis'], 2101))
 
-        def ms_temp(T, R):
-            return self.xr_temperatures.ModelScenario[np.where(np.abs(T-self.xr_temperatures.Temperature.sel(Risk=R)) < 0.2)[0]].values
+        def ms_temp(temp, risk):
+            return self.xr_temperatures.ModelScenario[np.where(np.abs(temp - self.xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]].values
 
         def check_monotomy(traj):
             vec = [traj[0]]
