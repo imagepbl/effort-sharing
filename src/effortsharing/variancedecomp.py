@@ -11,14 +11,12 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import xarray as xr
 import yaml
 from SALib.analyze import sobol
 
 # Sobol analysis
 from SALib.sample import saltelli
-from SALib.test_functions import Ishigami
 from tqdm import tqdm
 
 warnings.simplefilter(action="ignore")

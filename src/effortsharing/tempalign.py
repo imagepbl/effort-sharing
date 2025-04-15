@@ -7,7 +7,6 @@
 # Put in packages that we need
 # =========================================================== #
 
-import json
 from pathlib import Path
 
 import numpy as np

@@ -7,14 +7,12 @@
 # Put in packages that we need
 # =========================================================== #
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
-from scipy.signal import savgol_filter
 
 # =========================================================== #
 # CLASS OBJECT
