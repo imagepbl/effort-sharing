@@ -26,7 +26,7 @@ warnings.simplefilter(action="ignore")
 # =========================================================== #
 
 
-class vardecomposing(object):
+class vardecomposing:
     # =========================================================== #
     # =========================================================== #
 
@@ -149,7 +149,7 @@ class vardecomposing(object):
         for i in range(len(Si_norm)):
             m_i = np.nanmin(Si_norm[i])
             if m_i < 0:
-                Si_norm[i] = (Si_norm[i] - m_i) / np.sum((Si_norm[i] - m_i))
+                Si_norm[i] = (Si_norm[i] - m_i) / np.sum(Si_norm[i] - m_i)
         Si_norm[np.unique(np.where(np.isnan(Si_norm))[0])] = np.nan
         return Si_norm
 

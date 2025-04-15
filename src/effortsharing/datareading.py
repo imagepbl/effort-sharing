@@ -19,7 +19,7 @@ import yaml
 # =========================================================== #
 
 
-class datareading(object):
+class datareading:
     # =========================================================== #
     # =========================================================== #
 
@@ -1784,7 +1784,7 @@ class datareading(object):
                         params = self.settings["params"]
                         path = f"X:/user/dekkerm/Data/NDC/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/{cty.lower()}_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                         try:
-                            with open(path, "r") as file:
+                            with open(path) as file:
                                 json_data = json.load(file)
                             country_name = json_data["results"]["country"]["name"]
                             series_items = json_data["results"]["series"]
@@ -1812,7 +1812,7 @@ class datareading(object):
                     params = self.settings["params"]
                     path = f"X:/user/dekkerm/Data/NDC/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/regions/groupeu27_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
                     try:
-                        with open(path, "r") as file:
+                        with open(path) as file:
                             json_data = json.load(file)
                         country_name = json_data["results"]["country"]["name"]
                         series_items = json_data["results"]["series"]
