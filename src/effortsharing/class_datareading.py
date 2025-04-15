@@ -25,14 +25,12 @@ class datareading(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self):
+    def __init__(self, input_file):
         print("# ==================================== #")
         print("# DATAREADING class                    #")
 
-        self.current_dir = Path.cwd()
-
         # Read in Input YAML file
-        with open(self.current_dir / 'input.yml') as file:
+        with open(input_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
 
         # Get dimension lists
