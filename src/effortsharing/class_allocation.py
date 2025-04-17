@@ -27,11 +27,18 @@ class allocation:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, reg, lulucf="incl", dataread_file="xr_dataread.nc", gas="GHG"):
+    def __init__(
+        self,
+        reg,
+        lulucf="incl",
+        dataread_file="xr_dataread.nc",
+        gas="GHG",
+        settings_file="./input.yaml",
+    ):
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
-        with open(self.current_dir / "input.yml") as file:
+        with open(settings_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(
             self.settings["paths"]["data"]["datadrive"] + "all_countries.npy",
@@ -595,6 +602,7 @@ class allocation:
             .sel(Time=np.arange(self.settings["params"]["start_year_analysis"], 2101))
             .astype("float32")
         )
+        Path(savepath).parent.mkdir(exist_ok=True)
         xr_total_onlyalloc.to_netcdf(savepath, format="NETCDF4")
         self.xr_alloc = xr_total_onlyalloc
         self.xr_total.close()
