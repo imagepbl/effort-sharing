@@ -24,15 +24,17 @@ class dataexportcl(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self):
+    def __init__(
+        self, input_file="../../input.yml", settings_file="./export_settings.yml"
+    ):
         print("# ==================================== #")
         print("# DATAREADING class                    #")
         self.current_dir = Path.cwd()
 
         # Read in export settings YAML file and Input YAML file
-        with open(self.current_dir / "export_settings.yml") as file:
+        with open(settings_file) as file:
             self.export_settings = yaml.load(file, Loader=yaml.FullLoader)
-        with open(self.current_dir / "../input.yml") as file:
+        with open(input_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
 
         # Set up main data objects
