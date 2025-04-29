@@ -27,11 +27,16 @@ class allocation:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, reg, lulucf="incl", dataread_file="xr_dataread.nc", gas="GHG"):
-        self.current_dir = Path.cwd()
-
+    def __init__(
+        self,
+        reg,
+        lulucf="incl",
+        dataread_file="xr_dataread.nc",
+        gas="GHG",
+        input_file="input.yml",
+    ):
         # Read in Input YAML file
-        with open(self.current_dir / "input.yml") as file:
+        with open(input_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(
             self.settings["paths"]["data"]["datadrive"] + "all_countries.npy", allow_pickle=True
