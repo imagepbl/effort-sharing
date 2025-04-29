@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # Pyflakes
+    "UP",  # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "I",  # isort
+    "PL",  # pylint
+    "N",  # naming conventions
+]
+ignore = []
