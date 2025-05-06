@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+import effortsharing.regions as _regions
 from effortsharing.config import Config
 
 
@@ -44,11 +45,124 @@ def read_general(config: Config):
     )
 
     # Extend countries with non-country regions
-    # TODO: maybe move to outer scope?
-    non_country_regions = {"European Union": "EU", "Earth": "EARTH"}
-    regions = {**countries, **non_country_regions}
+    regions = {**countries, **_regions.ADDITIONAL_EU_AND_EARTH}
 
     return General(countries, regions)
+
+
+def read_ssps_refactor(config, regions):
+    """Read GDP and population data from SSPs."""
+    print("- Reading GDP and population data from SSPs")
+
+    # Define input
+    data_root = config.paths.input
+    filename = "SSPs_v2023.xlsx"
+
+    # Read data
+    df = pd.read_excel(data_root / filename, sheet_name="data")
+
+    # Filter for relevant models
+    df = df[(df.Model.isin(["OECD ENV-Growth 2023", "IIASA-WiC POP 2023"]))].drop(
+        columns=["Model", "Unit"]
+    )
+
+    # Convert year columns into row indexes
+    melted = df.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time")
+    melted["Time"] = melted["Time"].astype(int)
+
+    # Transform to xarray dataset
+    ds = melted.pivot(
+        index=["Scenario", "Region", "Time"], columns="Variable", values="value"
+    ).to_xarray()
+
+    # Split historical from future scenarios
+    hist = ds.sel(Scenario="Historical Reference", Time=slice(1980, 2020))
+    ds = ds.drop_sel(Scenario="Historical Reference")
+
+    # Substitute historical data into the corresponding years of each scenario
+    historical_expanded = hist.expand_dims(Scenario=ds.Scenario)
+    ds.loc[dict(Time=slice(1980, 2020))] = historical_expanded
+
+    # Rename variable
+    ds = ds.rename_vars({"GDP|PPP": "GDP"})
+
+    # Replace region names with ISO codes
+    region_lookup_table = {**regions, **_regions.ADDITIONAL_REGIONS_SSPS}
+    ds["Region"] = list(map(lambda name: region_lookup_table.get(name, "oeps"), ds.Region.values))
+    ds = ds.sortby(ds.Region)
+
+    return ds
+
+
+# TODO: check why different from refactored version; fix; remove.
+def read_ssps(config, regions):
+    print("- Reading GDP and population data from SSPs")
+
+    # Define input
+    data_root = config.paths.input
+    filename = "SSPs_v2023.xlsx"
+
+    for i in range(6):
+        df_ssp = pd.read_excel(
+            data_root / filename,
+            sheet_name="data",
+        )
+        if i >= 1:
+            df_ssp = df_ssp[
+                (df_ssp.Model.isin(["OECD ENV-Growth 2023"]))
+                & (df_ssp.Scenario == "Historical Reference")
+            ]
+        else:
+            df_ssp = df_ssp[
+                (df_ssp.Model.isin(["OECD ENV-Growth 2023", "IIASA-WiC POP 2023"]))
+                & (df_ssp.Scenario.isin(["SSP1", "SSP2", "SSP3", "SSP4", "SSP5"]))
+            ]
+        region_full = np.array(df_ssp.Region)
+        region_iso = []
+        for r in region_full:
+            iso = regions.get(r, None)
+            if iso is None:
+                # TODO: read from self.regions_iso instead ?!
+                iso = _regions.ADDITIONAL_REGIONS_SSPS.get(r, None)
+            if iso is None:
+                print(r)
+                iso = "oeps"
+            region_iso.append(iso)
+        df_ssp["Region"] = region_iso
+        variable = np.array(df_ssp["Variable"])
+        variable[variable == "GDP|PPP"] = "GDP"
+        df_ssp["Variable"] = variable
+        df_ssp = df_ssp.drop(["Model", "Unit"], axis=1)
+        dummy = df_ssp.melt(
+            id_vars=["Scenario", "Region", "Variable"],
+            var_name="Time",
+            value_name="Value",
+        )
+        dummy["Time"] = np.array(dummy["Time"].astype(int))
+        if i >= 1:
+            dummy["Scenario"] = ["SSP" + str(i)] * len(dummy)
+            xr_hist_gdp_i = xr.Dataset.from_dataframe(
+                dummy.pivot(
+                    index=["Scenario", "Region", "Time"],
+                    columns="Variable",
+                    values="Value",
+                )
+            ).sel(Time=[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015])
+            xr_ssp = xr.merge([xr_ssp, xr_hist_gdp_i])
+        else:
+            xr_ssp = (
+                xr.Dataset.from_dataframe(
+                    dummy.pivot(
+                        index=["Scenario", "Region", "Time"],
+                        columns="Variable",
+                        values="Value",
+                    )
+                )
+                .reindex({"Time": np.arange(2020, 2101, 5)})
+                .reindex({"Time": np.arange(1980, 2101, 5)})
+            )
+
+        return xr_ssp
 
 
 class datareading:
@@ -84,134 +198,6 @@ class datareading:
 
         # print("# startyear: ", self.settings["params"]["start_year_analysis"])
         print("# ==================================== #")
-
-    # =========================================================== #
-    # =========================================================== #
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def read_ssps(self):
-        print("- Reading GDP and population data from SSPs")
-        for i in range(6):
-            df_ssp = pd.read_excel(
-                self.settings["paths"]["data"]["external"] + "SSPs_v2023.xlsx",
-                sheet_name="data",
-            )
-            if i >= 1:
-                df_ssp = df_ssp[
-                    (df_ssp.Model.isin(["OECD ENV-Growth 2023"]))
-                    & (df_ssp.Scenario == "Historical Reference")
-                ]
-            else:
-                df_ssp = df_ssp[
-                    (df_ssp.Model.isin(["OECD ENV-Growth 2023", "IIASA-WiC POP 2023"]))
-                    & (df_ssp.Scenario.isin(["SSP1", "SSP2", "SSP3", "SSP4", "SSP5"]))
-                ]
-            region_full = np.array(df_ssp.Region)
-            region_iso = []
-            for r_i, r in enumerate(region_full):
-                wh = np.where(self.regions_name == r)[0]
-                if len(wh) > 0:
-                    iso = self.countries_iso[wh[0]]
-                elif r == "Aruba":
-                    iso = "ABW"
-                elif r == "Bahamas":
-                    iso = "BHS"
-                elif r == "Democratic Republic of the Congo":
-                    iso = "COD"
-                elif r == "Cabo Verde":
-                    iso = "CPV"
-                elif r == "C?te d'Ivoire":
-                    iso = "CIV"
-                elif r == "Western Sahara":
-                    iso = "ESH"
-                elif r == "Gambia":
-                    iso = "GMB"
-                elif r == "Czechia":
-                    iso = "CZE"
-                elif r == "French Guiana":
-                    iso = "GUF"
-                elif r == "Guam":
-                    iso = "GUM"
-                elif r == "Hong Kong":
-                    iso = "HKG"
-                elif r == "Iran":
-                    iso = "IRN"
-                elif r == "Macao":
-                    iso = "MAC"
-                elif r == "Moldova":
-                    iso = "MDA"
-                elif r == "Mayotte":
-                    iso = "MYT"
-                elif r == "New Caledonia":
-                    iso = "NCL"
-                elif r == "Puerto Rico":
-                    iso = "PRI"
-                elif r == "French Polynesia":
-                    iso = "PYF"
-                elif r == "Turkey":
-                    iso = "TUR"
-                elif r == "Taiwan":
-                    iso = "TWN"
-                elif r == "Tanzania":
-                    iso = "TZA"
-                elif r == "United States":
-                    iso = "USA"
-                elif r == "United States Virgin Islands":
-                    iso = "VIR"
-                elif r == "Viet Nam":
-                    iso = "VNM"
-                elif r == "Cura?ao":
-                    iso = "CUW"
-                elif r == "Guadeloupe":
-                    iso = "GLP"
-                elif r == "Martinique":
-                    iso = "MTQ"
-                elif r == "Palestine":
-                    iso = "PSE"
-                elif r == "R?union":
-                    iso = "REU"
-                elif r == "Syria":
-                    iso = "SYR"
-                elif r == "Venezuela":
-                    iso = "VEN"
-                elif r == "World":
-                    iso = "EARTH"
-                else:
-                    print(r)
-                    iso = "oeps"
-                region_iso.append(iso)
-            df_ssp["Region"] = region_iso
-            Variable = np.array(df_ssp["Variable"])
-            Variable[Variable == "GDP|PPP"] = "GDP"
-            df_ssp["Variable"] = Variable
-            df_ssp = df_ssp.drop(["Model", "Unit"], axis=1)
-            dummy = df_ssp.melt(
-                id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value"
-            )
-            dummy["Time"] = np.array(dummy["Time"].astype(int))
-            if i >= 1:
-                dummy["Scenario"] = ["SSP" + str(i)] * len(dummy)
-                xr_hist_gdp_i = xr.Dataset.from_dataframe(
-                    dummy.pivot(
-                        index=["Scenario", "Region", "Time"], columns="Variable", values="Value"
-                    )
-                ).sel(Time=[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015])
-                self.xr_ssp = xr.merge([self.xr_ssp, xr_hist_gdp_i])
-            else:
-                self.xr_ssp = (
-                    xr.Dataset.from_dataframe(
-                        dummy.pivot(
-                            index=["Scenario", "Region", "Time"], columns="Variable", values="Value"
-                        )
-                    )
-                    .reindex({"Time": np.arange(2020, 2101, 5)})
-                    .reindex({"Time": np.arange(1980, 2101, 5)})
-                )
-
-    # =========================================================== #
-    # =========================================================== #
 
     def read_undata(self):
         print("- Reading UN population data and gapminder, processed by OWID (for past population)")
@@ -2506,15 +2492,3 @@ class datareading:
             format="NETCDF4",
             engine="netcdf4",
         )
-
-
-if __name__ == "__main__":
-    import sys
-
-    from rich import print
-
-    config_file = sys.argv[1]
-    config = Config.from_file(config_file)
-
-    general = read_general(config)
-    print(general)
