@@ -8,68 +8,85 @@
 # =========================================================== #
 
 import json
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import xarray as xr
-import yaml
 
-# =========================================================== #
-# CLASS OBJECT
-# =========================================================== #
+from effortsharing.config import Config
+
+
+@dataclass
+class General:
+    countries: dict[str, str]
+    regions: dict[str, str]
+
+
+def read_general(config: Config):
+    """Read country names and ISO from UNFCCC table."""
+    print("- Reading unfccc country data")
+
+    data_root = config.paths.input
+    filename = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    # Read and transform countries
+    columns = {"Name": "name", "Country ISO Code": "iso"}
+    countries = (
+        pd.read_excel(
+            data_root / filename,
+            sheet_name="Country groups",
+            usecols=columns.keys(),
+        )
+        .rename(columns=columns)
+        .set_index("name")["iso"]
+        .to_dict()
+    )
+
+    # Extend countries with non-country regions
+    # TODO: maybe move to outer scope?
+    non_country_regions = {"European Union": "EU", "Earth": "EARTH"}
+    regions = {**countries, **non_country_regions}
+
+    return General(countries, regions)
 
 
 class datareading:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, input_file='input.yml'):
+    def __init__(self):
         print("# ==================================== #")
         print("# DATAREADING class                    #")
 
-        # Read in Input YAML file
-        with open(input_file) as file:
-            self.settings = yaml.load(file, Loader=yaml.FullLoader)
-
         # Get dimension lists
-        self.dim_temp = (
-            np.array(self.settings["dimension_ranges"]["peak_temperature"]).astype(float).round(2)
-        )
-        self.dim_prob = np.array(self.settings["dimension_ranges"]["risk_of_exceedance"]).round(2)
-        self.dim_negemis = np.array(self.settings["dimension_ranges"]["negative_emissions"]).round(
-            2
-        )
-        self.dim_nonco2 = np.array(self.settings["dimension_ranges"]["non_co2_reduction"]).round(2)
-        self.dim_timing = np.array(self.settings["dimension_ranges"]["timing_of_mitigation_action"])
+        # self.dim_temp = (
+        #     np.array(self.settings["dimension_ranges"]["peak_temperature"]).astype(float).round(2)
+        # )
+        # self.dim_prob = np.array(self.settings["dimension_ranges"]["risk_of_exceedance"]).round(2)
+        # self.dim_negemis = np.array(self.settings["dimension_ranges"]["negative_emissions"]).round(
+        #     2
+        # )
+        # self.dim_nonco2 = np.array(self.settings["dimension_ranges"]["non_co2_reduction"]).round(2)
+        # self.dim_timing = np.array(self.settings["dimension_ranges"]["timing_of_mitigation_action"])
 
-        self.time_future = np.arange(self.settings["params"]["start_year_analysis"], 2101)
-        self.time_past = np.arange(1850, self.settings["params"]["start_year_analysis"] + 1)
-        self.savepath = (
-            self.settings["paths"]["data"]["datadrive"]
-            + "startyear_"
-            + str(self.settings["params"]["start_year_analysis"])
-            + "/"
-        )
-        self.recent_increment = int(
-            np.floor(self.settings["params"]["start_year_analysis"] / 5) * 5
-        )
+        # self.time_future = np.arange(self.settings["params"]["start_year_analysis"], 2101)
+        # self.time_past = np.arange(1850, self.settings["params"]["start_year_analysis"] + 1)
+        # self.savepath = (
+        #     self.settings["paths"]["data"]["datadrive"]
+        #     + "startyear_"
+        #     + str(self.settings["params"]["start_year_analysis"])
+        #     + "/"
+        # )
+        # self.recent_increment = int(
+        #     np.floor(self.settings["params"]["start_year_analysis"] / 5) * 5
+        # )
 
-        print("# startyear: ", self.settings["params"]["start_year_analysis"])
+        # print("# startyear: ", self.settings["params"]["start_year_analysis"])
         print("# ==================================== #")
 
     # =========================================================== #
     # =========================================================== #
-
-    def read_general(self):
-        print("- Reading general data")
-        df_gen = pd.read_excel(
-            self.settings["paths"]["data"]["external"] + "UNFCCC_Parties_Groups_noeu.xlsx",
-            sheet_name="Country groups",
-        )
-        self.countries_iso = np.array(list(df_gen["Country ISO Code"]))
-        self.countries_name = np.array(list(df_gen["Name"]))
-        self.regions_iso = np.array(list(df_gen["Country ISO Code"]) + ["EU", "EARTH"])
-        self.regions_name = np.array(list(df_gen["Name"]) + ["European Union", "Earth"])
 
     # =========================================================== #
     # =========================================================== #
@@ -2489,3 +2506,15 @@ class datareading:
             format="NETCDF4",
             engine="netcdf4",
         )
+
+
+if __name__ == "__main__":
+    import sys
+
+    from rich import print
+
+    config_file = sys.argv[1]
+    config = Config.from_file(config_file)
+
+    general = read_general(config)
+    print(general)
