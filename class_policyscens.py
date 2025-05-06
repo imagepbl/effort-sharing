@@ -163,57 +163,38 @@ class policyscenadding(object):
         df_scenarios_renamed.sort_values(by=["Region_cleaned"], inplace=True)
         df_scenarios_renamed.reset_index(drop=True, inplace=True)
 
-        # Add a new column 'Is_Duplicate' to indicate subsequent duplicates
-        df_scenarios_renamed["Is_Duplicate"] = df_scenarios_renamed.duplicated(
-            subset=["Model", "Scenario", "Variable", "2025", "2100"], keep="first"
-        )
+        # TODO figure out why some duplicates are not the same, maybe problems from modelling teams?
+        # For now this keeps the first duplicate and removes the rest
+        df_scenarios_deduplicated = df_scenarios_renamed.groupby(["Model", "Scenario", "Variable", "Region_cleaned"], as_index = True).first()
 
-        # Remove all rows that are Is_Duplicate = True
-        df_scenarios_deduplicated = df_scenarios_renamed[
-            ~df_scenarios_renamed["Is_Duplicate"]
-        ]
-
-        # TODO: Adapt in the future
-        # For GEM-E3_V2023 there are several India results
-        # Becomes an issue later when converting to xarray so removing for now
-        df_scenarios_deduplicated = df_scenarios_deduplicated[
-            ~(
-                (df_scenarios_deduplicated["Model"] == "GEM-E3_V2023")
-                & (df_scenarios_deduplicated["Region_cleaned"] == "India")
-            )
-        ]
+        # Removing columns from index
+        df_scenarios_deduplicated.reset_index(inplace=True)
 
         # Drop helper columns and reorder the DataFrame
         df_scenarios_deduplicated.drop(
-            columns=["Model_2", "Region_2", "Is_Duplicate", "Region"], inplace=True
+            columns=["Model_2", "Region_2", "Region"], inplace=True
         )
-        df_scenarios_deduplicated.rename(
-            columns={"Region_cleaned": "Region"}, inplace=True
+        df_scenarios_deduplicated = df_scenarios_deduplicated.rename(
+            columns={"Region_cleaned": "Region"}
         )
 
         # # Convert countries to ISO3 codes and leave regions as is
         logger.info("Converting country names to ISO3 codes")
         cc = coco.CountryConverter()
-        df_scenarios_deduplicated["Region"] = cc.pandas_convert(
-            series=df_scenarios_deduplicated["Region"], to="ISO3", not_found=None
-        )
 
-        # # Check if there are any lists in the 'Region' column
-        # for col in ["Scenario", "Model", "Region"]:
-        #     print(
-        #         f"Column '{col}' contains lists: {df_scenarios_deduplicated[col].apply(lambda x: isinstance(x, list)).any()}"
-        #     )
+        # Convert countries to ISO3 codes only if "R10" is not in the column
+        def conditional_convert(region):
+            if "R10" in region:
+                return region  # Keep the original value if "R10" is present
+            return cc.convert(names=region, to="ISO3", not_found=None)
+
+        # Apply the conditional conversion to the 'Region' column
+        df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(conditional_convert)
 
         # Take the lists in "Region" and convert them to text divided by comma
         df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(
             lambda x: ", ".join(x) if isinstance(x, list) else x
         )
-        # # Check if there are any lists in the 'Region' column again
-        # for col in ["Scenario", "Model", "Region"]:
-        #     print(
-        #         f"Column '{col}' contains lists: {df_scenarios_deduplicated[col].apply(lambda x: isinstance(x, list)).any()}"
-        #     )
-
 
         # Reorder the columns
         columns_to_keep = [
