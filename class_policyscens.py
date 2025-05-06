@@ -165,7 +165,9 @@ class policyscenadding(object):
 
         # TODO figure out why some duplicates are not the same, maybe problems from modelling teams?
         # For now this keeps the first duplicate and removes the rest
-        df_scenarios_deduplicated = df_scenarios_renamed.groupby(["Model", "Scenario", "Variable", "Region_cleaned"], as_index = True).first()
+        df_scenarios_deduplicated = df_scenarios_renamed.groupby(
+            ["Model", "Scenario", "Variable", "Region_cleaned"], as_index=True
+        ).first()
 
         # Removing columns from index
         df_scenarios_deduplicated.reset_index(inplace=True)
@@ -189,7 +191,9 @@ class policyscenadding(object):
             return cc.convert(names=region, to="ISO3", not_found=None)
 
         # Apply the conditional conversion to the 'Region' column
-        df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(conditional_convert)
+        df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(
+            conditional_convert
+        )
 
         # Take the lists in "Region" and convert them to text divided by comma
         df_scenarios_deduplicated["Region"] = df_scenarios_deduplicated["Region"].apply(
@@ -225,11 +229,6 @@ class policyscenadding(object):
 
         # Convert the 'Time' column to integers
         df_melted["Time"] = np.array(df_melted["Time"].astype(int))
-
-        # for col in ["Scenario", "Model", "Region", "Time"]:
-        #     print(
-        #         f"Column '{col}' contains lists: {df_melted[col].apply(lambda x: isinstance(x, list)).any()}"
-        #     )
 
         # Set the index for the xarray object
         df_melted.set_index(["Scenario", "Model", "Region", "Time"], inplace=True)
