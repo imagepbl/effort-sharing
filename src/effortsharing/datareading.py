@@ -23,6 +23,11 @@ class General:
     countries: dict[str, str]
     regions: dict[str, str]
 
+@dataclass
+class UNPopulation:
+    population: xr.Dataset
+    population_long: xr.Dataset
+
 
 def read_general(config: Config):
     """Read country names and ISO from UNFCCC table."""
@@ -165,6 +170,33 @@ def read_ssps(config, regions):
         return xr_ssp
 
 
+def read_un_population(config, countries):
+    print("- Reading UN population data and gapminder, processed by OWID (for past population)")
+
+    # Define input
+    data_root = config.paths.input
+    filename = "population_HYDE_UNP_Gapminder.csv"
+
+    df_pop = pd.read_csv(data_root / filename)[["Code", "Year", "Population (historical)"]].rename(
+        {"Code": "Region", "Population (historical)": "Population", "Year": "Time"},
+        axis=1,
+    )
+    reg = np.array(df_pop.Region)
+    reg[reg == "OWID_WRL"] = "EARTH"
+    df_pop.Region = reg
+
+    xr_unp_long = (
+        xr.Dataset.from_dataframe(
+            df_pop[df_pop.Region.isin(list(countries.values()) + ["EARTH"])].set_index(
+                ["Region", "Time"]
+            )
+        )
+        / 1e6
+    )
+    xr_unp = xr_unp_long.sel(Time=np.arange(1850, 2000))
+    return UNPopulation(xr_unp, xr_unp_long)
+
+
 class datareading:
     # =========================================================== #
     # =========================================================== #
@@ -199,35 +231,6 @@ class datareading:
         # print("# startyear: ", self.settings["params"]["start_year_analysis"])
         print("# ==================================== #")
 
-    def read_undata(self):
-        print("- Reading UN population data and gapminder, processed by OWID (for past population)")
-        df_pop = pd.read_csv(
-            self.settings["paths"]["data"]["external"] + "population_HYDE_UNP_Gapminder.csv"
-        )[["Code", "Year", "Population (historical)"]].rename(
-            {"Code": "Region", "Population (historical)": "Population", "Year": "Time"}, axis=1
-        )
-        reg = np.array(df_pop.Region)
-        reg[reg == "OWID_WRL"] = "EARTH"
-        df_pop.Region = reg
-        self.xr_unp = (
-            xr.Dataset.from_dataframe(
-                df_pop[df_pop.Region.isin(list(self.countries_iso) + ["EARTH"])].set_index(
-                    ["Region", "Time"]
-                )
-            ).sel(Time=np.arange(1850, 2000))
-            / 1e6
-        )
-        self.xr_unp_long = (
-            xr.Dataset.from_dataframe(
-                df_pop[df_pop.Region.isin(list(self.countries_iso) + ["EARTH"])].set_index(
-                    ["Region", "Time"]
-                )
-            )
-            / 1e6
-        )
-
-    # =========================================================== #
-    # =========================================================== #
 
     def read_hdi(self):
         print("- Read Human Development Index data")
