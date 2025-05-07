@@ -3,12 +3,12 @@
 # ============================================== #
 paths:
   data:
-    external: X:/user/dekkerm/Data/
-    baseline: X:/user/heerdenvr/Downscaling/Mark/23_02_2024/
-    internal: Data/
-    datadrive: K:/Data/Data_effortsharing/DataUpdate_ongoing/
-    export: K:/Data/Data_effortsharing/EffortSharingExports/
-    lambollrepo: K:/Code/AR6CarbonBudgetCalc/
+    external: ../data/input/
+    baseline: ../data/input/
+    # internal: Data/
+    datadrive: ../data/output/
+    export: ../data/output/
+    lambollrepo: ../../AR6CarbonBudgetCalc/  # clone from https://github.com/Rlamboll/AR6CarbonBudgetCalc
 
 # ============================================== #
 # PARAMS
