@@ -1656,16 +1656,21 @@ def determine_global_co2_trajectories(
     )
 
 
-def read_baseline(self):
+def read_baseline(
+    config: Config,
+    countries,  # TODO: pass in region instead??
+    xr_hist,
+):
     print("- Reading baseline emissions")
+
+    data_root = config.paths.input
+    start_year = config.params.start_year_analysis
+    countries_iso = list(countries.values())
+
     xr_bases = []
-    for i in range(
-        3
-    ):  # In the up-to-date baselines, only SSP1, 2 and 3 are included. Will be updated at some point.
-        df_base = pd.read_excel(
-            self.settings["paths"]["data"]["baseline"] + "SSP" + str(i + 1) + ".xlsx",
-            sheet_name="Sheet1",
-        )
+    for i in range(3):
+        # In the up-to-date baselines, only SSP1, 2 and 3 are included. Will be updated at some point.
+        df_base = pd.read_excel(data_root / f"SSP{i + 1}.xlsx", sheet_name="Sheet1")
         df_base = df_base[df_base["Unnamed: 1"] == "Emissions|CO2|Energy"]
         df_base = df_base.drop(["Unnamed: 1"], axis=1)
         df_base = df_base.rename(columns={"COUNTRY": "Region"})
@@ -1681,27 +1686,33 @@ def read_baseline(self):
         dummy = df_base.set_index(["Region", "Scenario", "Time"])
         dummy = dummy.astype(float)
         xr_bases.append(xr.Dataset.from_dataframe(dummy))
-    xr_base = xr.merge(xr_bases).reindex({"Region": self.countries_iso})
+
+    xr_base = xr.merge(xr_bases).reindex({"Region": countries_iso})
 
     # Assign 2020 values in Time index
-    xr_base = xr_base.reindex(Time=np.arange(self.settings["params"]["start_year_analysis"], 2101))
-    for year in np.arange(self.settings["params"]["start_year_analysis"], 2021):
-        xr_base.CO2_base_excl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(
-            Time=year, Region=self.countries_iso
+    xr_base = xr_base.reindex(Time=np.arange(start_year, 2101))
+    for year in np.arange(start_year, 2021):
+        xr_base.CO2_base_excl.loc[dict(Time=year, Region=countries_iso)] = xr_hist.sel(
+            Time=year, Region=countries_iso
         ).CO2_hist_excl
 
+    # TODO: might be useful to create a helper function like so:
+    def mask_outside(data, lower=-1e9, upper=1e9):
+        cond1 = data > lower
+        cond2 = data < upper
+        return data.where(cond1 & cond2)
+
     # Harmonize emissions from historical values to baseline emissions
-    diffrac = self.xr_hist.CO2_hist_excl.sel(
-        Time=self.settings["params"]["start_year_analysis"]
-    ) / xr_base.CO2_base_excl.sel(Time=self.settings["params"]["start_year_analysis"])
+    diffrac = xr_hist.CO2_hist_excl.sel(Time=start_year) / xr_base.CO2_base_excl.sel(
+        Time=start_year
+    )
     diffrac = diffrac.where(diffrac < 1e9)
     diffrac = diffrac.where(diffrac > -1e9)
     xr_base = xr_base.assign(CO2_base_excl=xr_base.CO2_base_excl * diffrac)
 
     # Using a fraction, get other emissions variables
     fraction_startyear_co2_incl = (
-        self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).CO2_hist
-        / self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).CO2_hist_excl
+        xr_hist.sel(Time=start_year).CO2_hist / xr_hist.sel(Time=start_year).CO2_hist_excl
     )
     fraction_startyear_co2_incl = fraction_startyear_co2_incl.where(
         fraction_startyear_co2_incl < 1e9
@@ -1712,8 +1723,7 @@ def read_baseline(self):
     xr_base = xr_base.assign(CO2_base_incl=xr_base.CO2_base_excl * fraction_startyear_co2_incl)
 
     fraction_startyear_ghg_excl = (
-        self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).GHG_hist_excl
-        / self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).CO2_hist_excl
+        xr_hist.sel(Time=start_year).GHG_hist_excl / xr_hist.sel(Time=start_year).CO2_hist_excl
     )
     fraction_startyear_ghg_excl = fraction_startyear_ghg_excl.where(
         fraction_startyear_ghg_excl < 1e9
@@ -1724,8 +1734,7 @@ def read_baseline(self):
     xr_base = xr_base.assign(GHG_base_excl=xr_base.CO2_base_excl * fraction_startyear_ghg_excl)
 
     fraction_startyear_ghg_incl = (
-        self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).GHG_hist
-        / self.xr_hist.sel(Time=self.settings["params"]["start_year_analysis"]).CO2_hist_excl
+        xr_hist.sel(Time=start_year).GHG_hist / xr_hist.sel(Time=start_year).CO2_hist_excl
     )
     fraction_startyear_ghg_incl = fraction_startyear_ghg_incl.where(
         fraction_startyear_ghg_incl < 1e9
@@ -1736,22 +1745,24 @@ def read_baseline(self):
     xr_base = xr_base.assign(GHG_base_incl=xr_base.CO2_base_excl * fraction_startyear_ghg_incl)
 
     # Assign 2020 values in Time index
-    xr_base = xr_base.reindex(Time=np.arange(self.settings["params"]["start_year_analysis"], 2101))
-    for year in np.arange(self.settings["params"]["start_year_analysis"], 2021):
-        xr_base.GHG_base_excl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(
-            Time=year, Region=self.countries_iso
+    xr_base = xr_base.reindex(Time=np.arange(start_year, 2101))
+    for year in np.arange(start_year, 2021):
+        xr_base.GHG_base_excl.loc[dict(Time=year, Region=countries_iso)] = xr_hist.sel(
+            Time=year, Region=countries_iso
         ).GHG_hist_excl
-        xr_base.CO2_base_incl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(
-            Time=year, Region=self.countries_iso
+        xr_base.CO2_base_incl.loc[dict(Time=year, Region=countries_iso)] = xr_hist.sel(
+            Time=year, Region=countries_iso
         ).CO2_hist
-        xr_base.GHG_base_incl.loc[dict(Time=year, Region=self.countries_iso)] = self.xr_hist.sel(
-            Time=year, Region=self.countries_iso
+        xr_base.GHG_base_incl.loc[dict(Time=year, Region=countries_iso)] = xr_hist.sel(
+            Time=year, Region=countries_iso
         ).GHG_hist
 
     # Harmonize global baseline emissions with sum of all countries (this is important for consistency of AP, etc.)
-    base_onlyc = xr_base.reindex(Region=self.countries_iso)
+    base_onlyc = xr_base.reindex(Region=countries_iso)
     base_w = base_onlyc.sum(dim="Region").expand_dims({"Region": ["EARTH"]})
-    self.xr_base = xr.merge([base_w, base_onlyc])
+    xr_base = xr.merge([base_w, base_onlyc])
+
+    return xr_base
 
 
 def read_ndc_climateresource(self):
@@ -2480,7 +2491,11 @@ if __name__ == "__main__":
         globalbudgets.xr_co2_budgets,
         nonco2trajectories.xr_traj_nonco2,
     )
-    # datareader.read_baseline()
+    xr_base = read_baseline(
+        config,
+        general.countries,
+        jonesdata.xr_hist,
+    )
     # datareader.read_ndc()
     # datareader.read_ndc_climateresource()
     # datareader.merge_xr()
