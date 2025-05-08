@@ -2035,14 +2035,19 @@ def merge_xr(
     xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(["Variable"])
     return xr_total
 
-def add_country_groups(self):
+def add_country_groups(config: Config, regions, xr_total):
     print("- Add country groups")
-    path_ctygroups = self.settings["paths"]["data"]["external"] + "/UNFCCC_Parties_Groups_noeu.xlsx"
-    df = pd.read_excel(path_ctygroups, sheet_name="Country groups")
+
+    data_root = config.paths.input
+    filename = "UNFCCC_Parties_Groups_noeu.xlsx"
+    regions_name = list(regions.keys())
+    regions_iso = list(regions.values())
+
+    df = pd.read_excel(data_root / filename, sheet_name="Country groups")
     countries_iso = np.array(df["Country ISO Code"])
-    list_of_regions = list(np.array(self.regions_iso).copy())
-    reg_iso = list(self.regions_iso)
-    reg_name = list(self.regions_name)
+    list_of_regions = list(np.array(regions_iso).copy())
+    reg_iso = regions_iso.copy()
+    reg_name = regions_name.copy()
     for group_of_choice in [
         "G20",
         "EU",
@@ -2058,29 +2063,25 @@ def add_country_groups(self):
             list_of_regions = list_of_regions + [group_of_choice]
         group_indices = countries_iso[np.array(df[group_of_choice]) == 1]
         country_to_eu = {}
-        for cty in np.array(self.xr_total.Region):
+        for cty in np.array(xr_total.Region):
             if cty in group_indices:
                 country_to_eu[cty] = [group_of_choice]
             else:
                 country_to_eu[cty] = [""]
         group_coord = xr.DataArray(
-            [
-                group
-                for country in np.array(self.xr_total["Region"])
-                for group in country_to_eu[country]
-            ],
+            [group for country in np.array(xr_total["Region"]) for group in country_to_eu[country]],
             dims=["Region"],
             coords={
                 "Region": [
                     country
-                    for country in np.array(self.xr_total["Region"])
+                    for country in np.array(xr_total["Region"])
                     for group in country_to_eu[country]
                 ]
             },
         )
         if group_of_choice == "EU":
             xr_eu = (
-                self.xr_total[
+                xr_total[
                     [
                         "Population",
                         "GDP",
@@ -2099,7 +2100,7 @@ def add_country_groups(self):
             )  # skipna=False)
         else:
             xr_eu = (
-                self.xr_total[
+                xr_total[
                     [
                         "Population",
                         "GDP",
@@ -2122,28 +2123,30 @@ def add_country_groups(self):
                 .sum(skipna=False)
             )
         xr_eu2 = xr_eu.rename({"group": "Region"})
-        dummy = self.xr_total.reindex(Region=list_of_regions)
-        self.xr_total = xr.merge([dummy, xr_eu2])
-        self.xr_total = self.xr_total.reindex(Region=list_of_regions)
+        dummy = xr_total.reindex(Region=list_of_regions)
+
+        new_total = xr.merge([dummy, xr_eu2])
+        new_total = new_total.reindex(Region=list_of_regions)
         if group_of_choice not in ["EU", "EARTH"]:
             reg_iso.append(group_of_choice)
             reg_name.append(group_of_choice)
-    self.xr_total = self.xr_total
-    self.xr_total["GHG_base_incl"][np.where(self.xr_total.Region == "EU")[0], np.array([3, 4])] = (
-        np.nan
-    )  # SSP4, 5 are empty for Europe!
-    self.xr_total["CO2_base_incl"][np.where(self.xr_total.Region == "EU")[0], np.array([3, 4])] = (
-        np.nan
-    )  # SSP4, 5 are empty for Europe!
-    self.xr_total["GHG_base_excl"][np.where(self.xr_total.Region == "EU")[0], np.array([3, 4])] = (
-        np.nan
-    )  # SSP4, 5 are empty for Europe!
-    self.xr_total["CO2_base_excl"][np.where(self.xr_total.Region == "EU")[0], np.array([3, 4])] = (
-        np.nan
-    )  # SSP4, 5 are empty for Europe!
-    self.regions_iso = np.array(reg_iso)
-    self.regions_name = np.array(reg_name)
 
+    new_total["GHG_base_incl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
+        np.nan
+    )  # SSP4, 5 are empty for Europe!
+    new_total["CO2_base_incl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
+        np.nan
+    )  # SSP4, 5 are empty for Europe!
+    new_total["GHG_base_excl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
+        np.nan
+    )  # SSP4, 5 are empty for Europe!
+    new_total["CO2_base_excl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
+        np.nan
+    )  # SSP4, 5 are empty for Europe!
+
+    new_regions = dict(zip(reg_name, reg_iso))
+
+    return new_total, new_regions
 
 def save(self):
     print("- Save important files")
@@ -2532,7 +2535,7 @@ if __name__ == "__main__":
         ar6data.xr_ar6_C_bunkers,
         general.regions,
     )
-    # add_country_groups()
+    new_total, new_regions = add_country_groups(config, general.regions, xr_total)
     # save()
     # country_specific_datareaders()
 
