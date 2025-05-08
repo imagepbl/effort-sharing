@@ -1996,29 +1996,44 @@ def read_ndc(config: Config, countries, xr_hist):
 
     return xr_ndc, xr_ndc_excl
 
-def merge_xr(self):
+def merge_xr(
+    xr_ssp,
+    xr_hist,
+    xr_unp,
+    xr_hdish,
+    xr_co2_budgets,
+    all_projected_gases,
+    xr_base,
+    xr_ndc,
+    xr_ndc_excl,
+    xr_ndc_CR,
+    xr_ar6_C,
+    xr_ar6_C_bunkers,
+    regions,
+):
+    regions_iso = list(regions.values())
     print("- Merging xrarray object")
     xr_total = xr.merge(
         [
-            self.xr_ssp,
-            self.xr_hist,
-            self.xr_unp,
-            self.xr_hdish,
-            self.xr_co2_budgets,
-            self.all_projected_gases,
-            self.xr_base,
-            self.xr_ndc,
-            self.xr_ndc_excl,
-            self.xr_ndc_CR,
-            self.xr_ar6_C,
-            self.xr_ar6_C_bunkers,
+            xr_ssp,
+            xr_hist,
+            xr_unp,
+            xr_hdish,
+            xr_co2_budgets,
+            all_projected_gases,
+            xr_base,
+            xr_ndc,
+            xr_ndc_excl,
+            xr_ndc_CR,
+            xr_ar6_C,
+            xr_ar6_C_bunkers,
         ]
     )
-    xr_total = xr_total.reindex(Region=self.regions_iso)
+    xr_total = xr_total.reindex(Region=regions_iso)
     xr_total = xr_total.reindex(Time=np.arange(1850, 2101))
     xr_total["GHG_globe"] = xr_total["GHG_globe"].astype(float)
-    self.xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(["Variable"])
-
+    xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(["Variable"])
+    return xr_total
 
 def add_country_groups(self):
     print("- Add country groups")
@@ -2476,11 +2491,9 @@ if __name__ == "__main__":
 
     config = Config.from_file(sys.argv[1])
     general = read_general(config)  # TODO combine with un_population?
-    ssps = read_ssps(config, regions=general.regions)
-    ssps_new = read_ssps_refactor(config, regions=general.regions)
+    xr_ssp = read_ssps(config, regions=general.regions)
     un_pop = read_un_population(config, countries=general.countries)
-    hdi, hdi_sh = read_hdi_refactor(config, general.countries, un_pop)
-    hdi_new, hdi_sh_new = read_hdi_refactor(config, general.countries, un_pop)
+    xr_hdi, xr_hdish = read_hdi(config, general.countries, un_pop)
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
     ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
     nonco2data = nonco2variation(config)
@@ -2504,7 +2517,21 @@ if __name__ == "__main__":
 
     xr_ndc_CR = read_ndc_climateresource(config, general.countries)
     xr_ndc, xr_ndc_excl = read_ndc(config, general.countries, jonesdata.xr_hist)
-    # merge_xr()
+    xr_total = merge_xr(
+        xr_ssp,
+        jonesdata.xr_hist,
+        un_pop.population,
+        xr_hdish,
+        globalbudgets.xr_co2_budgets,
+        global_co2_trajectories.all_projected_gases,
+        xr_base,
+        xr_ndc,
+        xr_ndc_excl,
+        xr_ndc_CR,
+        ar6data.xr_ar6_C,
+        ar6data.xr_ar6_C_bunkers,
+        general.regions,
+    )
     # add_country_groups()
     # save()
     # country_specific_datareaders()
