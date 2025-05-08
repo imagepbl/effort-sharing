@@ -2262,9 +2262,13 @@ def save(config: Config, xr_total, regions, countries):
     xr_rci.to_netcdf(config.paths.output / "xr_rci.nc")
 
 
-def country_specific_datareaders(self):
+def country_specific_datareaders(config: Config, xr_total, xr_primap):
+    savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
+    time_future = np.arange(config.params.start_year_analysis, 2101)
+    time_past = np.arange(1850, config.params.start_year_analysis + 1)
+
     # Dutch emissions - harmonized with the KEV # TODO harmonize global emissions with this, as well.
-    xr_dataread_nld = xr.open_dataset(self.savepath + "xr_dataread.nc").load().copy()
+    xr_dataread_nld = xr.open_dataset(config.paths.output / "xr_dataread.nc").load().copy()
     dutch_time = np.array(
         [
             1990,
@@ -2305,52 +2309,50 @@ def country_specific_datareaders(self):
             172.0,
         ]
     )
-    dutch_time_interp = np.arange(1990, self.settings["params"]["start_year_analysis"] + 1)
+    dutch_time_interp = np.arange(1990, config.params.start_year_analysis + 1)
     dutch_ghg_interp = np.interp(dutch_time_interp, dutch_time, dutch_ghg)
-    fraction_1990 = float(dutch_ghg[0] / self.xr_total.GHG_hist.sel(Region="NLD", Time=1990))
+    fraction_1990 = float(dutch_ghg[0] / xr_total.GHG_hist.sel(Region="NLD", Time=1990))
     pre_1990_raw = (
-        np.array(self.xr_total.GHG_hist.sel(Region="NLD", Time=np.arange(1850, 1990)))
-        * fraction_1990
+        np.array(xr_total.GHG_hist.sel(Region="NLD", Time=np.arange(1850, 1990))) * fraction_1990
     )
     total_ghg_nld = np.array(list(pre_1990_raw) + list(dutch_ghg_interp))
     fractions = np.array(
         xr_dataread_nld.GHG_hist.sel(
             Region="NLD",
-            Time=np.arange(1850, self.settings["params"]["start_year_analysis"] + 1),
+            Time=np.arange(1850, config.params.start_year_analysis + 1),
         )
         / total_ghg_nld
     )
-    for t_i, t in enumerate(self.time_past):
+    for t_i, t in enumerate(time_past):
         xr_dataread_nld.GHG_hist.loc[dict(Time=t, Region="NLD")] = total_ghg_nld[t_i]
 
-    xr_dataread_nld.CO2_base_incl.loc[dict(Region="NLD", Time=self.time_future)] = (
-        xr_dataread_nld.CO2_base_incl.sel(Region="NLD", Time=self.time_future) / fractions[-1]
+    xr_dataread_nld.CO2_base_incl.loc[dict(Region="NLD", Time=time_future)] = (
+        xr_dataread_nld.CO2_base_incl.sel(Region="NLD", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nld.CO2_base_excl.loc[dict(Region="NLD", Time=self.time_future)] = (
-        xr_dataread_nld.CO2_base_excl.sel(Region="NLD", Time=self.time_future) / fractions[-1]
+    xr_dataread_nld.CO2_base_excl.loc[dict(Region="NLD", Time=time_future)] = (
+        xr_dataread_nld.CO2_base_excl.sel(Region="NLD", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nld.GHG_base_incl.loc[dict(Region="NLD", Time=self.time_future)] = (
-        xr_dataread_nld.GHG_base_incl.sel(Region="NLD", Time=self.time_future) / fractions[-1]
+    xr_dataread_nld.GHG_base_incl.loc[dict(Region="NLD", Time=time_future)] = (
+        xr_dataread_nld.GHG_base_incl.sel(Region="NLD", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nld.GHG_base_excl.loc[dict(Region="NLD", Time=self.time_future)] = (
-        xr_dataread_nld.GHG_base_excl.sel(Region="NLD", Time=self.time_future) / fractions[-1]
+    xr_dataread_nld.GHG_base_excl.loc[dict(Region="NLD", Time=time_future)] = (
+        xr_dataread_nld.GHG_base_excl.sel(Region="NLD", Time=time_future) / fractions[-1]
     )
 
-    xr_dataread_nld.CO2_hist.loc[dict(Region="NLD", Time=self.time_past)] = (
-        xr_dataread_nld.CO2_hist.sel(Region="NLD", Time=self.time_past) / fractions
+    xr_dataread_nld.CO2_hist.loc[dict(Region="NLD", Time=time_past)] = (
+        xr_dataread_nld.CO2_hist.sel(Region="NLD", Time=time_past) / fractions
     )
-    xr_dataread_nld.CO2_hist_excl.loc[dict(Region="NLD", Time=self.time_past)] = (
-        xr_dataread_nld.CO2_hist_excl.sel(Region="NLD", Time=self.time_past) / fractions
+    xr_dataread_nld.CO2_hist_excl.loc[dict(Region="NLD", Time=time_past)] = (
+        xr_dataread_nld.CO2_hist_excl.sel(Region="NLD", Time=time_past) / fractions
     )
-    xr_dataread_nld.GHG_hist_excl.loc[dict(Region="NLD", Time=self.time_past)] = (
-        xr_dataread_nld.GHG_hist_excl.sel(Region="NLD", Time=self.time_past) / fractions
+    xr_dataread_nld.GHG_hist_excl.loc[dict(Region="NLD", Time=time_past)] = (
+        xr_dataread_nld.GHG_hist_excl.sel(Region="NLD", Time=time_past) / fractions
     )
     xr_dataread_nld.sel(
-        Temperature=np.array(self.settings["dimension_ranges"]["peak_temperature_saved"])
-        .astype(float)
-        .round(2)
+        Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     ).to_netcdf(
-        self.savepath + "xr_dataread_NLD.nc",
+        savepath / "xr_dataread_NLD.nc",
+        # TODO: make separate variable for encoding so we can reuse it?
         encoding={
             "Region": {"dtype": "str"},
             "Scenario": {"dtype": "str"},
@@ -2391,12 +2393,13 @@ def country_specific_datareaders(self):
         engine="netcdf4",
     )
 
+    # TODO: move to seperate function?
     # Norwegian emissions - harmonized with EDGAR
-    xr_dataread_nor = xr.open_dataset(self.savepath + "xr_dataread.nc").load().copy()
+    xr_dataread_nor = xr.open_dataset(config.paths.output / "xr_dataread.nc").load().copy()
     # Get data and interpolate
-    time_axis = np.arange(1990, self.settings["params"]["start_year_analysis"] + 1)
+    time_axis = np.arange(1990, config.params.start_year_analysis + 1)
     ghg_axis = np.array(
-        self.xr_primap.sel(Scenario="HISTCR", Region="NOR", time=time_axis, Category="M.0.EL")[
+        xr_primap.sel(Scenario="HISTCR", Region="NOR", time=time_axis, Category="M.0.EL")[
             "KYOTOGHG (AR6GWP100)"
         ]
     )
@@ -2405,49 +2408,45 @@ def country_specific_datareaders(self):
 
     # Get older data by linking to Jones
     fraction_minyear = float(
-        ghg_axis[0] / self.xr_total.GHG_hist_excl.sel(Region="NOR", Time=np.min(time_axis))
+        ghg_axis[0] / xr_total.GHG_hist_excl.sel(Region="NOR", Time=np.min(time_axis))
     )
     pre_minyear_raw = (
-        np.array(
-            self.xr_total.GHG_hist_excl.sel(Region="NOR", Time=np.arange(1850, np.min(time_axis)))
-        )
+        np.array(xr_total.GHG_hist_excl.sel(Region="NOR", Time=np.arange(1850, np.min(time_axis))))
         * fraction_minyear
     )
     total_ghg_nor = np.array(list(pre_minyear_raw) + list(ghg_interp)) / 1e3
     fractions = np.array(
-        xr_dataread_nor.GHG_hist_excl.sel(Region="NOR", Time=self.time_past) / total_ghg_nor
+        xr_dataread_nor.GHG_hist_excl.sel(Region="NOR", Time=time_past) / total_ghg_nor
     )
-    for t_i, t in enumerate(self.time_past):
+    for t_i, t in enumerate(time_past):
         xr_dataread_nor.GHG_hist_excl.loc[dict(Time=t, Region="NOR")] = total_ghg_nor[t_i]
 
-    xr_dataread_nor.CO2_base_incl.loc[dict(Region="NOR", Time=self.time_future)] = (
-        xr_dataread_nor.CO2_base_incl.sel(Region="NOR", Time=self.time_future) / fractions[-1]
+    xr_dataread_nor.CO2_base_incl.loc[dict(Region="NOR", Time=time_future)] = (
+        xr_dataread_nor.CO2_base_incl.sel(Region="NOR", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nor.CO2_base_excl.loc[dict(Region="NOR", Time=self.time_future)] = (
-        xr_dataread_nor.CO2_base_excl.sel(Region="NOR", Time=self.time_future) / fractions[-1]
+    xr_dataread_nor.CO2_base_excl.loc[dict(Region="NOR", Time=time_future)] = (
+        xr_dataread_nor.CO2_base_excl.sel(Region="NOR", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nor.GHG_base_incl.loc[dict(Region="NOR", Time=self.time_future)] = (
-        xr_dataread_nor.GHG_base_incl.sel(Region="NOR", Time=self.time_future) / fractions[-1]
+    xr_dataread_nor.GHG_base_incl.loc[dict(Region="NOR", Time=time_future)] = (
+        xr_dataread_nor.GHG_base_incl.sel(Region="NOR", Time=time_future) / fractions[-1]
     )
-    xr_dataread_nor.GHG_base_excl.loc[dict(Region="NOR", Time=self.time_future)] = (
-        xr_dataread_nor.GHG_base_excl.sel(Region="NOR", Time=self.time_future) / fractions[-1]
+    xr_dataread_nor.GHG_base_excl.loc[dict(Region="NOR", Time=time_future)] = (
+        xr_dataread_nor.GHG_base_excl.sel(Region="NOR", Time=time_future) / fractions[-1]
     )
 
-    xr_dataread_nor.CO2_hist.loc[dict(Region="NOR", Time=self.time_past)] = (
-        xr_dataread_nor.CO2_hist.sel(Region="NOR", Time=self.time_past) / fractions
+    xr_dataread_nor.CO2_hist.loc[dict(Region="NOR", Time=time_past)] = (
+        xr_dataread_nor.CO2_hist.sel(Region="NOR", Time=time_past) / fractions
     )
-    xr_dataread_nor.CO2_hist_excl.loc[dict(Region="NOR", Time=self.time_past)] = (
-        xr_dataread_nor.CO2_hist_excl.sel(Region="NOR", Time=self.time_past) / fractions
+    xr_dataread_nor.CO2_hist_excl.loc[dict(Region="NOR", Time=time_past)] = (
+        xr_dataread_nor.CO2_hist_excl.sel(Region="NOR", Time=time_past) / fractions
     )
-    xr_dataread_nor.GHG_hist.loc[dict(Region="NOR", Time=self.time_past)] = (
-        xr_dataread_nor.GHG_hist.sel(Region="NOR", Time=self.time_past) / fractions
+    xr_dataread_nor.GHG_hist.loc[dict(Region="NOR", Time=time_past)] = (
+        xr_dataread_nor.GHG_hist.sel(Region="NOR", Time=time_past) / fractions
     )
     xr_dataread_nor.sel(
-        Temperature=np.array(self.settings["dimension_ranges"]["peak_temperature_saved"])
-        .astype(float)
-        .round(2)
+        Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     ).to_netcdf(
-        self.savepath + "xr_dataread_NOR.nc",
+        savepath / "xr_dataread_NOR.nc",
         encoding={
             "Region": {"dtype": "str"},
             "Scenario": {"dtype": "str"},
@@ -2530,40 +2529,4 @@ if __name__ == "__main__":
     )
     new_total, new_regions = add_country_groups(config, general.regions, xr_total)
     save(config, xr_total, new_regions, general.countries)
-    # country_specific_datareaders()
-
-    import IPython
-
-    IPython.embed()
-    quit()
-
-
-# def __init__(self):
-#     print("# ==================================== #")
-#     print("# DATAREADING class                    #")
-
-#     Get dimension lists
-#     self.dim_temp = (
-#         np.array(self.settings["dimension_ranges"]["peak_temperature"]).astype(float).round(2)
-#     )
-#     self.dim_prob = np.array(self.settings["dimension_ranges"]["risk_of_exceedance"]).round(2)
-#     self.dim_negemis = np.array(self.settings["dimension_ranges"]["negative_emissions"]).round(
-#         2
-#     )
-#     self.dim_nonco2 = np.array(self.settings["dimension_ranges"]["non_co2_reduction"]).round(2)
-#     self.dim_timing = np.array(self.settings["dimension_ranges"]["timing_of_mitigation_action"])
-
-#     self.time_future = np.arange(self.settings["params"]["start_year_analysis"], 2101)
-#     self.time_past = np.arange(1850, self.settings["params"]["start_year_analysis"] + 1)
-#     self.savepath = (
-#         self.settings["paths"]["data"]["datadrive"]
-#         + "startyear_"
-#         + str(self.settings["params"]["start_year_analysis"])
-#         + "/"
-#     )
-#     self.recent_increment = int(
-#         np.floor(self.settings["params"]["start_year_analysis"] / 5) * 5
-#     )
-
-#     print("# startyear: ", self.settings["params"]["start_year_analysis"])
-#     print("# ==================================== #")
+    country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
