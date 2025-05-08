@@ -527,9 +527,8 @@ class allocation:
         part2 = yearfracs * self.xr_total.AP.sel(Time=self.analysis_timeframe)
         gdr_post2030 = (part1 + part2).sel(Time=np.arange(2031, 2101))
 
-        gdr_total = xr.merge([gdr, gdr_post2030])
-        gdr_total = gdr_total.rename({"Value": "GDR"})
-        self.xr_total = self.xr_total.assign(GDR=gdr_total.GDR)
+        gdr_total = xr.concat([gdr, gdr_post2030.Value], dim="Time")
+        self.xr_total = self.xr_total.assign(GDR=gdr_total)
         xr_rci.close()
 
     # =========================================================== #
