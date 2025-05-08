@@ -54,6 +54,14 @@ class NonCO2Data:
     xr_nonco2warming_wrt_start: xr.Dataset
 
 
+# TODO: perhaps combine this class with the one before?
+@dataclass
+class NonCO2Trajectories:
+    xr_traj_nonco2: xr.Dataset
+    xr_traj_nonco2_2: xr.Dataset
+    xr_traj_nonco2_adapt: xr.Dataset | None
+
+
 def read_general(config: Config) -> General:
     """Read country names and ISO from UNFCCC table."""
     print("- Reading unfccc country data")
@@ -1078,25 +1086,19 @@ def nonco2variation(config: Config):
     return NonCO2Data(xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start)
 
 
-def determine_global_nonco2_trajectories(self):
+def determine_global_nonco2_trajectories(
+    config: Config, ar6data: AR6Data, xr_hist, xr_temperatures
+):
     print("- Computing global nonco2 trajectories")
+
     # Relationship between non-co2 reduction and budget is based on Rogelj et al and requires the year 2020 (even though startyear may be different) - not a problem
-    xr_ch4_raw = self.xr_ar6.sel(Variable="Emissions|CH4") * self.settings["params"]["gwp_ch4"]
-    xr_n2o_raw = (
-        self.xr_ar6.sel(Variable="Emissions|N2O") * self.settings["params"]["gwp_n2o"] / 1e3
-    )
-    n2o_start = (
-        self.xr_hist.sel(Region="EARTH")
-        .sel(Time=self.settings["params"]["start_year_analysis"])
-        .N2O_hist
-    )
-    ch4_start = (
-        self.xr_hist.sel(Region="EARTH")
-        .sel(Time=self.settings["params"]["start_year_analysis"])
-        .CH4_hist
-    )
-    n2o_2020 = self.xr_hist.sel(Region="EARTH").sel(Time=2020).N2O_hist
-    ch4_2020 = self.xr_hist.sel(Region="EARTH").sel(Time=2020).CH4_hist
+
+    xr_ch4_raw = ar6data.xr_ar6.sel(Variable="Emissions|CH4") * config.params.gwp_ch4
+    xr_n2o_raw = ar6data.xr_ar6.sel(Variable="Emissions|N2O") * config.params.gwp_n2o / 1e3
+    n2o_start = xr_hist.sel(Region="EARTH").sel(Time=config.params.start_year_analysis).N2O_hist
+    ch4_start = xr_hist.sel(Region="EARTH").sel(Time=config.params.start_year_analysis).CH4_hist
+    n2o_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).N2O_hist
+    ch4_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).CH4_hist
     tot_2020 = n2o_2020 + ch4_2020
     tot_start = n2o_start + ch4_start
 
@@ -1108,28 +1110,26 @@ def determine_global_nonco2_trajectories(self):
                 1,
                 len(
                     np.arange(
-                        self.settings["params"]["start_year_analysis"],
-                        self.settings["params"]["harmonization_year"],
+                        config.params.start_year_analysis,
+                        config.params.harmonization_year,
                     )
                 ),
             )
         )
-        + [1] * len(np.arange(self.settings["params"]["harmonization_year"], 2101))
+        + [1] * len(np.arange(config.params.harmonization_year, 2101))
     )
     xr_comp = xr.DataArray(
         1 - compensation_form,
         dims=["Time"],
-        coords={"Time": np.arange(self.settings["params"]["start_year_analysis"], 2101)},
+        coords={"Time": np.arange(config.params.start_year_analysis, 2101)},
     )
     xr_nonco2_raw = xr_ch4_raw + xr_n2o_raw
-    xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=self.settings["params"]["start_year_analysis"])
-    xr_nonco2_raw = xr_nonco2_raw.sel(
-        Time=np.arange(self.settings["params"]["start_year_analysis"], 2101)
-    )
+    xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=config.params.start_year_analysis)
+    xr_nonco2_raw = xr_nonco2_raw.sel(Time=np.arange(config.params.start_year_analysis, 2101))
 
     def ms_temp(temp, risk):
-        return self.xr_temperatures.ModelScenario[
-            np.where(np.abs(temp - self.xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
+        return xr_temperatures.ModelScenario[
+            np.where(np.abs(temp - xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
         ].values
 
     def check_monotomy(traj):
@@ -1142,7 +1142,7 @@ def determine_global_nonco2_trajectories(self):
         return np.array(vec)
 
     def rescale(traj):
-        offset = traj.sel(Time=self.settings["params"]["start_year_analysis"]) - tot_start
+        offset = traj.sel(Time=config.params.start_year_analysis) - tot_start
         traj_scaled = -xr_comp * offset + traj
         return traj_scaled
 
@@ -1154,48 +1154,52 @@ def determine_global_nonco2_trajectories(self):
     nonco2 = []
     vals = []
     timings = []
-    for temp_i, temp in enumerate(self.dim_temp):
-        for p_i, p in enumerate(self.dim_prob):
+
+    dim_temp = np.array(config.dimension_ranges.peak_temperature).astype(float).round(2)
+    dim_prob = np.array(config.dimension_ranges.risk_of_exceedance).round(2)
+    dim_nonco2 = np.array(config.dimension_ranges.non_co2_reduction).round(2)
+    dim_timing = np.array(config.dimension_ranges.timing_of_mitigation_action)
+
+    for temp_i, temp in enumerate(dim_temp):
+        for p_i, p in enumerate(dim_prob):
             ms1 = ms_temp(temp, p)
-            for timing_i, timing in enumerate(self.dim_timing):
+            for timing_i, timing in enumerate(dim_timing):
                 if timing == "Immediate" or temp in [1.5, 1.56, 1.6] and timing == "Delayed":
-                    mslist = self.ms_immediate
+                    mslist = ar6data.ms_immediate
                 else:
-                    mslist = self.ms_delayed
+                    mslist = ar6data.ms_delayed
                 ms2 = np.intersect1d(ms1, mslist)
                 if len(ms2) == 0:
-                    for n_i, n in enumerate(self.dim_nonco2):
-                        times = times + list(
-                            np.arange(self.settings["params"]["start_year_analysis"], 2101)
-                        )
+                    for n_i, n in enumerate(dim_nonco2):
+                        times = times + list(np.arange(config.params.start_year_analysis, 2101))
                         vals = vals + [np.nan] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         nonco2 = nonco2 + [n] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         temps = temps + [temp] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         risks = risks + [p] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         timings = timings + [timing] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                 else:
                     reductions = xr_reductions.sel(
                         ModelScenario=np.intersect1d(xr_reductions.ModelScenario, ms2)
                     )
-                    reds = reductions.Value.quantile(self.dim_nonco2[::-1])
-                    for n_i, n in enumerate(self.dim_nonco2):
+                    reds = reductions.Value.quantile(dim_nonco2[::-1])
+                    for n_i, n in enumerate(dim_nonco2):
                         red = reds[n_i]
                         ms2 = reductions.ModelScenario[
                             np.where(np.abs(reductions.Value - red) < 0.1)
                         ]
                         trajs = xr_nonco2_raw.sel(
                             ModelScenario=ms2,
-                            Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
+                            Time=np.arange(config.params.start_year_analysis, 2101),
                         )
                         trajectory_mean = rescale(trajs.Value.mean(dim="ModelScenario"))
 
@@ -1206,21 +1210,19 @@ def determine_global_nonco2_trajectories(self):
                             + trajectory_mean
                         )  # 1.5*red has been removed -> check effect
                         trajectory_mean2 = check_monotomy(np.array(traj2))
-                        times = times + list(
-                            np.arange(self.settings["params"]["start_year_analysis"], 2101)
-                        )
+                        times = times + list(np.arange(config.params.start_year_analysis, 2101))
                         vals = vals + list(trajectory_mean2)
                         nonco2 = nonco2 + [n] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         temps = temps + [temp] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         risks = risks + [p] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
                         timings = timings + [timing] * len(
-                            list(np.arange(self.settings["params"]["start_year_analysis"], 2101))
+                            list(np.arange(config.params.start_year_analysis, 2101))
                         )
 
     dict_nonco2 = {}
@@ -1232,34 +1234,39 @@ def determine_global_nonco2_trajectories(self):
     dict_nonco2["Timing"] = timings
     df_nonco2 = pd.DataFrame(dict_nonco2)
     dummy = df_nonco2.set_index(["NonCO2red", "Time", "Temperature", "Risk", "Timing"])
-    self.xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
+    xr_traj_nonco2 = xr.Dataset.from_dataframe(dummy)
 
     # Post-processing: making temperature dependence smooth
-    self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({"Temperature": [1.5, 1.8, 2.1, 2.4]})
-    self.xr_traj_nonco2 = self.xr_traj_nonco2.reindex({"Temperature": self.dim_temp})
-    self.xr_traj_nonco2 = self.xr_traj_nonco2.interpolate_na(dim="Temperature")
-    self.xr_traj_nonco2_2 = self.xr_traj_nonco2.copy()
+    xr_traj_nonco2 = xr_traj_nonco2.reindex({"Temperature": [1.5, 1.8, 2.1, 2.4]})
+    xr_traj_nonco2 = xr_traj_nonco2.reindex({"Temperature": dim_temp})
+    xr_traj_nonco2 = xr_traj_nonco2.interpolate_na(dim="Temperature")
+    xr_traj_nonco2_2 = xr_traj_nonco2.copy()
 
     # change time coordinate in self.xr_traj_nonco2 if needed (different starting year than 2021)
-    difyears = 2020 + 1 - self.settings["params"]["start_year_analysis"]
+    difyears = 2020 + 1 - config.params.start_year_analysis
+
     if difyears > 0:
-        self.xr_traj_nonco2_adapt = self.xr_traj_nonco2.assign_coords(
-            {"Time": self.xr_traj_nonco2.Time - (difyears - 1)}
-        ).reindex({"Time": np.arange(self.settings["params"]["start_year_analysis"], 2101)})
+        xr_traj_nonco2_adapt = xr_traj_nonco2.assign_coords(
+            {"Time": xr_traj_nonco2.Time - (difyears - 1)}
+        ).reindex({"Time": np.arange(config.params.start_year_analysis, 2101)})
         for t in np.arange(0, difyears):
-            self.xr_traj_nonco2_adapt.NonCO2_globe.loc[{"Time": 2101 - difyears + t}] = (
-                self.xr_traj_nonco2.sel(Time=2101 - difyears + t).NonCO2_globe
-                - self.xr_traj_nonco2.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
-            ) + self.xr_traj_nonco2_adapt.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
+            xr_traj_nonco2_adapt.NonCO2_globe.loc[{"Time": 2101 - difyears + t}] = (
+                xr_traj_nonco2.sel(Time=2101 - difyears + t).NonCO2_globe
+                - xr_traj_nonco2.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
+            ) + xr_traj_nonco2_adapt.NonCO2_globe.sel(Time=2101 - difyears + t - 1)
         fr = (
             (
-                self.xr_traj_nonco2.NonCO2_globe.sum(dim="Time")
-                - self.xr_traj_nonco2_adapt.NonCO2_globe.sum(dim="Time")
+                xr_traj_nonco2.NonCO2_globe.sum(dim="Time")
+                - xr_traj_nonco2_adapt.NonCO2_globe.sum(dim="Time")
             )
             * (1 - xr_comp)
             / np.sum(1 - xr_comp)
         )
-        self.xr_traj_nonco2 = self.xr_traj_nonco2_adapt + fr
+        xr_traj_nonco2 = xr_traj_nonco2_adapt + fr
+    else:
+        xr_traj_nonco2_adapt = None
+
+    return NonCO2Trajectories(xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt)
 
 
 def determine_global_budgets(self):
@@ -2454,7 +2461,6 @@ def country_specific_datareaders(self):
 
 if __name__ == "__main__":
     import sys
-    from effortsharing.config import Config
 
     config = Config.from_file(sys.argv[1])
     general = read_general(config)  # TODO combine with un_population?
@@ -2466,7 +2472,11 @@ if __name__ == "__main__":
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
     ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
     nonco2data = nonco2variation(config)
-    # datareader.determine_global_nonco2_trajectories()
+
+    # This is really where the compute starts
+    nonco2trajectories = determine_global_nonco2_trajectories(
+        config, ar6data, jonesdata.xr_hist, nonco2data.xr_temperatures
+    )
     # datareader.determine_global_budgets()
     # datareader.determine_global_co2_trajectories()
     # datareader.read_baseline()
