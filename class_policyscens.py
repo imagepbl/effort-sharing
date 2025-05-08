@@ -1,6 +1,6 @@
-# ======================================== #
-# Class that adds the policy scenarios from ENGAGE
-# ======================================== #
+"""
+Module that adds the policy scenarios from ELEVATE to xr_total
+"""
 
 # =========================================================== #
 # PREAMBULE
@@ -279,6 +279,7 @@ class policyscenadding(object):
         """
         logger.info("Adding policy scenarios to xarray object")
 
+        # Kyoto gas/GHG version
         xr_total = self.xr_total.assign(NDC=xr_kyoto["Value"].sel(Scenario="NDC"))
         xr_total = xr_total.assign(CurPol=xr_kyoto["Value"].sel(Scenario="CurPol"))
         xr_total = xr_total.assign(NetZero=xr_kyoto["Value"].sel(Scenario="NetZero"))
