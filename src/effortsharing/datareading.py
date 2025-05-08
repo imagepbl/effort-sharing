@@ -1765,18 +1765,20 @@ def read_baseline(
     return xr_base
 
 
-def read_ndc_climateresource(self):
+def read_ndc_climateresource(config: Config, countries):
     print("- Reading NDC data from Climate resource")
-    ghg_data = np.zeros(shape=(len(self.countries_iso) + 1, 3, 2, 2, len(np.arange(2010, 2051))))
-    for cty_i, cty in enumerate(self.countries_iso):
+
+    countries_iso = list(countries.values())
+    version_ndcs = config.params.version_ndcs
+    data_root = config.paths.input / f"ClimateResource_{version_ndcs}"
+
+    ghg_data = np.zeros(shape=(len(countries_iso) + 1, 3, 2, 2, len(np.arange(2010, 2051))))
+    for cty_i, cty in enumerate(countries_iso):
         for cond_i, cond in enumerate(["conditional", "range", "unconditional"]):
             for hot_i, hot in enumerate(["include", "exclude"]):
                 for amb_i, amb in enumerate(["low", "high"]):
-                    params = self.settings["params"]
-                    path = (
-                        self.settings["paths"]["data"]["external"]
-                        + f"/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/{cty.lower()}_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
-                    )
+                    filename = f"{cty.lower()}_ndc_{version_ndcs}_CR_{cond}_{hot}.json"
+                    path = data_root / cond / hot / filename
                     try:
                         with open(path) as file:
                             json_data = json.load(file)
@@ -1799,15 +1801,13 @@ def read_ndc_climateresource(self):
                                 # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                     except:
                         continue
+
     # Now also for EU
     for cond_i, cond in enumerate(["conditional", "range", "unconditional"]):
         for hot_i, hot in enumerate(["include", "exclude"]):
             for amb_i, amb in enumerate(["low", "high"]):
-                params = self.settings["params"]
-                path = (
-                    self.settings["paths"]["data"]["external"]
-                    + f"/ClimateResource_{params['version_ndcs']}/{cond}/{hot}/regions/groupeu27_ndc_{params['version_ndcs']}_CR_{cond}_{hot}.json"
-                )
+                filename = f"groupeu27_ndc_{version_ndcs}_CR_{cond}_{hot}.json"
+                path = data_root / cond / hot / "regions" / filename
                 try:
                     with open(path) as file:
                         json_data = json.load(file)
@@ -1830,8 +1830,9 @@ def read_ndc_climateresource(self):
                             # series.append([country_iso.upper(), country_name, "Emissions|Total GHG excl. LULUCF", conditionality, hot_air, ambition] + list(ghg_values))
                 except:
                     continue
+
     coords = {
-        "Region": list(self.countries_iso) + ["EU"],
+        "Region": list(countries_iso) + ["EU"],
         "Conditionality": ["conditional", "range", "unconditional"],
         "Hot_air": ["include", "exclude"],
         "Ambition": ["min", "max"],
@@ -1844,7 +1845,9 @@ def read_ndc_climateresource(self):
         ),
     }
     xr_ndc = xr.Dataset(data_vars, coords=coords)
-    self.xr_ndc_CR = xr_ndc.sel(Time=2030)
+    xr_ndc_CR = xr_ndc.sel(Time=2030)
+
+    return xr_ndc_CR
 
 
 def read_ndc(self):
@@ -2496,12 +2499,13 @@ if __name__ == "__main__":
         general.countries,
         jonesdata.xr_hist,
     )
-    # datareader.read_ndc()
-    # datareader.read_ndc_climateresource()
-    # datareader.merge_xr()
-    # datareader.add_country_groups()
-    # datareader.save()
-    # datareader.country_specific_datareaders()
+
+    xr_ndc_CR = read_ndc_climateresource(config, general.countries)
+    # read_ndc()
+    # merge_xr()
+    # add_country_groups()
+    # save()
+    # country_specific_datareaders()
 
     import IPython
 
