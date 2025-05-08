@@ -36,6 +36,16 @@ class JonesData:
     xr_edgar: xr.Dataset
     xr_primap: xr.Dataset
 
+@dataclass
+class AR6Data:
+    xr_ar6_prevet: xr.Dataset
+    xr_ar6: xr.Dataset
+    ms_immediate: np.ndarray
+    ms_delayed: np.ndarray
+    xr_ar6_landuse: xr.Dataset
+    xr_ar6_C: xr.Dataset
+    xr_ar6_C_bunkers: xr.Dataset
+
 
 def read_general(config: Config) -> General:
     """Read country names and ISO from UNFCCC table."""
@@ -609,6 +619,280 @@ def read_historicalemis_jones(config: Config, regions) -> JonesData:
     return JonesData(xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap)
 
 
+def read_ar6(config: Config, xr_hist):
+    print("- Read AR6 data")
+
+    # Define input
+    data_root = config.paths.input
+    filename = "AR6_Scenarios_Database_World_v1.1.csv"
+    metadata_file = "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx"
+    elevate_snapshot = "elevate-internal_snapshot_1739887620.csv"
+
+    df_ar6raw = pd.read_csv(data_root / filename)
+    df_ar6 = df_ar6raw[
+        df_ar6raw.Variable.isin(
+            [
+                "Emissions|CO2",
+                "Emissions|CO2|AFOLU",
+                "Emissions|Kyoto Gases",
+                "Emissions|CO2|Energy and Industrial Processes",
+                "Emissions|CH4",
+                "Emissions|N2O",
+                "Emissions|CO2|AFOLU|Land",
+                "Emissions|CH4|AFOLU|Land",
+                "Emissions|N2O|AFOLU|Land",
+                "Carbon Sequestration|CCS",
+                "Carbon Sequestration|Land Use",
+                "Carbon Sequestration|Direct Air Capture",
+                "Carbon Sequestration|Enhanced Weathering",
+                "Carbon Sequestration|Other",
+                "Carbon Sequestration|Feedstocks",
+                "AR6 climate diagnostics|Exceedance Probability 1.5C|MAGICCv7.5.3",
+                "AR6 climate diagnostics|Exceedance Probability 2.0C|MAGICCv7.5.3",
+                "AR6 climate diagnostics|Exceedance Probability 2.5C|MAGICCv7.5.3",
+                "AR6 climate diagnostics|Exceedance Probability 3.0C|MAGICCv7.5.3",
+                "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|5.0th Percentile",
+                "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|33.0th Percentile",
+                "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+                "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|67.0th Percentile",
+                "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|95.0th Percentile",
+            ]
+        )
+    ]
+    df_ar6 = df_ar6.reset_index(drop=True)
+    idx = (
+        df_ar6[(df_ar6.Variable == "Emissions|CH4") & (df_ar6["2100"] > 1e5)]
+    ).index  # Removing erroneous CH4 scenarios
+    df_ar6 = df_ar6[~df_ar6.index.isin(idx)]
+    df_ar6 = df_ar6.reset_index(drop=True)
+
+    df_ar6_meta = pd.read_excel(data_root / metadata_file, sheet_name="meta_Ch3vetted_withclimate")
+    mods = np.array(df_ar6_meta.Model)
+    scens = np.array(df_ar6_meta.Scenario)
+    modscens_meta = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
+    df_ar6_meta["ModelScenario"] = modscens_meta
+    df_ar6_meta = df_ar6_meta[["ModelScenario", "Category", "Policy_category"]]
+    mods = np.array(df_ar6.Model)
+    scens = np.array(df_ar6.Scenario)
+    modscens = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
+    df_ar6["ModelScenario"] = modscens
+    df_ar6 = df_ar6.drop(["Model", "Scenario", "Region", "Unit"], axis=1)
+    dummy = df_ar6.melt(id_vars=["ModelScenario", "Variable"], var_name="Time", value_name="Value")
+    dummy["Time"] = np.array(dummy["Time"].astype(int))
+    dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
+    xr_scen2 = xr.Dataset.from_dataframe(dummy)
+    xr_scen2 = xr_scen2.reindex(Time=np.arange(2000, 2101, 10))
+    xr_scen2 = xr_scen2.reindex(Time=np.arange(2000, 2101))
+    xr_ar6_prevet = xr_scen2.interpolate_na(dim="Time", method="linear")
+
+    recent_increment = int(config.params.start_year_analysis // 5 * 5)
+    vetting_nans = np.array(
+        xr_ar6_prevet.ModelScenario[
+            ~np.isnan(xr_ar6_prevet.Value.sel(Time=2100, Variable="Emissions|CO2"))
+        ]
+    )
+    vetting_recentyear = np.array(
+        xr_ar6_prevet.ModelScenario[
+            np.where(
+                np.abs(
+                    xr_ar6_prevet.sel(Time=recent_increment, Variable="Emissions|CO2").Value
+                    - xr_hist.sel(Region="EARTH", Time=recent_increment).CO2_hist
+                )
+                < 1e4
+            )[0]
+        ]
+    )
+    vetting_total = np.intersect1d(vetting_nans, vetting_recentyear)
+    xr_ar6 = xr_ar6_prevet.sel(ModelScenario=vetting_total)
+    ms_immediate = np.array(
+        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P2", "P2a", "P2b", "P2c"])].ModelScenario
+    )
+    ms_delayed = np.array(
+        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P3a", "P3b", "P3c"])].ModelScenario
+    )
+
+    # TODO: shouldn't ch4 also be divided by 1000? That's what was done above in read_jones...
+    xr_ar6_landuse = (
+        xr_ar6.sel(Variable="Emissions|CO2|AFOLU|Land") * 1
+        + xr_ar6.sel(Variable="Emissions|CH4|AFOLU|Land") * config.params.gwp_ch4
+        + xr_ar6.sel(Variable="Emissions|N2O|AFOLU|Land") * config.params.gwp_n2o / 1000
+    )
+    xr_ar6_landuse = xr_ar6_landuse.rename({"Value": "GHG_LULUCF"})
+    xr_ar6_landuse = xr_ar6_landuse.assign(
+        CO2_LULUCF=xr_ar6.sel(Variable="Emissions|CO2|AFOLU|Land").Value
+    )
+
+    # Take averages of GHG excluding land use for the C-categories (useful for the Robiou paper)
+    xr_both = xr.merge([xr_ar6, xr_ar6_landuse])
+    xr_ar6_nozeros = xr_both.where(xr_both > -1e9, np.nan).where(xr_both != 0, np.nan)
+    xr_averages = []
+    for i in range(6):
+        C = [["C1"], ["C1", "C2"], ["C2"], ["C3"], ["C6"], ["C7"]][i]
+        Cname = ["C1", "C1+C2", "C2", "C3", "C6", "C7"][i]
+        C_cat = np.intersect1d(
+            np.array(xr_ar6_nozeros.ModelScenario),
+            np.array(df_ar6_meta[df_ar6_meta.Category.isin(C)].ModelScenario),
+        )
+        xr_averages.append(
+            xr_ar6_nozeros.sel(ModelScenario=C_cat)
+            .mean(dim="ModelScenario")
+            .expand_dims(Category=[Cname])
+        )
+    xr_av = xr.merge(xr_averages)
+    xr_ar6_C = xr.merge(
+        [
+            (xr_av.Value.sel(Variable="Emissions|Kyoto Gases") - xr_av.GHG_LULUCF)
+            .to_dataset(name="GHG_excl_C")
+            .drop_vars("Variable"),
+            (xr_av.Value.sel(Variable="Emissions|CO2") - xr_av.CO2_LULUCF)
+            .to_dataset(name="CO2_excl_C")
+            .drop_vars("Variable"),
+            (
+                xr_av.Value.sel(
+                    Variable=[
+                        "Carbon Sequestration|CCS",
+                        "Carbon Sequestration|Direct Air Capture",
+                    ]
+                ).sum(dim="Variable", skipna=False)
+            ).to_dataset(name="CO2_neg_C"),
+        ]
+    )
+    xr_ar6_C = xr_ar6_C.reindex(Time=np.arange(2000, 2101, 10))
+    xr_ar6_C = xr_ar6_C.reindex(Time=np.arange(2000, 2101))
+
+    # Bunker subtraction
+    # TODO: move to separate function?
+    df_elevate_bunkers = pd.read_csv(data_root / elevate_snapshot)[:-1]
+    mods = np.array(df_elevate_bunkers.Model)
+    scens = np.array(df_elevate_bunkers.Scenario)
+    modscens = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
+    df_elevate_bunkers["ModelScenario"] = modscens
+    df_elevate_bunkers = df_elevate_bunkers.drop(["Model", "Scenario", "Region", "Unit"], axis=1)
+    dummy = df_elevate_bunkers.melt(
+        id_vars=["ModelScenario", "Variable"], var_name="Time", value_name="Value"
+    )
+    dummy["Time"] = np.array(dummy["Time"].astype(int))
+    dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
+    xr_elevate_bunkers = xr.Dataset.from_dataframe(dummy)
+    xr_elevate_bunkers = xr_elevate_bunkers.reindex({"Time": np.arange(2010, 2101, 10)})
+
+    modscens = np.array(xr_elevate_bunkers.ModelScenario)
+    categories = []
+    for ms in modscens:
+        if (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            < 1.5
+        ):
+            categories.append("C1")
+        elif (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            < 1.7
+        ):
+            categories.append("C2")
+        elif (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            < 2.0
+        ):
+            categories.append("C3")
+        elif (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            < 3.0
+        ):
+            categories.append("C6")
+        elif (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            < 4.0
+        ):
+            categories.append("C7")
+        elif (
+            xr_elevate_bunkers.sel(
+                ModelScenario=ms,
+                Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
+            )
+            .max()
+            .Value
+            > 4.0
+        ):
+            categories.append("C8")
+        else:
+            categories.append(
+                "C9"
+            )  # Fictuous category to show that for these mds, there is no temperature assessment
+    categories = np.array(categories)
+
+    xrs = []
+    for temp in [1.7, 2.0, 3.0]:
+        if temp == 1.7:
+            cat = "C2"
+        elif temp == 2.0:
+            cat = "C3"
+        elif temp == 3.0:
+            cat = "C6"
+        xrs.append(
+            (
+                xr_elevate_bunkers.sel(
+                    Variable="Emissions|CO2|Energy|Demand|Bunkers",
+                    ModelScenario=modscens[categories == cat],
+                ).median(dim="ModelScenario")
+            ).expand_dims(Temperature=[temp])
+        )
+    xr_all = xr.concat(xrs, dim="Temperature")
+    xr_all = xr_all.reindex(Temperature=[1.5, 1.6, 1.7, 2.0, 3.0, 4.0, 4.5])
+
+    # Extrapolation
+    vals = xr_all.loc[dict(Temperature=3.0)] - xr_all.loc[dict(Temperature=1.7)]
+    vals = vals.where(vals > 0, 0)
+    xr_all.loc[dict(Temperature=1.5)] = xr_all.loc[dict(Temperature=1.7)] - vals * (0.2 / 1.3)
+    xr_all.loc[dict(Temperature=1.6)] = xr_all.loc[dict(Temperature=1.7)] - vals * (0.1 / 1.3)
+    xr_all.loc[dict(Temperature=4.0)] = xr_all.loc[dict(Temperature=3.0)] + vals * (1.0 / 1.3)
+    xr_all.loc[dict(Temperature=4.5)] = xr_all.loc[dict(Temperature=3.0)] + vals * (1.5 / 1.3)
+
+    xr_all = (
+        xr_all.rename({"Temperature": "Category"})
+        .drop_vars("Variable")
+        .rename({"Value": "CO2_bunkers_C"})
+    )
+
+    # Rename ticks of temperature
+    xr_all = xr_all.assign_coords(Category=["C1", "C1+C2", "C2", "C3", "C6", "C7", "C8"])
+    xr_ar6_C_bunkers = xr_all
+
+    return AR6Data(
+        xr_ar6_prevet,
+        xr_ar6,
+        ms_immediate,
+        ms_delayed,
+        xr_ar6_landuse,
+        xr_ar6_C,
+        xr_ar6_C_bunkers,
+    )
+
+
 class datareading:
     # =========================================================== #
     # =========================================================== #
@@ -642,277 +926,6 @@ class datareading:
 
         # print("# startyear: ", self.settings["params"]["start_year_analysis"])
         print("# ==================================== #")
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def read_ar6(self):
-        print("- Read AR6 data")
-        df_ar6raw = pd.read_csv(
-            self.settings["paths"]["data"]["external"] + "AR6_Scenarios_Database_World_v1.1.csv"
-        )
-        df_ar6 = df_ar6raw[
-            df_ar6raw.Variable.isin(
-                [
-                    "Emissions|CO2",
-                    "Emissions|CO2|AFOLU",
-                    "Emissions|Kyoto Gases",
-                    "Emissions|CO2|Energy and Industrial Processes",
-                    "Emissions|CH4",
-                    "Emissions|N2O",
-                    "Emissions|CO2|AFOLU|Land",
-                    "Emissions|CH4|AFOLU|Land",
-                    "Emissions|N2O|AFOLU|Land",
-                    "Carbon Sequestration|CCS",
-                    "Carbon Sequestration|Land Use",
-                    "Carbon Sequestration|Direct Air Capture",
-                    "Carbon Sequestration|Enhanced Weathering",
-                    "Carbon Sequestration|Other",
-                    "Carbon Sequestration|Feedstocks",
-                    "AR6 climate diagnostics|Exceedance Probability 1.5C|MAGICCv7.5.3",
-                    "AR6 climate diagnostics|Exceedance Probability 2.0C|MAGICCv7.5.3",
-                    "AR6 climate diagnostics|Exceedance Probability 2.5C|MAGICCv7.5.3",
-                    "AR6 climate diagnostics|Exceedance Probability 3.0C|MAGICCv7.5.3",
-                    "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|5.0th Percentile",
-                    "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|33.0th Percentile",
-                    "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                    "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|67.0th Percentile",
-                    "AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|95.0th Percentile",
-                ]
-            )
-        ]
-        df_ar6 = df_ar6.reset_index(drop=True)
-        idx = (
-            df_ar6[(df_ar6.Variable == "Emissions|CH4") & (df_ar6["2100"] > 1e5)]
-        ).index  # Removing erroneous CH4 scenarios
-        df_ar6 = df_ar6[~df_ar6.index.isin(idx)]
-        df_ar6 = df_ar6.reset_index(drop=True)
-        df_ar6_meta = pd.read_excel(
-            self.settings["paths"]["data"]["external"]
-            + "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx",
-            sheet_name="meta_Ch3vetted_withclimate",
-        )
-        mods = np.array(df_ar6_meta.Model)
-        scens = np.array(df_ar6_meta.Scenario)
-        modscens_meta = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
-        df_ar6_meta["ModelScenario"] = modscens_meta
-        df_ar6_meta = df_ar6_meta[["ModelScenario", "Category", "Policy_category"]]
-        mods = np.array(df_ar6.Model)
-        scens = np.array(df_ar6.Scenario)
-        modscens = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
-        df_ar6["ModelScenario"] = modscens
-        df_ar6 = df_ar6.drop(["Model", "Scenario", "Region", "Unit"], axis=1)
-        dummy = df_ar6.melt(
-            id_vars=["ModelScenario", "Variable"], var_name="Time", value_name="Value"
-        )
-        dummy["Time"] = np.array(dummy["Time"].astype(int))
-        dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
-        xr_scen2 = xr.Dataset.from_dataframe(dummy)
-        xr_scen2 = xr_scen2.reindex(Time=np.arange(2000, 2101, 10))
-        xr_scen2 = xr_scen2.reindex(Time=np.arange(2000, 2101))
-        self.xr_ar6_prevet = xr_scen2.interpolate_na(dim="Time", method="linear")
-
-        vetting_nans = np.array(
-            self.xr_ar6_prevet.ModelScenario[
-                ~np.isnan(self.xr_ar6_prevet.Value.sel(Time=2100, Variable="Emissions|CO2"))
-            ]
-        )
-        vetting_recentyear = np.array(
-            self.xr_ar6_prevet.ModelScenario[
-                np.where(
-                    np.abs(
-                        self.xr_ar6_prevet.sel(
-                            Time=self.recent_increment, Variable="Emissions|CO2"
-                        ).Value
-                        - self.xr_hist.sel(Region="EARTH", Time=self.recent_increment).CO2_hist
-                    )
-                    < 1e4
-                )[0]
-            ]
-        )
-        vetting_total = np.intersect1d(vetting_nans, vetting_recentyear)
-        self.xr_ar6 = self.xr_ar6_prevet.sel(ModelScenario=vetting_total)
-        self.ms_immediate = np.array(
-            df_ar6_meta[df_ar6_meta.Policy_category.isin(["P2", "P2a", "P2b", "P2c"])].ModelScenario
-        )
-        self.ms_delayed = np.array(
-            df_ar6_meta[df_ar6_meta.Policy_category.isin(["P3a", "P3b", "P3c"])].ModelScenario
-        )
-        self.xr_ar6_landuse = (
-            self.xr_ar6.sel(Variable="Emissions|CO2|AFOLU|Land") * 1
-            + self.xr_ar6.sel(Variable="Emissions|CH4|AFOLU|Land")
-            * self.settings["params"]["gwp_ch4"]
-            + self.xr_ar6.sel(Variable="Emissions|N2O|AFOLU|Land")
-            * self.settings["params"]["gwp_n2o"]
-            / 1000
-        )
-        self.xr_ar6_landuse = self.xr_ar6_landuse.rename({"Value": "GHG_LULUCF"})
-        self.xr_ar6_landuse = self.xr_ar6_landuse.assign(
-            CO2_LULUCF=self.xr_ar6.sel(Variable="Emissions|CO2|AFOLU|Land").Value
-        )
-
-        # Take averages of GHG excluding land use for the C-categories (useful for the Robiou paper)
-        xr_both = xr.merge([self.xr_ar6, self.xr_ar6_landuse])
-        xr_ar6_nozeros = xr_both.where(xr_both > -1e9, np.nan).where(xr_both != 0, np.nan)
-        xr_averages = []
-        for i in range(6):
-            C = [["C1"], ["C1", "C2"], ["C2"], ["C3"], ["C6"], ["C7"]][i]
-            Cname = ["C1", "C1+C2", "C2", "C3", "C6", "C7"][i]
-            C_cat = np.intersect1d(
-                np.array(xr_ar6_nozeros.ModelScenario),
-                np.array(df_ar6_meta[df_ar6_meta.Category.isin(C)].ModelScenario),
-            )
-            xr_averages.append(
-                xr_ar6_nozeros.sel(ModelScenario=C_cat)
-                .mean(dim="ModelScenario")
-                .expand_dims(Category=[Cname])
-            )
-        xr_av = xr.merge(xr_averages)
-        self.xr_ar6_C = xr.merge(
-            [
-                (xr_av.Value.sel(Variable="Emissions|Kyoto Gases") - xr_av.GHG_LULUCF)
-                .to_dataset(name="GHG_excl_C")
-                .drop_vars("Variable"),
-                (xr_av.Value.sel(Variable="Emissions|CO2") - xr_av.CO2_LULUCF)
-                .to_dataset(name="CO2_excl_C")
-                .drop_vars("Variable"),
-                (
-                    xr_av.Value.sel(
-                        Variable=[
-                            "Carbon Sequestration|CCS",
-                            "Carbon Sequestration|Direct Air Capture",
-                        ]
-                    ).sum(dim="Variable", skipna=False)
-                ).to_dataset(name="CO2_neg_C"),
-            ]
-        )
-        self.xr_ar6_C = self.xr_ar6_C.reindex(Time=np.arange(2000, 2101, 10))
-        self.xr_ar6_C = self.xr_ar6_C.reindex(Time=np.arange(2000, 2101))
-
-        # Bunker subtraction
-        df_elevate_bunkers = pd.read_csv(
-            self.settings["paths"]["data"]["external"] + "elevate-internal_snapshot_1739887620.csv"
-        )[:-1]
-        mods = np.array(df_elevate_bunkers.Model)
-        scens = np.array(df_elevate_bunkers.Scenario)
-        modscens = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
-        df_elevate_bunkers["ModelScenario"] = modscens
-        df_elevate_bunkers = df_elevate_bunkers.drop(
-            ["Model", "Scenario", "Region", "Unit"], axis=1
-        )
-        dummy = df_elevate_bunkers.melt(
-            id_vars=["ModelScenario", "Variable"], var_name="Time", value_name="Value"
-        )
-        dummy["Time"] = np.array(dummy["Time"].astype(int))
-        dummy = dummy.set_index(["ModelScenario", "Variable", "Time"])
-        xr_elevate_bunkers = xr.Dataset.from_dataframe(dummy)
-        xr_elevate_bunkers = xr_elevate_bunkers.reindex({"Time": np.arange(2010, 2101, 10)})
-
-        modscens = np.array(xr_elevate_bunkers.ModelScenario)
-        categories = []
-        for ms in modscens:
-            if (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                < 1.5
-            ):
-                categories.append("C1")
-            elif (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                < 1.7
-            ):
-                categories.append("C2")
-            elif (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                < 2.0
-            ):
-                categories.append("C3")
-            elif (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                < 3.0
-            ):
-                categories.append("C6")
-            elif (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                < 4.0
-            ):
-                categories.append("C7")
-            elif (
-                xr_elevate_bunkers.sel(
-                    ModelScenario=ms,
-                    Variable="AR6 climate diagnostics|Surface Temperature (GSAT)|MAGICCv7.5.3|50.0th Percentile",
-                )
-                .max()
-                .Value
-                > 4.0
-            ):
-                categories.append("C8")
-            else:
-                categories.append(
-                    "C9"
-                )  # Fictuous category to show that for these mds, there is no temperature assessment
-        categories = np.array(categories)
-
-        xrs = []
-        for temp in [1.7, 2.0, 3.0]:
-            if temp == 1.7:
-                cat = "C2"
-            elif temp == 2.0:
-                cat = "C3"
-            elif temp == 3.0:
-                cat = "C6"
-            xrs.append(
-                (
-                    xr_elevate_bunkers.sel(
-                        Variable="Emissions|CO2|Energy|Demand|Bunkers",
-                        ModelScenario=modscens[categories == cat],
-                    ).median(dim="ModelScenario")
-                ).expand_dims(Temperature=[temp])
-            )
-        xr_all = xr.concat(xrs, dim="Temperature")
-        xr_all = xr_all.reindex(Temperature=[1.5, 1.6, 1.7, 2.0, 3.0, 4.0, 4.5])
-
-        # Extrapolation
-        vals = xr_all.loc[dict(Temperature=3.0)] - xr_all.loc[dict(Temperature=1.7)]
-        vals = vals.where(vals > 0, 0)
-        xr_all.loc[dict(Temperature=1.5)] = xr_all.loc[dict(Temperature=1.7)] - vals * (0.2 / 1.3)
-        xr_all.loc[dict(Temperature=1.6)] = xr_all.loc[dict(Temperature=1.7)] - vals * (0.1 / 1.3)
-        xr_all.loc[dict(Temperature=4.0)] = xr_all.loc[dict(Temperature=3.0)] + vals * (1.0 / 1.3)
-        xr_all.loc[dict(Temperature=4.5)] = xr_all.loc[dict(Temperature=3.0)] + vals * (1.5 / 1.3)
-
-        xr_all = (
-            xr_all.rename({"Temperature": "Category"})
-            .drop_vars("Variable")
-            .rename({"Value": "CO2_bunkers_C"})
-        )
-
-        # Rename ticks of temperature
-        xr_all = xr_all.assign_coords(Category=["C1", "C1+C2", "C2", "C3", "C6", "C7", "C8"])
-        self.xr_ar6_C_bunkers = xr_all
 
     # =========================================================== #
     # =========================================================== #
@@ -2536,7 +2549,6 @@ class datareading:
 if __name__ == "__main__":
     import sys
     from effortsharing.config import Config
-    from effortsharing import datareading
 
     config = Config.from_file(sys.argv[1])
     general = read_general(config)  # TODO combine with un_population?
@@ -2546,7 +2558,8 @@ if __name__ == "__main__":
     hdi, hdi_sh = read_hdi_refactor(config, general.countries, un_pop)
     hdi_new, hdi_sh_new = read_hdi_refactor(config, general.countries, un_pop)
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
-    # datareader.read_ar6()
+    ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
+
     # datareader.nonco2variation()
     # datareader.determine_global_nonco2_trajectories()
     # datareader.determine_global_budgets()
