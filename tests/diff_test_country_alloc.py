@@ -1,5 +1,6 @@
 import xarray as xr
 
+
 def compare_netcdf_files(file1, file2):
     """
     Compare two NetCDF files and print the differences.
@@ -23,6 +24,7 @@ def compare_netcdf_files(file1, file2):
     # Close the datasets
     ds1.close()
     ds2.close()
+
 
 if __name__ == "__main__":
     # file_benchmark = r"K:\data\DataUpdate_08_2024\xr_alloc_USA.nc"

@@ -13,33 +13,37 @@ The main notebook you will be using is `Main.ipynb` in the main directory. Each 
 
 One final important notebook is `Aggregator.ipynb`. This script aggregates the country-individual files `xr_alloc_XYZ.nc`. One output is the aggregation of those files into a single file for a single year, for example `xr_alloc_2030.nc`. Useful for analysis purposes. Input variables can be changed in `input.yml`.
 
-## Installation instructions (currently aimed at direct colleagues)
 
-It is recommended to clone the code to the `K:\` directory for best performance. 
-```shell
-git clone https://github.com/imagepbl/EffortSharing
-```
+## Setting up the environment (currently aimed at direct colleagues)
 
-### Setting up the environment
+We use conda for managing project dependencies. A portable (minimal) environment
+specification is contained in environment.yml. For full reproducibility across
+platforms, we also maintain a conda-lock file. When adding new dependencies,
+make sure to add them to `environment.yml` and re-generate the lockfile. 
 
-#### conda
-We recommend to install the Conda environment also on the `K:\` drive to increase performance. Create folders `environments\effortsharing_env` on `K:\`.
-Create a new conda environment with a `--prefix` in that folder. Activate it and update it the content based on the file `environment.yml`. 
+For best performance in PBL werkomgeving, we recommend working from the K:/ drive.
 
 ```shell
-cd .\environments\effortsharing_env\
-conda create --prefix .
-conda activate K:\environments\effortsharing_env
-conda env update --name K:\environments\effortsharing_env --file K:\<FILEPATH>\environment.yml
+# Clone the repo 
+git clone https://github.com/imagepbl/effort-sharing
+cd effort-sharing
+
+# Create the environment
+conda env create --file environment.yml
+
+# Activate the environment
+conda activate effortsharing_env
+
+# To update the existing environment with any changes in environment.yml
+conda env update -f environment.yml
+
+# Use conda-lock to export to/install from a reproducible package list
+conda-lock lock
+conda-lock install name effortsharing_env
+pip install -e .  # conda-lock doesn't install local libraries
 ```
 
-#### pip
-
-```shell
-pip install -r /path/to/requirements_pip.txt
-```
-
-### Setting up required folder structure
+## Setting up required folder structure
 
 You will need to make a folder+subfolder in the K:/ drive as follows: `K:/Data/Data_effortsharing/DataUpdate_ongoing`. There all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
 
