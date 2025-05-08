@@ -2148,28 +2148,29 @@ def add_country_groups(config: Config, regions, xr_total):
 
     return new_total, new_regions
 
-def save(self):
+def save(config: Config, xr_total, regions, countries):
     print("- Save important files")
 
-    xr_normal = self.xr_total.sel(
-        Temperature=np.array(self.settings["dimension_ranges"]["peak_temperature_saved"])
-        .astype(float)
-        .round(2)
+    savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
+
+    # TODO move to separate function?
+    regions_name = np.array(list(regions.keys()))
+    regions_iso = np.array(list(regions.values()))
+    countries_name = np.array(list(countries.keys()))
+    countries_iso = np.array(list(countries.values()))
+    np.save(config.paths.output / "all_regions.npy", regions_iso)
+    np.save(config.paths.output / "all_regions_names.npy", regions_name)
+    np.save(config.paths.output / "all_countries.npy", countries_iso)
+    np.save(config.paths.output / "all_countries_names.npy", countries_name)
+
+    xr_normal = xr_total.sel(
+        Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     )
     xr_version = xr_normal
 
-    np.save(self.settings["paths"]["data"]["datadrive"] + "all_regions.npy", self.regions_iso)
-    np.save(
-        self.settings["paths"]["data"]["datadrive"] + "all_regions_names.npy", self.regions_name
-    )
-    np.save(self.settings["paths"]["data"]["datadrive"] + "all_countries.npy", self.countries_iso)
-    np.save(
-        self.settings["paths"]["data"]["datadrive"] + "all_countries_names.npy",
-        self.countries_name,
-    )
 
     xr_version.to_netcdf(
-        self.savepath + "xr_dataread.nc",
+        savepath / "xr_dataread.nc",
         encoding={
             "Region": {"dtype": "str"},
             "Scenario": {"dtype": "str"},
@@ -2211,9 +2212,7 @@ def save(self):
     for gas in ["CO2", "GHG"]:
         for lulucf_i, lulucf in enumerate(["incl", "excl"]):
             luext = ["", "_excl"][lulucf_i]
-            xrt = xr_version.sel(
-                Time=np.arange(self.settings["params"]["start_year_analysis"], 2101)
-            )
+            xrt = xr_version.sel(Time=np.arange(config.params.start_year_analysis, 2101))
             r1_nom = xrt.GDP.sel(Region="EARTH") / xrt.Population.sel(Region="EARTH")
             base_worldsum = xrt[gas + "_base_" + lulucf].sel(Region="EARTH")
             rb_part1 = (xrt.GDP / xrt.Population / r1_nom) ** (1 / 3.0)
@@ -2222,10 +2221,11 @@ def save(self):
                 * (base_worldsum - xrt[gas + "_globe" + luext])
                 / base_worldsum
             )
-            rbw = (rb_part1 * rb_part2).sel(Region=self.countries_iso).sum(dim="Region")
+            rbw = (rb_part1 * rb_part2).sel(Region=countries_iso).sum(dim="Region")
             rbw = rbw.where(rbw != 0)
-            rbw.to_netcdf(self.savepath + "xr_rbw_" + gas + "_" + lulucf + ".nc")
+            rbw.to_netcdf(savepath / f"xr_rbw_{gas}_lulucf.nc")
 
+    # TODO: move to separate function? This is reading new data
     # GDR RCI indices
     r = 0
     hist_emissions_startyears = [1850, 1950, 1990]
@@ -2236,14 +2236,7 @@ def save(self):
             for weight_i, weight in enumerate(rci_weights):
                 # Read RCI
                 df_rci = pd.read_csv(
-                    self.settings["paths"]["data"]["external"]
-                    + "RCI/GDR_15_"
-                    + str(startyear)
-                    + "_"
-                    + th
-                    + "_"
-                    + weight
-                    + ".xls",
+                    config.paths.input / "RCI" / f"GDR_15_{startyear}_{th}_{weight}.xls",
                     delimiter="\t",
                     skiprows=30,
                 )[:-2]
@@ -2266,7 +2259,7 @@ def save(self):
     )
     xr_rci = xr.Dataset.from_dataframe(dfdummy)
     xr_rci = xr_rci.reindex({"Region": xr_version.Region})
-    xr_rci.to_netcdf(self.settings["paths"]["data"]["datadrive"] + "xr_rci.nc")
+    xr_rci.to_netcdf(config.paths.output / "xr_rci.nc")
 
 
 def country_specific_datareaders(self):
@@ -2536,7 +2529,7 @@ if __name__ == "__main__":
         general.regions,
     )
     new_total, new_regions = add_country_groups(config, general.regions, xr_total)
-    # save()
+    save(config, xr_total, new_regions, general.countries)
     # country_specific_datareaders()
 
     import IPython
