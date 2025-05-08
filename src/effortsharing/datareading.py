@@ -1091,41 +1091,33 @@ def determine_global_nonco2_trajectories(
 ):
     print("- Computing global nonco2 trajectories")
 
+    # Shorthand for often-used expressions
+    start_year = config.params.start_year_analysis
+    n_years = 2101 - start_year
+
     # Relationship between non-co2 reduction and budget is based on Rogelj et al and requires the year 2020 (even though startyear may be different) - not a problem
 
     xr_ch4_raw = ar6data.xr_ar6.sel(Variable="Emissions|CH4") * config.params.gwp_ch4
     xr_n2o_raw = ar6data.xr_ar6.sel(Variable="Emissions|N2O") * config.params.gwp_n2o / 1e3
-    n2o_start = xr_hist.sel(Region="EARTH").sel(Time=config.params.start_year_analysis).N2O_hist
-    ch4_start = xr_hist.sel(Region="EARTH").sel(Time=config.params.start_year_analysis).CH4_hist
+    n2o_start = xr_hist.sel(Region="EARTH").sel(Time=start_year).N2O_hist
+    ch4_start = xr_hist.sel(Region="EARTH").sel(Time=start_year).CH4_hist
     n2o_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).N2O_hist
     ch4_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).CH4_hist
     tot_2020 = n2o_2020 + ch4_2020
     tot_start = n2o_start + ch4_start
 
     # Rescale CH4 and N2O trajectories
-    compensation_form = np.array(
-        list(
-            np.linspace(
-                0,
-                1,
-                len(
-                    np.arange(
-                        config.params.start_year_analysis,
-                        config.params.harmonization_year,
-                    )
-                ),
-            )
-        )
-        + [1] * len(np.arange(config.params.harmonization_year, 2101))
-    )
+    n_years_before = config.params.harmonization_year - start_year
+    n_years_after = 2101 - config.params.harmonization_year
+    compensation_form = np.array(list(np.linspace(0, 1, n_years_before)) + [1] * n_years_after)
     xr_comp = xr.DataArray(
         1 - compensation_form,
         dims=["Time"],
-        coords={"Time": np.arange(config.params.start_year_analysis, 2101)},
+        coords={"Time": np.arange(start_year, 2101)},
     )
     xr_nonco2_raw = xr_ch4_raw + xr_n2o_raw
-    xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=config.params.start_year_analysis)
-    xr_nonco2_raw = xr_nonco2_raw.sel(Time=np.arange(config.params.start_year_analysis, 2101))
+    xr_nonco2_raw_start = xr_nonco2_raw.sel(Time=start_year)
+    xr_nonco2_raw = xr_nonco2_raw.sel(Time=np.arange(start_year, 2101))
 
     def ms_temp(temp, risk):
         return xr_temperatures.ModelScenario[
@@ -1142,7 +1134,7 @@ def determine_global_nonco2_trajectories(
         return np.array(vec)
 
     def rescale(traj):
-        offset = traj.sel(Time=config.params.start_year_analysis) - tot_start
+        offset = traj.sel(Time=start_year) - tot_start
         traj_scaled = -xr_comp * offset + traj
         return traj_scaled
 
@@ -1171,22 +1163,12 @@ def determine_global_nonco2_trajectories(
                 ms2 = np.intersect1d(ms1, mslist)
                 if len(ms2) == 0:
                     for n_i, n in enumerate(dim_nonco2):
-                        times = times + list(np.arange(config.params.start_year_analysis, 2101))
-                        vals = vals + [np.nan] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        nonco2 = nonco2 + [n] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        temps = temps + [temp] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        risks = risks + [p] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        timings = timings + [timing] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
+                        times = times + list(np.arange(start_year, 2101))
+                        vals = vals + [np.nan] * n_years
+                        nonco2 = nonco2 + [n] * n_years
+                        temps = temps + [temp] * n_years
+                        risks = risks + [p] * n_years
+                        timings = timings + [timing] * n_years
                 else:
                     reductions = xr_reductions.sel(
                         ModelScenario=np.intersect1d(xr_reductions.ModelScenario, ms2)
@@ -1199,7 +1181,7 @@ def determine_global_nonco2_trajectories(
                         ]
                         trajs = xr_nonco2_raw.sel(
                             ModelScenario=ms2,
-                            Time=np.arange(config.params.start_year_analysis, 2101),
+                            Time=np.arange(start_year, 2101),
                         )
                         trajectory_mean = rescale(trajs.Value.mean(dim="ModelScenario"))
 
@@ -1210,20 +1192,12 @@ def determine_global_nonco2_trajectories(
                             + trajectory_mean
                         )  # 1.5*red has been removed -> check effect
                         trajectory_mean2 = check_monotomy(np.array(traj2))
-                        times = times + list(np.arange(config.params.start_year_analysis, 2101))
+                        times = times + list(np.arange(start_year, 2101))
                         vals = vals + list(trajectory_mean2)
-                        nonco2 = nonco2 + [n] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        temps = temps + [temp] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        risks = risks + [p] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
-                        timings = timings + [timing] * len(
-                            list(np.arange(config.params.start_year_analysis, 2101))
-                        )
+                        nonco2 = nonco2 + [n] * n_years
+                        temps = temps + [temp] * n_years
+                        risks = risks + [p] * n_years
+                        timings = timings + [timing] * n_years
 
     dict_nonco2 = {}
     dict_nonco2["Time"] = times
@@ -1243,12 +1217,12 @@ def determine_global_nonco2_trajectories(
     xr_traj_nonco2_2 = xr_traj_nonco2.copy()
 
     # change time coordinate in self.xr_traj_nonco2 if needed (different starting year than 2021)
-    difyears = 2020 + 1 - config.params.start_year_analysis
+    difyears = 2020 + 1 - start_year
 
     if difyears > 0:
         xr_traj_nonco2_adapt = xr_traj_nonco2.assign_coords(
             {"Time": xr_traj_nonco2.Time - (difyears - 1)}
-        ).reindex({"Time": np.arange(config.params.start_year_analysis, 2101)})
+        ).reindex({"Time": np.arange(start_year, 2101)})
         for t in np.arange(0, difyears):
             xr_traj_nonco2_adapt.NonCO2_globe.loc[{"Time": 2101 - difyears + t}] = (
                 xr_traj_nonco2.sel(Time=2101 - difyears + t).NonCO2_globe
