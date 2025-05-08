@@ -13,6 +13,7 @@ from pathlib import Path
 import country_converter as coco
 import numpy as np
 import pandas as pd
+import pooch
 import xarray as xr
 import yaml
 
@@ -43,10 +44,6 @@ class policyscenadding(object):
         logger.info("Initializing policyscenadding class")
 
         self.current_dir = Path.cwd()
-        self.df_scenarios_kyoto = None
-        self.df_scenarios_co2 = None
-        self.xr_eng = None
-        self.xr_eng_co2 = None
         self.xr_total_co2 = None
 
         # Scenario names
@@ -77,9 +74,14 @@ class policyscenadding(object):
         logger.info("Reading and filtering ELEVATE scenario data")
 
         # Read the raw data
+        file_path = pooch.retrieve(
+            url="https://zenodo.org/records/15114066/files/Data_D2.3_vetted_20250211.csv?download=1",
+            known_hash="SHA256:2b203c67b1f8ff7084dc5d6fd1fed07933d5766b66017cda741894e08d9b74e1",
+            fname="ELEVATE_Data_D2.3_vetted_20250211.csv",
+        )
+
         df_scenarios_raw = pd.read_csv(
-            self.settings["paths"]["data"]["external"]
-            + "/ELEVATE/ELEVATE_Data_D2.3_vetted_20250211.csv",
+            file_path,
             header=0,
         )
 
