@@ -37,6 +37,7 @@ ADDITIONAL_REGIONS_HDI = {
     "Bahamas": "BHS",
     "Bolivia (Plurinational State of)": "BOL",
     "Cabo Verde": "CPV",
+    # "China": "CHN",  # TODO: check which one it should be
     "China": "TWN",
     "Congo (Democratic Republic of the)": "COD",
     "Congo": "COG",
