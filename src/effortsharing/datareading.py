@@ -1850,18 +1850,24 @@ def read_ndc_climateresource(config: Config, countries):
     return xr_ndc_CR
 
 
-def read_ndc(self):
+def read_ndc(config: Config, countries, xr_hist):
     print("- Reading NDC data")
+
+    data_root = config.paths.input
+    filename = "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx"
+
+    # TODO: use package or better dict mapping method instead
+    countries_name = np.array(list(countries.keys()))
+    countries_iso = np.array(list(countries.values()))
+
     df_ndc_raw = pd.read_excel(
-        self.settings["paths"]["data"]["external"]
-        + "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
-        sheet_name="Reduction All_GHG_incl",
-        header=[0, 1],
+        data_root / filename, sheet_name="Reduction All_GHG_incl", header=[0, 1]
     )
     regs = df_ndc_raw["(Mt CO2 equivalent)"]["Country name"]
     regs_iso = []
+
     for r in regs:
-        wh = np.where(self.countries_name == r)[0]
+        wh = np.where(countries_name == r)[0]
         if len(wh) == 0:
             if r == "United States":
                 regs_iso.append("USA")
@@ -1872,7 +1878,7 @@ def read_ndc(self):
             else:
                 regs_iso.append(np.nan)
         else:
-            regs_iso.append(self.countries_iso[wh[0]])
+            regs_iso.append(countries_iso[wh[0]])
     regs_iso = np.array(regs_iso)
     df_ndc_raw["ISO"] = regs_iso
 
@@ -1884,8 +1890,8 @@ def read_ndc(self):
     df_red = []
     df_abs = []
     df_inv = []
-    histemis = self.xr_hist.GHG_hist.sel(Time=2015)
-    for r in list(self.countries_iso) + ["EU"]:
+    histemis = xr_hist.GHG_hist.sel(Time=2015)
+    for r in list(countries_iso) + ["EU"]:
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
@@ -1918,21 +1924,16 @@ def read_ndc(self):
         "GHG_ndc_inv": df_inv,
     }
     df_ndc = pd.DataFrame(dict_ndc)
-    self.xr_ndc = xr.Dataset.from_dataframe(
-        df_ndc.set_index(["Region", "Ambition", "Conditionality"])
-    )
+    xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
     # Now for GHG excluding LULUCF
     df_ndc_raw = pd.read_excel(
-        self.settings["paths"]["data"]["external"]
-        + "/Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
-        sheet_name="Reduction All_GHG_excl",
-        header=[0, 1],
+        data_root / filename, sheet_name="Reduction All_GHG_excl", header=[0, 1]
     )
     regs = df_ndc_raw["(Mt CO2 equivalent)"]["Country name"]
     regs_iso = []
     for r in regs:
-        wh = np.where(self.countries_name == r)[0]
+        wh = np.where(countries_name == r)[0]
         if len(wh) == 0:
             if r == "United States":
                 regs_iso.append("USA")
@@ -1943,7 +1944,7 @@ def read_ndc(self):
             else:
                 regs_iso.append(np.nan)
         else:
-            regs_iso.append(self.countries_iso[wh[0]])
+            regs_iso.append(countries_iso[wh[0]])
     regs_iso = np.array(regs_iso)
     df_ndc_raw["ISO"] = regs_iso
 
@@ -1955,8 +1956,8 @@ def read_ndc(self):
     df_red = []
     df_abs = []
     df_inv = []
-    histemis = self.xr_hist.GHG_hist.sel(Time=2015)
-    for r in list(self.countries_iso) + ["EU"]:
+    histemis = xr_hist.GHG_hist.sel(Time=2015)
+    for r in list(countries_iso) + ["EU"]:
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
@@ -1989,10 +1990,11 @@ def read_ndc(self):
         "GHG_ndc_excl_inv": df_inv,
     }
     df_ndc = pd.DataFrame(dict_ndc)
-    self.xr_ndc_excl = xr.Dataset.from_dataframe(
+    xr_ndc_excl = xr.Dataset.from_dataframe(
         df_ndc.set_index(["Region", "Ambition", "Conditionality"])
     )
 
+    return xr_ndc, xr_ndc_excl
 
 def merge_xr(self):
     print("- Merging xrarray object")
@@ -2501,7 +2503,7 @@ if __name__ == "__main__":
     )
 
     xr_ndc_CR = read_ndc_climateresource(config, general.countries)
-    # read_ndc()
+    xr_ndc, xr_ndc_excl = read_ndc(config, general.countries, jonesdata.xr_hist)
     # merge_xr()
     # add_country_groups()
     # save()
