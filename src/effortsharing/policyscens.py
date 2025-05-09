@@ -23,7 +23,7 @@ class policyscenadding:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, startyear=2021, input_file="input.yml"):
+    def __init__(self, startyear=2021, input_file="input.yml", xr_total=None):
         print("# ==================================== #")
         print("# Initializing policyscenadding class  #")
         print("# ==================================== #")
@@ -31,9 +31,12 @@ class policyscenadding:
         # Read in Input YAML file
         with open(input_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xr.open_dataset(
-            self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
-        )
+        if xr_total is None:
+            self.xr_total = xr.open_dataset(
+                self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
+            )
+        else:
+            self.xr_total = xr_total
 
     # =========================================================== #
     # =========================================================== #
