@@ -3,12 +3,12 @@
 # ============================================== #
 paths:
   data:
-    external: ../data/input/
-    baseline: ../data/input/
+    external: /home/verhoes/git/carbon-budget-explorer/effort-sharing/data/input/
+    baseline: /home/verhoes/git/carbon-budget-explorer/effort-sharing/data/input/
     # internal: Data/
-    datadrive: ../data/output/
-    export: ../data/output/
-    lambollrepo: ../../AR6CarbonBudgetCalc/  # clone from https://github.com/Rlamboll/AR6CarbonBudgetCalc
+    datadrive: /home/verhoes/git/carbon-budget-explorer/effort-sharing/data/output/
+    export: /home/verhoes/git/carbon-budget-explorer/effort-sharing/data/output/
+    lambollrepo: /home/verhoes/git/carbon-budget-explorer/AR6CarbonBudgetCalc/  # clone from https://github.com/Rlamboll/AR6CarbonBudgetCalc
 
 # ============================================== #
 # PARAMS
