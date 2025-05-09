@@ -1,18 +1,6 @@
-# ============================================== #
-# PATHS
-# ============================================== #
 paths:
-  data:
-    external: ../data/input/
-    baseline: ../data/input/
-    # internal: Data/
-    datadrive: ../data/output/
-    export: ../data/output/
-    lambollrepo: ../../AR6CarbonBudgetCalc/  # clone from https://github.com/Rlamboll/AR6CarbonBudgetCalc
-
-# ============================================== #
-# PARAMS
-# ============================================== #
+  input: ../data/input
+  output: ../data/output
 
 params:
   convergence_year_gdr: 2100
