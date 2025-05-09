@@ -56,7 +56,7 @@ class Config:
     dimension_ranges: DimensionRanges
 
     @classmethod
-    def from_file(cls, config_file):
+    def from_file(cls, config_file: Path | str) -> "Config":
         # Open file
         with open(config_file) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
