@@ -2268,7 +2268,7 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
     time_past = np.arange(1850, config.params.start_year_analysis + 1)
 
     # Dutch emissions - harmonized with the KEV # TODO harmonize global emissions with this, as well.
-    xr_dataread_nld = xr.open_dataset(config.paths.output / "xr_dataread.nc").load().copy()
+    xr_dataread_nld = xr.open_dataset(savepath / "xr_dataread.nc").load().copy()
     dutch_time = np.array(
         [
             1990,
@@ -2395,7 +2395,7 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
 
     # TODO: move to seperate function?
     # Norwegian emissions - harmonized with EDGAR
-    xr_dataread_nor = xr.open_dataset(config.paths.output / "xr_dataread.nc").load().copy()
+    xr_dataread_nor = xr.open_dataset(savepath / "xr_dataread.nc").load().copy()
     # Get data and interpolate
     time_axis = np.arange(1990, config.params.start_year_analysis + 1)
     ghg_axis = np.array(
