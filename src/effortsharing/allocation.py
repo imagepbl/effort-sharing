@@ -499,8 +499,9 @@ class allocation:
         if self.focus_region != "EU":
             rci_reg = xr_rci.rci.sel(Region=self.focus_region)
         else:
+            fn = self.settings["paths"]["data"]["external"] + "UNFCCC_Parties_Groups_noeu.xlsx"
             df = pd.read_excel(
-                "X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name="Country groups"
+                fn, sheet_name="Country groups"
             )
             countries_iso = np.array(df["Country ISO Code"])
             group_eu = countries_iso[np.array(df["EU"]) == 1]
