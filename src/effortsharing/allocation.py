@@ -499,8 +499,9 @@ class allocation:
         if self.focus_region != "EU":
             rci_reg = xr_rci.rci.sel(Region=self.focus_region)
         else:
+            fn = self.settings["paths"]["data"]["external"] + "UNFCCC_Parties_Groups_noeu.xlsx"
             df = pd.read_excel(
-                "X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name="Country groups"
+                fn, sheet_name="Country groups"
             )
             countries_iso = np.array(df["Country ISO Code"])
             group_eu = countries_iso[np.array(df["EU"]) == 1]
@@ -527,9 +528,8 @@ class allocation:
         part2 = yearfracs * self.xr_total.AP.sel(Time=self.analysis_timeframe)
         gdr_post2030 = (part1 + part2).sel(Time=np.arange(2031, 2101))
 
-        gdr_total = xr.merge([gdr, gdr_post2030])
-        gdr_total = gdr_total.rename({"Value": "GDR"})
-        self.xr_total = self.xr_total.assign(GDR=gdr_total.GDR)
+        gdr_total = xr.concat([gdr, gdr_post2030.Value], dim="Time")
+        self.xr_total = self.xr_total.assign(GDR=gdr_total)
         xr_rci.close()
 
     # =========================================================== #

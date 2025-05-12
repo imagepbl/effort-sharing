@@ -23,7 +23,7 @@ class policyscenadding:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, startyear=2021, input_file="input.yml"):
+    def __init__(self, startyear=2021, input_file="input.yml", xr_total=None):
         print("# ==================================== #")
         print("# Initializing policyscenadding class  #")
         print("# ==================================== #")
@@ -31,9 +31,12 @@ class policyscenadding:
         # Read in Input YAML file
         with open(input_file) as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.xr_total = xr.open_dataset(
-            self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
-        )
+        if xr_total is None:
+            self.xr_total = xr.open_dataset(
+                self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
+            )
+        else:
+            self.xr_total = xr_total
 
     # =========================================================== #
     # =========================================================== #
@@ -42,7 +45,7 @@ class policyscenadding:
         print("- Read ENGAGE scenarios and change region namings")
         df_eng_raw = pd.read_csv(
             self.settings["paths"]["data"]["external"]
-            + "ENGAGE/PolicyScenarios/ENGAGE_internal_2610_onlyemis.csv"
+            + "ENGAGE_internal_2610_onlyemis.csv"
         )
 
         df_eng = df_eng_raw[df_eng_raw.Variable == "Emissions|Kyoto Gases"]
@@ -157,25 +160,23 @@ class policyscenadding:
     # =========================================================== #
     # =========================================================== #
 
-    def add_to_xr(self):
-        print("- Add to overall xrobject")
-        xr_total = self.xr_total.assign(NDC=self.xr_eng["Value"].sel(Scenario="NDC"))
-        xr_total = xr_total.assign(CurPol=self.xr_eng["Value"].sel(Scenario="CurPol"))
-        xr_total = xr_total.assign(NetZero=self.xr_eng["Value"].sel(Scenario="NetZero"))
+    def _to_xr(self, xr_eng: xr.Dataset, xr_total: xr.Dataset) -> xr.Dataset:
+        xr_total = xr_total.assign(NDC=self.xr_eng["Value"].sel(Scenario="NDC"))
+        xr_total = xr_total.assign(CurPol=xr_eng["Value"].sel(Scenario="CurPol"))
+        xr_total = xr_total.assign(NetZero=xr_eng["Value"].sel(Scenario="NetZero"))
         xr_total = xr_total.reindex(Time=np.arange(1850, 2101))
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc = self.xr_total[["NDC", "CurPol", "NetZero"]]
+        return self.xr_total[["NDC", "CurPol", "NetZero"]]
+
+    def add_to_xr(self):
+        print("- Add to overall xrobject")
+        xr_total_onlyalloc = self._to_xr(self.xr_eng, self.xr_total)
         xr_total_onlyalloc.to_netcdf(
             self.settings["paths"]["data"]["datadrive"] + "xr_policyscen.nc"
         )
 
         # CO2 version
-        xr_total2 = self.xr_total.assign(NDC=self.xr_eng_co2["Value"].sel(Scenario="NDC"))
-        xr_total2 = xr_total2.assign(CurPol=self.xr_eng_co2["Value"].sel(Scenario="CurPol"))
-        xr_total2 = xr_total2.assign(NetZero=self.xr_eng_co2["Value"].sel(Scenario="NetZero"))
-        xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
-        self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
+        xr_total_onlyalloc_co2 = self._to_xr(self.xr_eng_co2, self.xr_total)
         xr_total_onlyalloc_co2.to_netcdf(
             self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
         )
