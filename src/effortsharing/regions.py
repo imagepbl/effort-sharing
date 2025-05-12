@@ -1,3 +1,41 @@
+from dataclasses import dataclass
+import pandas as pd
+import effortsharing.regions as _regions
+
+
+@dataclass
+class General:
+    countries: dict[str, str]
+    regions: dict[str, str]
+
+
+def read_general(config: Config) -> General:
+    """Read country names and ISO from UNFCCC table."""
+    print("- Reading unfccc country data")
+
+    data_root = config.paths.input
+    filename = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    # Read and transform countries
+    columns = {"Name": "name", "Country ISO Code": "iso"}
+    countries = (
+        pd.read_excel(
+            data_root / filename,
+            sheet_name="Country groups",
+            usecols=columns.keys(),
+        )
+        .rename(columns=columns)
+        .set_index("name")["iso"]
+        .to_dict()
+    )
+
+    # Extend countries with non-country regions
+    regions = {**countries, **_regions.ADDITIONAL_EU_AND_EARTH}
+
+    general = General(countries, regions)
+    return general
+
+
 ADDITIONAL_EU_AND_EARTH = {"European Union": "EU", "Earth": "EARTH"}
 ADDITIONAL_REGIONS_SSPS = {
     "Aruba": "ABW",
