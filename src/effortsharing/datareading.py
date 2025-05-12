@@ -2481,10 +2481,9 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
     )
 
 
-if __name__ == "__main__":
-    import sys
+def main(config_file):
+    config = Config.from_file(config_file)
 
-    config = Config.from_file(sys.argv[1])
     general = read_general(config)  # TODO combine with un_population?
     xr_ssp = read_ssps(config, regions=general.regions)
     un_pop = read_un_population(config, countries=general.countries)
@@ -2528,5 +2527,12 @@ if __name__ == "__main__":
         general.regions,
     )
     new_total, new_regions = add_country_groups(config, general.regions, xr_total)
-    save(config, xr_total, new_regions, general.countries)
+    save(config, new_total, new_regions, general.countries)
     country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
+
+
+if __name__ == "__main__":
+    import sys
+
+    config_file = sys.argv[1]
+    main(config_file)
