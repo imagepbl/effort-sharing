@@ -3,6 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 import xarray as xr
+
 from effortsharing.config import Config
 
 
@@ -239,7 +240,7 @@ def read_ndc(config: Config, countries, xr_hist):
 
 
 # TODO: check this function
-def read_ndcs(config: Config, countries, xr_hist):
+def read_and_save_all(config: Config, countries, xr_hist) -> float:
     print("- Reading NDC data")
 
     # Read NDC data from Climate resource

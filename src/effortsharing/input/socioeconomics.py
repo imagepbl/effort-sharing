@@ -1,21 +1,33 @@
-from dataclasses import dataclass
+"""
+Functions to read and process socio-economic input data from various sources.
 
+Import as library:
+
+    from effortsharing.input import socioeconomics
+
+
+Or use as standalone script:
+
+    python src/effortsharing/input/socioeconomics.py config.yml
+
+
+"""
+
+import logging
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.config import Config
 import effortsharing.regions as _regions
 
-
-@dataclass
-class UNPopulation:
-    population: xr.Dataset
-    population_long: xr.Dataset
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
-def read_ssps_refactor(config, regions):
+def read_ssps_refactor(config: Config, regions):
     """Read GDP and population data from SSPs."""
-    print("- Reading GDP and population data from SSPs")
+    logger.info("Reading GDP and population data from SSPs")
 
     # Define input
     data_root = config.paths.input
@@ -59,7 +71,7 @@ def read_ssps_refactor(config, regions):
 
 # TODO: check why different from refactored version; fix; remove.
 def read_ssps(config, regions):
-    print("- Reading GDP and population data from SSPs")
+    logger.info("Reading GDP and population data from SSPs")
 
     # Define input
     data_root = config.paths.input
@@ -88,7 +100,7 @@ def read_ssps(config, regions):
                 # TODO: read from self.regions_iso instead ?!
                 iso = _regions.ADDITIONAL_REGIONS_SSPS.get(r, None)
             if iso is None:
-                print(r)
+                logger.warning(f"region not found: {r}")
                 iso = "oeps"
             region_iso.append(iso)
         df_ssp["Region"] = region_iso
@@ -128,8 +140,8 @@ def read_ssps(config, regions):
         return xr_ssp
 
 
-def read_un_population(config, countries) -> UNPopulation:
-    print("- Reading UN population data and gapminder, processed by OWID (for past population)")
+def read_un_population(config, countries):
+    logger.info("Reading UN population data and gapminder, processed by OWID (for past population)")
 
     # Define input
     data_root = config.paths.input
@@ -152,11 +164,11 @@ def read_un_population(config, countries) -> UNPopulation:
         / 1e6
     )
     xr_unp = xr_unp_long.sel(Time=np.arange(1850, 2000))
-    return UNPopulation(xr_unp, xr_unp_long)
+    return xr_unp, xr_unp_long
 
 
-def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
-    print("- Read Human Development Index data")
+def read_hdi_refactor(config, countries, population_long):
+    logger.info("Read Human Development Index data")
 
     # Define input
     data_root = config.paths.input
@@ -199,7 +211,7 @@ def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
     hdi = df.to_xarray().dropna("Region")
 
     # Add hdi_sh
-    pop_2019 = unpopulation.population_long.sel(Time=2019).Population.drop("Time")
+    pop_2019 = population_long.sel(Time=2019).Population.drop("Time")
     with xr.set_options(arithmetic_join="outer"):
         # "outer join" ensures that all regions are kept, even if they are
         # missing in one of the terms (data will be NaN)
@@ -209,8 +221,8 @@ def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
     return hdi, hdi_sh
 
 
-def read_hdi(config, countries, unpopulation):
-    print("- Read Human Development Index data")
+def read_hdi(config, countries, population_long):
+    logger.info("Read Human Development Index data")
 
     # Define input
     data_root = config.paths.input
@@ -348,7 +360,7 @@ def read_hdi(config, countries, unpopulation):
             hdi_values[r_i] = np.nan
 
         try:
-            pop = float(unpopulation.long.sel(Region=iso, Time=2019).Population)
+            pop = float(population_long.sel(Region=iso, Time=2019).Population)
         except:
             pop = np.nan
         hdi_sh_values[r_i] = hdi_values[r_i] * pop
@@ -376,16 +388,46 @@ def read_hdi(config, countries, unpopulation):
     return xr_hdi, xr_hdish
 
 
-# TODO: check this function
-def read_socioeconomics(config, countries, regions):
-    """Read socio-economic data (GDP, population, HDI) from various sources."""
-    # Read GDP and population data from SSPs
-    ssp_data = read_ssps_refactor(config, regions)
+def process_socioeconomics(config: Config, save=True):
+    """Collect socio-economic input data from various sources to intermediate file."""
 
-    # Read UN population data
-    un_population = read_un_population(config, countries)
+    logger.info("Processing socio-economic input data")
 
-    # Read HDI data
-    hdi_data, hdi_sh_data = read_hdi_refactor(config, countries, un_population)
+    countries, regions = _regions.read_general(config)
 
-    return ssp_data, un_population, hdi_data, hdi_sh_data
+    ssps = read_ssps(config, regions)
+    population, population_long = read_un_population(config, countries)
+    hdi, hdi_sh = read_hdi(config, countries, population_long)
+
+    # Merge datasets
+    socioeconomic_data = xr.merge([ssps, population, hdi_sh])
+    # TODO: Reindex time and regions??
+
+    # Save to disk
+    if save:
+        save_path = config.paths.intermediate / "socioeconomics.nc"
+
+        logger.info(f"Saving socio-economic data to {save_path}")
+
+        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
+        socioeconomic_data.to_netcdf(save_path)
+
+    return socioeconomic_data
+
+
+if __name__ == "__main__":
+    import argparse
+
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process socio-economic input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    # Read config
+    config = Config.from_file(args.config)
+
+    # Process socio-economic data
+    process_socioeconomics(config)

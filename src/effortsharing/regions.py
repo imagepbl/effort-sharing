@@ -1,15 +1,9 @@
-from dataclasses import dataclass
 import pandas as pd
-import effortsharing.regions as _regions
+
+from effortsharing.config import Config
 
 
-@dataclass
-class General:
-    countries: dict[str, str]
-    regions: dict[str, str]
-
-
-def read_general(config: Config) -> General:
+def read_general(config: Config):
     """Read country names and ISO from UNFCCC table."""
     print("- Reading unfccc country data")
 
@@ -30,10 +24,9 @@ def read_general(config: Config) -> General:
     )
 
     # Extend countries with non-country regions
-    regions = {**countries, **_regions.ADDITIONAL_EU_AND_EARTH}
+    regions = {**countries, **ADDITIONAL_EU_AND_EARTH}
 
-    general = General(countries, regions)
-    return general
+    return countries, regions
 
 
 ADDITIONAL_EU_AND_EARTH = {"European Union": "EU", "Earth": "EARTH"}
