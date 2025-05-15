@@ -1,14 +1,19 @@
 import json
+import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+import effortsharing.regions as _regions
 from effortsharing.config import Config
+from effortsharing.input.emissions import load_emissions
+
+logger = logging.getLogger(__name__)
 
 
 def read_ndc_climateresource(config: Config, countries):
-    print("- Reading NDC data from Climate resource")
+    logger.info("Reading NDC data from Climate resource")
 
     countries_iso = list(countries.values())
     version_ndcs = config.params.version_ndcs
@@ -93,7 +98,7 @@ def read_ndc_climateresource(config: Config, countries):
 
 
 def read_ndc(config: Config, countries, xr_hist):
-    print("- Reading NDC data")
+    logger.info("Reading NDC data")
 
     data_root = config.paths.input
     filename = "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx"
@@ -238,19 +243,68 @@ def read_ndc(config: Config, countries, xr_hist):
 
     return xr_ndc, xr_ndc_excl
 
+########################
 
-# TODO: check this function
-def read_and_save_all(config: Config, countries, xr_hist) -> float:
-    print("- Reading NDC data")
 
-    # Read NDC data from Climate resource
+def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
+    """Collect NDC input data from various sources to intermediate file.
+
+    Args:
+        config: effortsharing.config.Config object
+        xr_hist: xarray dataset containing variable "GHG_hist" for year 2015
+        from_intermediate: Whether to read from intermediate files if available (default: True)
+        save: Whether to save intermediate data to disk (default: True)
+
+    Returns:
+        xarray.Dataset: NDC data
+    """
+
+    save_path = config.paths.intermediate / "ndcs.nc"
+
+    # Check if we can load from intermediate file
+    if from_intermediate and save_path.exists():
+        logger.info(f"Loading NDC data from {save_path}")
+        return xr.load_dataset(save_path)
+
+    # Otherwise, process raw input files
+    logger.info("Processing NDC input data")
+
+    countries, regions = _regions.read_general(config)
+
+    xr_ndc, xr_ndc_excl = read_ndc(config, countries, xr_hist)
     xr_ndc_CR = read_ndc_climateresource(config, countries)
 
-    # Read NDC data from PBL
-    xr_ndc, xr_ndc_excl = read_ndc(config, countries, xr_hist)
-
     # Merge datasets
-    xr_ndc = xr.merge([xr_ndc, xr_ndc_excl])
-    xr_ndc = xr.merge([xr_ndc, xr_ndc_CR])
+    ncd_data = xr.merge([xr_ndc, xr_ndc_excl, xr_ndc_CR])
+    # TODO: Reindex time and regions??
 
-    return xr_ndc
+    # Save to disk
+    if save:
+        logger.info(f"Saving NDC data to {save_path}")
+
+        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
+        ncd_data.to_netcdf(save_path)
+        # TODO: add compression
+
+    return ncd_data
+
+
+if __name__ == "__main__":
+    import argparse
+
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process NDC input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    # Read config
+    config = Config.from_file(args.config)
+
+    # Needs historical emission data as input, so first load that
+    emissions = load_emissions(config, save=False)
+
+    # Process NDC data and save to intermediate file
+    load_ndcs(config, emissions, from_intermediate=False, save=True)
