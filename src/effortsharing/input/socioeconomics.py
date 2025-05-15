@@ -388,9 +388,26 @@ def read_hdi(config, countries, population_long):
     return xr_hdi, xr_hdish
 
 
-def process_socioeconomics(config: Config, save=True):
-    """Collect socio-economic input data from various sources to intermediate file."""
+def load_socioeconomics(config: Config, from_intermediate=True, save=True):
+    """Collect socio-economic input data from various sources to intermediate file.
 
+    Args:
+        config: effortsharing.config.Config object
+        from_intermediate: Whether to read from intermediate files if available (default: True)
+        save: Whether to save intermediate data to disk (default: True)
+
+    Returns:
+        xarray.Dataset: Socio-economic data
+    """
+
+    save_path = config.paths.intermediate / "socioeconomics.nc"
+
+    # Check if we can load from intermediate file
+    if from_intermediate and save_path.exists():
+        logger.info(f"Loading socio-economic data from {save_path}")
+        return xr.load_dataset(save_path)
+
+    # Otherwise, process raw input files
     logger.info("Processing socio-economic input data")
 
     countries, regions = _regions.read_general(config)
@@ -405,12 +422,11 @@ def process_socioeconomics(config: Config, save=True):
 
     # Save to disk
     if save:
-        save_path = config.paths.intermediate / "socioeconomics.nc"
-
         logger.info(f"Saving socio-economic data to {save_path}")
 
         config.paths.intermediate.mkdir(parents=True, exist_ok=True)
         socioeconomic_data.to_netcdf(save_path)
+        # TODO: add compression
 
     return socioeconomic_data
 
@@ -429,5 +445,5 @@ if __name__ == "__main__":
     # Read config
     config = Config.from_file(args.config)
 
-    # Process socio-economic data
-    process_socioeconomics(config)
+    # Process socio-economic data and save to intermediate file
+    load_socioeconomics(config, from_intermediate=False, save=True)
