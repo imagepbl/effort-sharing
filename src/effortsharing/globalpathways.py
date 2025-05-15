@@ -7,6 +7,14 @@ import xarray as xr
 from effortsharing.config import Config
 
 
+# TODO: can't remember whether NonCO2 data was emissions or socio-economic or NDC data
+@dataclass
+class NonCO2Data:
+    xr_temperatures: xr.Dataset
+    xr_nonco2warmings: xr.Dataset
+    xr_nonco2warming_wrt_start: xr.Dataset
+
+
 # TODO: perhaps combine this class with the one before?
 @dataclass
 class NonCO2Trajectories:

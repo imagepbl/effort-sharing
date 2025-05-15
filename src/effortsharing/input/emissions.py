@@ -1,41 +1,18 @@
-from dataclasses import dataclass
+import logging
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+import effortsharing.regions as _regions
 from effortsharing.config import Config
 
-
-@dataclass
-class JonesData:
-    xr_hist: xr.Dataset
-    xr_ghg_afolu: xr.Dataset
-    xr_ghg_agri: xr.DataArray
-    xr_edgar: xr.Dataset
-    xr_primap: xr.Dataset
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class AR6Data:
-    xr_ar6_prevet: xr.Dataset
-    xr_ar6: xr.Dataset
-    ms_immediate: np.ndarray
-    ms_delayed: np.ndarray
-    xr_ar6_landuse: xr.Dataset
-    xr_ar6_C: xr.Dataset
-    xr_ar6_C_bunkers: xr.Dataset
-
-
-@dataclass
-class NonCO2Data:
-    xr_temperatures: xr.Dataset
-    xr_nonco2warmings: xr.Dataset
-    xr_nonco2warming_wrt_start: xr.Dataset
-
-
-def read_historicalemis_jones(config: Config, regions) -> JonesData:
+def read_historicalemis_jones(config: Config, regions):
     # No harmonization with the KEV anymore, but it's also much closer now
-    print("- Reading historical emissions (jones)")
+    logger.info("Reading historical emissions (jones)")
 
     # Define input
     # TODO: separate functions for reading each of these files?
@@ -213,11 +190,11 @@ def read_historicalemis_jones(config: Config, regions) -> JonesData:
     group_eu = countries_iso[np.array(df["EU"]) == 1]
     xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
 
-    return JonesData(xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap)
+    return xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap
 
 
-def read_ar6(config: Config, xr_hist) -> AR6Data:
-    print("- Read AR6 data")
+def read_ar6(config: Config, xr_hist):
+    logger.info("Read AR6 data")
 
     # Define input
     data_root = config.paths.input
@@ -479,7 +456,7 @@ def read_ar6(config: Config, xr_hist) -> AR6Data:
     xr_all = xr_all.assign_coords(Category=["C1", "C1+C2", "C2", "C3", "C6", "C7", "C8"])
     xr_ar6_C_bunkers = xr_all
 
-    return AR6Data(
+    return (
         xr_ar6_prevet,
         xr_ar6,
         ms_immediate,
@@ -495,7 +472,7 @@ def read_baseline(
     countries,  # TODO: pass in region instead??
     xr_hist,
 ):
-    print("- Reading baseline emissions")
+    logger.info("Reading baseline emissions")
 
     data_root = config.paths.input
     start_year = config.params.start_year_analysis
@@ -599,18 +576,80 @@ def read_baseline(
     return xr_base
 
 
-# TODO: check this function
-def read_emissions(
-    config: Config,
-    regions,
-) -> tuple[NonCO2Data, JonesData, AR6Data]:
-    # Read historical emissions
-    jones_data = read_historicalemis_jones(config, regions)
+def load_emissions(config: Config, from_intermediate=True, save=True):
+    """Collect emission input data from various sources to intermediate file.
 
-    # Read AR6 data
-    ar6_data = read_ar6(config, jones_data.xr_hist)
+    Args:
+        config: effortsharing.config.Config object
+        from_intermediate: Whether to read from intermediate files if available (default: True)
+        save: Whether to save intermediate data to disk (default: True)
 
-    # Read baseline emissions
-    xr_base = read_baseline(config, regions, jones_data.xr_hist)
+    Returns:
+        xarray.Dataset: Emission data
+    """
 
-    return (jones_data, ar6_data, xr_base)
+    save_path = config.paths.intermediate / "emissions.nc"
+
+    # Check if we can load from intermediate file
+    if from_intermediate and save_path.exists():
+        logger.info(f"Loading emission data from {save_path}")
+        return xr.load_dataset(save_path)
+
+    # Otherwise, process raw input files
+    logger.info("Processing emission input data")
+
+    countries, regions = _regions.read_general(config)
+
+    xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap = read_historicalemis_jones(
+        config, regions
+    )
+
+    xr_base = read_baseline(config, countries, xr_hist)
+    (
+        xr_ar6_prevet,
+        xr_ar6,
+        ms_immediate,
+        ms_delayed,
+        xr_ar6_landuse,
+        xr_ar6_C,
+        xr_ar6_C_bunkers,
+    ) = read_ar6(config, xr_hist)
+
+    # Merge datasets
+    emission_data = xr.merge(
+        [
+            xr_hist,
+            xr_base,
+            xr_ar6_C,
+            xr_ar6_C_bunkers,
+        ]
+    )
+    # TODO: Reindex time and regions??
+
+    # Save to disk
+    if save:
+        logger.info(f"Saving emission data to {save_path}")
+
+        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
+        emission_data.to_netcdf(save_path)
+        # TODO: add compression
+
+    return emission_data
+
+
+if __name__ == "__main__":
+    import argparse
+
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process emission input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    # Read config
+    config = Config.from_file(args.config)
+
+    # Process emission data and save to intermediate file
+    load_emissions(config, from_intermediate=False, save=True)
