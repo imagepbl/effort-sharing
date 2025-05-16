@@ -1,3 +1,34 @@
+import pandas as pd
+
+from effortsharing.config import Config
+
+
+def read_general(config: Config):
+    """Read country names and ISO from UNFCCC table."""
+    print("- Reading unfccc country data")
+
+    data_root = config.paths.input
+    filename = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    # Read and transform countries
+    columns = {"Name": "name", "Country ISO Code": "iso"}
+    countries = (
+        pd.read_excel(
+            data_root / filename,
+            sheet_name="Country groups",
+            usecols=columns.keys(),
+        )
+        .rename(columns=columns)
+        .set_index("name")["iso"]
+        .to_dict()
+    )
+
+    # Extend countries with non-country regions
+    regions = {**countries, **ADDITIONAL_EU_AND_EARTH}
+
+    return countries, regions
+
+
 ADDITIONAL_EU_AND_EARTH = {"European Union": "EU", "Earth": "EARTH"}
 ADDITIONAL_REGIONS_SSPS = {
     "Aruba": "ABW",
