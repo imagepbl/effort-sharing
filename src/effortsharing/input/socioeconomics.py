@@ -434,8 +434,10 @@ def load_socioeconomics(config: Config, from_intermediate=True, save=True):
 if __name__ == "__main__":
     import argparse
 
+    from rich.logging import RichHandler
+
     # Set up logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
 
     # Get the config file from command line arguments
     parser = argparse.ArgumentParser(description="Process socio-economic input data")

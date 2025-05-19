@@ -1,11 +1,13 @@
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
 from effortsharing.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 # TODO: perhaps combine this class with the one before?
@@ -216,7 +218,7 @@ def nonco2variation(config: Config):
 
 
 def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, temperatures):
-    print("- Computing global nonco2 trajectories")
+    logger.info("Computing global nonco2 trajectories")
 
     # Shorthand for often-used expressions
     start_year = config.params.start_year_analysis
@@ -372,7 +374,7 @@ def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, t
 
 
 def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2warming_wrt_start):
-    print("- Get global CO2 budgets")
+    logger.info("Get global CO2 budgets")
 
     # Define input
     data_root = config.paths.input
@@ -473,7 +475,7 @@ def determine_global_co2_trajectories(
     xr_co2_budgets,
     xr_traj_nonco2,
 ) -> GlobalCO2:
-    print("- Computing global co2 trajectories")
+    logger.info("Computing global co2 trajectories")
 
     # Shorthand for often-used expressions
     start_year = config.params.start_year_analysis
@@ -767,7 +769,7 @@ def merge_xr(
     regions,
 ):
     regions_iso = list(regions.values())
-    print("- Merging xrarray object")
+    logger.info("Merging xrarray object")
     xr_total = xr.merge(
         [
             xr_co2_budgets,
@@ -782,7 +784,7 @@ def merge_xr(
 
 
 def add_country_groups(config: Config, regions, xr_total):
-    print("- Add country groups")
+    logger.info("Add country groups")
 
     data_root = config.paths.input
     filename = "UNFCCC_Parties_Groups_noeu.xlsx"
@@ -896,7 +898,7 @@ def add_country_groups(config: Config, regions, xr_total):
 
 
 def save(config: Config, xr_total, regions, countries):
-    print("- Save important files")
+    logger.info("Save important files")
 
     savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
 
@@ -1254,6 +1256,7 @@ def main(config_file):
         xr_traj_nonco2=xr_traj_nonco2,
     )
 
+    logger.warning(xr_co2_budgets.sel(Temperature=1.5, Risk=0.5, NonCO2red=0.5))
     # new_total, new_regions = add_country_groups(config, general.regions, xr_total)
     # save(config, new_total, new_regions, general.countries)
     # country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
@@ -1262,8 +1265,10 @@ def main(config_file):
 if __name__ == "__main__":
     import sys
 
+    from rich.logging import RichHandler
+
     # Set up logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
 
     config_file = sys.argv[1]
     main(config_file)

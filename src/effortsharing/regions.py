@@ -1,11 +1,15 @@
+import logging
+
 import pandas as pd
 
 from effortsharing.config import Config
 
+logger = logging.getLogger(__name__)
+
 
 def read_general(config: Config):
     """Read country names and ISO from UNFCCC table."""
-    print("- Reading unfccc country data")
+    logger.info("Reading unfccc country data")
 
     data_root = config.paths.input
     filename = "UNFCCC_Parties_Groups_noeu.xlsx"
