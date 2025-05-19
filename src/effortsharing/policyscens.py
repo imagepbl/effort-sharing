@@ -56,11 +56,10 @@ class policyscenadding(object):
         }
 
         # Read in Input YAML file
-        with open(self.current_dir / "input.yml", encoding="utf-8") as file:
+        with open(self.current_dir / "notebooks/input.yml", encoding="utf-8") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.xr_total = xr.open_dataset(
-            self.settings["paths"]["data"]["datadrive"]
-            + "/startyear_2021/xr_dataread.nc"
+            self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
         )
 
     # =========================================================== #
@@ -121,9 +120,7 @@ class policyscenadding(object):
             "South East Asia": "Southeast Asia",
             "European Union": "EU",
         }
-        df_scenarios_filtered["Region"] = df_scenarios_filtered["Region"].replace(
-            region_mapping
-        )
+        df_scenarios_filtered["Region"] = df_scenarios_filtered["Region"].replace(region_mapping)
 
         df_scenarios_renamed = df_scenarios_filtered.copy()
 
@@ -156,9 +153,9 @@ class policyscenadding(object):
         )
 
         # Merge the data on region into a new column 'Region_cleaned'
-        df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed[
-            "Model_2"
-        ].combine_first(df_scenarios_renamed["Region_2"])
+        df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed["Model_2"].combine_first(
+            df_scenarios_renamed["Region_2"]
+        )
 
         # Sort the dataframe by 'Region_cleaned' and reset the index
         # Sorting it to give preference to e.g. "India" over "India (AR10)"
@@ -175,9 +172,7 @@ class policyscenadding(object):
         df_scenarios_deduplicated.reset_index(inplace=True)
 
         # Drop helper columns and reorder the DataFrame
-        df_scenarios_deduplicated.drop(
-            columns=["Model_2", "Region_2", "Region"], inplace=True
-        )
+        df_scenarios_deduplicated.drop(columns=["Model_2", "Region_2", "Region"], inplace=True)
         df_scenarios_deduplicated = df_scenarios_deduplicated.rename(
             columns={"Region_cleaned": "Region"}
         )
@@ -221,8 +216,6 @@ class policyscenadding(object):
         logger.info("Converting DataFrame to xarray objects")
 
         # Melt the DataFrame to long format
-        # df_co2_or_kyoto.drop_duplicates(inplace=True)
-
         df_melted = df_co2_or_kyoto.melt(
             id_vars=["Scenario", "Model", "Region"],
             var_name="Time",
@@ -232,19 +225,42 @@ class policyscenadding(object):
         # Convert the 'Time' column to integers
         df_melted["Time"] = np.array(df_melted["Time"].astype(int))
 
+        # Interpolate missing years for each scenario, model, and region
+        logger.info("Interpolating missing years")
+
+        years_full = np.arange(1850, 2101)
+
+        def interpolate_group(group):
+            group = group.dropna(subset=["Value"])
+            if group.empty:
+                # If all values are missing, return empty DataFrame
+                return pd.DataFrame(columns=group.columns)
+            return pd.DataFrame(
+                {
+                    "Scenario": group["Scenario"].iloc[0],
+                    "Model": group["Model"].iloc[0],
+                    "Region": group["Region"].iloc[0],
+                    "Time": years_full,
+                    "Value": np.interp(years_full, group["Time"], group["Value"]),
+                }
+            )
+
+        df_interp = (
+            df_melted.groupby(["Scenario", "Model", "Region"], as_index=False)
+            .apply(interpolate_group)
+            .reset_index(drop=True)
+        )
+
         # Set the index for the xarray object
-        df_melted.set_index(["Scenario", "Model", "Region", "Time"], inplace=True)
+        df_interp.set_index(["Scenario", "Model", "Region", "Time"], inplace=True)
 
-        df_melted = df_melted.drop_duplicates()
-        # duplicates = df_melted[df_melted.duplicated()]
-        # if not duplicates.empty:
-        #     print("Duplicate rows found:")
-        #     print(duplicates)
+        # TODO Do we want to drop duplicates here? Or keep all empty years?
+        # df_interp = df_interp.drop_duplicates()
+
         # Convert to xarray Dataset
-        xr_dataset = xr.Dataset.from_dataframe(df_melted)
-        xr_dataset = xr_dataset.reindex(Time=np.arange(1850, 2101))
+        xr_dataset = xr.Dataset.from_dataframe(df_interp)
 
-        return xr_dataset.interpolate_na(dim="Time", method="linear")
+        return xr_dataset
 
     def filter_and_convert(self, df_scenarios_deduplicated):
         """
@@ -305,6 +321,8 @@ class policyscenadding(object):
 
         self.xr_total.close()
 
+        return xr_total, xr_total_onlyalloc
+
 
 if __name__ == "__main__":
     # Create an instance of the class
@@ -315,4 +333,4 @@ if __name__ == "__main__":
     df_renamed = policyscen.rename_and_preprocess(df_filtered)
     df_deduplicated = policyscen.deduplicate_regions(df_renamed)
     xr_kyoto, xr_co2 = policyscen.filter_and_convert(df_deduplicated)
-    policyscen.add_to_xr(xr_kyoto, xr_co2)
+    xr_total, xr_total_onlyalloc = policyscen.add_to_xr(xr_kyoto, xr_co2)
