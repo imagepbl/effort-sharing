@@ -21,7 +21,7 @@ def load_all(config: Config, from_intermediate=True, save=True):
     emission_data, scenarios = emissions.load_emissions(config, from_intermediate, save)
     ndc_data = ndcs.load_ndcs(config, emission_data, from_intermediate, save)
 
-    return emission_data, socioeconomic_data, ndc_data
+    return emission_data, socioeconomic_data, scenarios, ndc_data
 
 
 if __name__ == "__main__":

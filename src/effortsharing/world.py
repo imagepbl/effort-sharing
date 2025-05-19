@@ -1,38 +1,13 @@
 import logging
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+import effortsharing.regions as _regions
 from effortsharing.config import Config
 
 logger = logging.getLogger(__name__)
-
-
-# TODO: perhaps combine this class with the one before?
-@dataclass
-class NonCO2Trajectories:
-    xr_traj_nonco2: xr.Dataset
-    xr_traj_nonco2_2: xr.Dataset
-    xr_traj_nonco2_adapt: xr.Dataset | None
-
-
-@dataclass
-class GlobalBudgets:
-    xr_bud_co2: xr.Dataset
-    xr_co2_budgets: xr.Dataset
-
-
-@dataclass
-class GlobalCO2:
-    xr_traj_co2: xr.Dataset
-    xr_traj_ghg: xr.Dataset
-    landuse_ghg_corr: xr.Dataset
-    landuse_co2_corr: xr.Dataset
-    xr_traj_ghg_excl: xr.Dataset
-    xr_traj_co2_excl: xr.Dataset
-    all_projected_gases: xr.Dataset
 
 
 def nonco2variation(config: Config):
@@ -210,11 +185,14 @@ def nonco2variation(config: Config):
         .NonCO2warming
     )
 
-    return xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start
+    # TODO: if nonco2warmings is not needed, we could merge the two others:
+    # return = xr.merge([xr_temperatures, xr_nonco2warming_wrt_start])
 
-    # TODO: can't do this? Datasets contain variables with same name but different values
-    # nonco2_data = xr.merge([xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start])
-    # return nonco2_data
+    return (
+        xr_temperatures,
+        # xr_nonco2warmings,  # TODO: not used, remove?
+        xr_nonco2warming_wrt_start,
+    )
 
 
 def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, temperatures):
@@ -370,7 +348,11 @@ def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, t
     else:
         xr_traj_nonco2_adapt = None
 
-    return xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt
+    return (
+        xr_traj_nonco2,
+        # xr_traj_nonco2_2,  # TODO: not used, remove?
+        # xr_traj_nonco2_adapt,  # TODO: not used, remove?
+    )
 
 
 def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2warming_wrt_start):
@@ -419,9 +401,9 @@ def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2w
     # Determine bunker emissions to subtract from global budget
     bunker_subtraction = []
     for t_i, t in enumerate(dim_temp):
-        bunker_subtraction += [
-            3.3 / 100
-        ]  # Assuming bunker emissions have a constant fraction of global emissions (3.3%) - https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
+        # Assuming bunker emissions have a constant fraction of global emissions (3.3%) -
+        # https://www.pbl.nl/sites/default/files/downloads/pbl-2020-analysing-international-shipping-and-aviation-emissions-projections_4076.pdf
+        bunker_subtraction += [3.3 / 100]
 
     Blist = np.zeros(shape=(len(dim_temp), len(dim_prob), len(dim_nonco2))) + np.nan
 
@@ -439,8 +421,10 @@ def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2w
         for t_i, t in enumerate(dim_temp):
             ms = ms_temp(t, round(1 - p, 2))
 
-            # This assumes that the budget from Forster implicitly includes the median nonCO2 warming among scenarios that meet that Temperature target
-            # Hence, only deviation (dT) from this median is interesting to assess here
+            # This assumes that the budget from Forster implicitly includes the
+            # median nonCO2 warming among scenarios that meet that Temperature
+            # target Hence, only deviation (dT) from this median is interesting
+            # to assess here
             dT = xr_nonco2warming_wrt_start.sel(
                 ModelScenario=ms, Risk=round(1 - p, 2)
             ) - xr_nonco2warming_wrt_start.sel(ModelScenario=ms, Risk=round(1 - p, 2)).median(
@@ -464,7 +448,10 @@ def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2w
     )
     xr_co2_budgets = xr.Dataset({"Budget": data2})
 
-    return xr_bud_co2, xr_co2_budgets
+    return (
+        xr_bud_co2,  # TODO: not used, remove?
+        xr_co2_budgets,
+    )
 
 
 def determine_global_co2_trajectories(
@@ -474,7 +461,7 @@ def determine_global_co2_trajectories(
     xr_temperatures,
     xr_co2_budgets,
     xr_traj_nonco2,
-) -> GlobalCO2:
+):
     logger.info("Computing global co2 trajectories")
 
     # Shorthand for often-used expressions
@@ -752,35 +739,77 @@ def determine_global_co2_trajectories(
         ]
     )
 
-    return GlobalCO2(
-        xr_traj_co2,
-        xr_traj_ghg,
-        landuse_ghg_corr,
-        landuse_co2_corr,
-        xr_traj_ghg_excl,
-        xr_traj_co2_excl,
+    return (
+        # xr_traj_co2,  # TODO: not used. Remove?
+        # xr_traj_ghg,  # TODO: not used. Remove?
+        # landuse_ghg_corr,  # TODO: not used. Remove?
+        # landuse_co2_corr,  # TODO: not used. Remove?
+        # xr_traj_ghg_excl,  # TODO: not used. Remove?
+        # xr_traj_co2_excl,  # TODO: not used. Remove?
         all_projected_gases,
     )
 
+    # Merge all data into a single xrarray object
 
-def merge_xr(
+
+def merge_data(
     xr_co2_budgets,
     all_projected_gases,
-    regions,
+    emission_data,
+    ndc_data,
+    socioeconomic_data,
 ):
-    regions_iso = list(regions.values())
-    logger.info("Merging xrarray object")
-    xr_total = xr.merge(
+    return xr.merge(
         [
-            xr_co2_budgets,
-            all_projected_gases,
+            xr_co2_budgets["Budget"],
+            all_projected_gases[  # TODO: could merge whole dataarray at once, no need to list all vars explicitly. Did this to get overview of what variable comes from where.
+                [
+                    "GHG_globe",
+                    "CO2_globe",
+                    "CO2_neg_globe",
+                    "NonCO2_globe",
+                    "GHG_globe_excl",
+                    "CO2_globe_excl",
+                ]
+            ],
+            emission_data[  # TODO: already stored elsewhere. Remove?
+                [
+                    "GHG_hist",
+                    "GHG_hist_excl",
+                    "CO2_hist",
+                    "CO2_hist_excl",
+                    "CH4_hist",
+                    "N2O_hist",
+                    "CO2_base_excl",
+                    "CO2_base_incl",
+                    "GHG_base_excl",
+                    "GHG_base_incl",
+                    "GHG_excl_C",
+                    "CO2_excl_C",
+                    "CO2_neg_C",
+                    "CO2_bunkers_C",
+                ]
+            ],
+            ndc_data[  # TODO: already stored elsewhere. Remove?
+                [
+                    "GHG_ndc",
+                    "GHG_ndc_red",
+                    "GHG_ndc_inv",
+                    "GHG_ndc_excl_red",
+                    "GHG_ndc_excl",
+                    "GHG_ndc_excl_inv",
+                    "GHG_ndc_excl_CR",
+                ]
+            ],
+            socioeconomic_data[  # TODO: already stored elsewhere. Remove?
+                [
+                    "GDP",
+                    "HDIsh",
+                    "Population",
+                ]
+            ],
         ]
     )
-    xr_total = xr_total.reindex(Region=regions_iso)
-    xr_total = xr_total.reindex(Time=np.arange(1850, 2101))
-    xr_total["GHG_globe"] = xr_total["GHG_globe"].astype(float)
-    xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(["Variable"])
-    return xr_total
 
 
 def add_country_groups(config: Config, regions, xr_total):
@@ -897,64 +926,82 @@ def add_country_groups(config: Config, regions, xr_total):
     return new_total, new_regions
 
 
-def save(config: Config, xr_total, regions, countries):
-    logger.info("Save important files")
+# TODO: Is this really necessary? Or can we remove it?
+def save_regions(config, countries, regions):
+    logger.info(f"Saving regions and countries to {config.paths.output}")
 
-    savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
-
-    # TODO move to separate function?
+    # Save regions and countries
     regions_name = np.array(list(regions.keys()))
     regions_iso = np.array(list(regions.values()))
     countries_name = np.array(list(countries.keys()))
     countries_iso = np.array(list(countries.values()))
+
     np.save(config.paths.output / "all_regions.npy", regions_iso)
     np.save(config.paths.output / "all_regions_names.npy", regions_name)
     np.save(config.paths.output / "all_countries.npy", countries_iso)
     np.save(config.paths.output / "all_countries_names.npy", countries_name)
 
-    xr_normal = xr_total.sel(
-        Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
-    )
-    xr_version = xr_normal
+
+# TODO: Probably not necessary, or could be done more compactly by looping over data_vars
+ENCODING = {
+    "Region": {"dtype": "str"},
+    "Scenario": {"dtype": "str"},
+    "Time": {"dtype": "int"},
+    "Temperature": {"dtype": "float"},
+    "NonCO2red": {"dtype": "float"},
+    "NegEmis": {"dtype": "float"},
+    "Risk": {"dtype": "float"},
+    "Timing": {"dtype": "str"},
+    "Conditionality": {"dtype": "str"},
+    "Ambition": {"dtype": "str"},
+    "GDP": {"zlib": True, "complevel": 9},
+    "Population": {"zlib": True, "complevel": 9},
+    "GHG_hist": {"zlib": True, "complevel": 9},
+    "GHG_hist_excl": {"zlib": True, "complevel": 9},
+    "CO2_hist": {"zlib": True, "complevel": 9},
+    "CO2_hist_excl": {"zlib": True, "complevel": 9},
+    "GHG_globe": {"zlib": True, "complevel": 9},
+    "GHG_globe_excl": {"zlib": True, "complevel": 9},
+    "CO2_globe": {"zlib": True, "complevel": 9},
+    "CO2_globe_excl": {"zlib": True, "complevel": 9},
+    "GHG_base_incl": {"zlib": True, "complevel": 9},
+    "GHG_base_excl": {"zlib": True, "complevel": 9},
+    "CO2_base_incl": {"zlib": True, "complevel": 9},
+    "CO2_base_excl": {"zlib": True, "complevel": 9},
+    "GHG_excl_C": {"zlib": True, "complevel": 9},
+    "CO2_excl_C": {"zlib": True, "complevel": 9},
+    "CO2_neg_C": {"zlib": True, "complevel": 9},
+    "CO2_bunkers_C": {"zlib": True, "complevel": 9},
+    "GHG_ndc": {"zlib": True, "complevel": 9},
+    "GHG_ndc_excl": {"zlib": True, "complevel": 9},
+    "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
+}
+
+
+def save_total(config: Config, xr_version):
+    """Save xr_total to netcdf file."""
+
+    startyear = config.params.start_year_analysis
+    savepath = config.paths.output / f"startyear_{startyear}" / "xr_dataread.nc"
+
+    logger.info(f"Saving xr_total to {savepath}")
 
     xr_version.to_netcdf(
-        savepath / "xr_dataread.nc",
-        encoding={
-            "Region": {"dtype": "str"},
-            "Scenario": {"dtype": "str"},
-            "Time": {"dtype": "int"},
-            "Temperature": {"dtype": "float"},
-            "NonCO2red": {"dtype": "float"},
-            "NegEmis": {"dtype": "float"},
-            "Risk": {"dtype": "float"},
-            "Timing": {"dtype": "str"},
-            "Conditionality": {"dtype": "str"},
-            "Ambition": {"dtype": "str"},
-            "GDP": {"zlib": True, "complevel": 9},
-            "Population": {"zlib": True, "complevel": 9},
-            "GHG_hist": {"zlib": True, "complevel": 9},
-            "GHG_hist_excl": {"zlib": True, "complevel": 9},
-            "CO2_hist": {"zlib": True, "complevel": 9},
-            "CO2_hist_excl": {"zlib": True, "complevel": 9},
-            "GHG_globe": {"zlib": True, "complevel": 9},
-            "GHG_globe_excl": {"zlib": True, "complevel": 9},
-            "CO2_globe": {"zlib": True, "complevel": 9},
-            "CO2_globe_excl": {"zlib": True, "complevel": 9},
-            "GHG_base_incl": {"zlib": True, "complevel": 9},
-            "GHG_base_excl": {"zlib": True, "complevel": 9},
-            "CO2_base_incl": {"zlib": True, "complevel": 9},
-            "CO2_base_excl": {"zlib": True, "complevel": 9},
-            "GHG_excl_C": {"zlib": True, "complevel": 9},
-            "CO2_excl_C": {"zlib": True, "complevel": 9},
-            "CO2_neg_C": {"zlib": True, "complevel": 9},
-            "CO2_bunkers_C": {"zlib": True, "complevel": 9},
-            "GHG_ndc": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
-        },
+        savepath,
+        encoding=ENCODING,
         format="NETCDF4",
         engine="netcdf4",
     )
+
+
+def save_rbw(config: Config, xr_version, countries):
+    """Save rbw factors to netcdf file."""
+    startyear = config.params.start_year_analysis
+    savepath = config.paths.output / f"startyear_{startyear}"
+
+    logger.info(f"Saving rbw factors to {savepath}")
+
+    countries_iso = np.array(list(countries.values()))
 
     # AP rbw factors
     for gas in ["CO2", "GHG"]:
@@ -973,7 +1020,14 @@ def save(config: Config, xr_total, regions, countries):
             rbw = rbw.where(rbw != 0)
             rbw.to_netcdf(savepath / f"xr_rbw_{gas}_lulucf.nc")
 
-    # TODO: move to separate function? This is reading new data
+
+# TODO: this doesn't need xr_version, only regions. Separate it more clearly.
+def save_rci(config: Config, xr_version):
+    """Save RCI data to netcdf file."""
+
+    savepath = config.paths.output / "xr_rci.nc"
+    logger.info(f"Saving RCI data to {savepath}")
+
     # GDR RCI indices
     r = 0
     hist_emissions_startyears = [1850, 1950, 1990]
@@ -1007,10 +1061,12 @@ def save(config: Config, xr_total, regions, countries):
     )
     xr_rci = xr.Dataset.from_dataframe(dfdummy)
     xr_rci = xr_rci.reindex({"Region": xr_version.Region})
-    xr_rci.to_netcdf(config.paths.output / "xr_rci.nc")
+    xr_rci.to_netcdf(savepath)
 
 
-def country_specific_datareaders(config: Config, xr_total, xr_primap):
+def datareader_netherlands(config: Config, xr_total):
+    logger.info("Processing custom emission data for Norway")
+
     savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
     time_future = np.arange(config.params.start_year_analysis, 2101)
     time_past = np.arange(1850, config.params.start_year_analysis + 1)
@@ -1096,54 +1152,29 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
     xr_dataread_nld.GHG_hist_excl.loc[dict(Region="NLD", Time=time_past)] = (
         xr_dataread_nld.GHG_hist_excl.sel(Region="NLD", Time=time_past) / fractions
     )
+
+    # Save the data
+    logger.info(f"Saving Netherlands data to {savepath / 'xr_dataread_NLD.nc'}")
     xr_dataread_nld.sel(
         Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     ).to_netcdf(
         savepath / "xr_dataread_NLD.nc",
-        # TODO: make separate variable for encoding so we can reuse it?
-        encoding={
-            "Region": {"dtype": "str"},
-            "Scenario": {"dtype": "str"},
-            "Time": {"dtype": "int"},
-            "Temperature": {"dtype": "float"},
-            "NonCO2red": {"dtype": "float"},
-            "NegEmis": {"dtype": "float"},
-            "Risk": {"dtype": "float"},
-            "Timing": {"dtype": "str"},
-            "Conditionality": {"dtype": "str"},
-            "Ambition": {"dtype": "str"},
-            "GDP": {"zlib": True, "complevel": 9},
-            "Population": {"zlib": True, "complevel": 9},
-            "GHG_hist": {"zlib": True, "complevel": 9},
-            "GHG_hist_excl": {"zlib": True, "complevel": 9},
-            "CO2_hist": {"zlib": True, "complevel": 9},
-            "CO2_hist_excl": {"zlib": True, "complevel": 9},
-            "GHG_globe": {"zlib": True, "complevel": 9},
-            "GHG_globe_excl": {"zlib": True, "complevel": 9},
-            "CO2_globe": {"zlib": True, "complevel": 9},
-            "CO2_globe_excl": {"zlib": True, "complevel": 9},
-            "GHG_base_incl": {"zlib": True, "complevel": 9},
-            "GHG_base_excl": {"zlib": True, "complevel": 9},
-            "CO2_base_incl": {"zlib": True, "complevel": 9},
-            "CO2_base_excl": {"zlib": True, "complevel": 9},
-            "GHG_excl_C": {"zlib": True, "complevel": 9},
-            "CO2_excl_C": {"zlib": True, "complevel": 9},
-            "CO2_neg_C": {"zlib": True, "complevel": 9},
-            "GHG_ndc": {"zlib": True, "complevel": 9},
-            "GHG_ndc_inv": {"zlib": True, "complevel": 9},
-            "GHG_ndc_red": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl_inv": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl_red": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
-        },
+        encoding=ENCODING,
         format="NETCDF4",
         engine="netcdf4",
     )
 
-    # TODO: move to seperate function?
+
+def datareader_norway(config: Config, xr_total, xr_primap):
     # Norwegian emissions - harmonized with EDGAR
+    logger.info("Processing custom emission data for Norway")
+
+    savepath = config.paths.output / f"startyear_{config.params.start_year_analysis}"
     xr_dataread_nor = xr.open_dataset(savepath / "xr_dataread.nc").load().copy()
+
+    time_future = np.arange(config.params.start_year_analysis, 2101)
+    time_past = np.arange(1850, config.params.start_year_analysis + 1)
+
     # Get data and interpolate
     time_axis = np.arange(1990, config.params.start_year_analysis + 1)
     ghg_axis = np.array(
@@ -1191,39 +1222,14 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
     xr_dataread_nor.GHG_hist.loc[dict(Region="NOR", Time=time_past)] = (
         xr_dataread_nor.GHG_hist.sel(Region="NOR", Time=time_past) / fractions
     )
+
+    # Save the data
+    logger.info(f"Saving Norway data to {savepath / 'xr_dataread_NOR.nc'}")
     xr_dataread_nor.sel(
         Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     ).to_netcdf(
         savepath / "xr_dataread_NOR.nc",
-        encoding={
-            "Region": {"dtype": "str"},
-            "Scenario": {"dtype": "str"},
-            "Time": {"dtype": "int"},
-            "Temperature": {"dtype": "float"},
-            "NonCO2red": {"dtype": "float"},
-            "NegEmis": {"dtype": "float"},
-            "Risk": {"dtype": "float"},
-            "Timing": {"dtype": "str"},
-            "Conditionality": {"dtype": "str"},
-            "Ambition": {"dtype": "str"},
-            "GDP": {"zlib": True, "complevel": 9},
-            "Population": {"zlib": True, "complevel": 9},
-            "GHG_hist": {"zlib": True, "complevel": 9},
-            "GHG_hist_excl": {"zlib": True, "complevel": 9},
-            "CO2_hist": {"zlib": True, "complevel": 9},
-            "CO2_hist_excl": {"zlib": True, "complevel": 9},
-            "GHG_globe": {"zlib": True, "complevel": 9},
-            "GHG_globe_excl": {"zlib": True, "complevel": 9},
-            "CO2_globe": {"zlib": True, "complevel": 9},
-            "CO2_globe_excl": {"zlib": True, "complevel": 9},
-            "GHG_base_incl": {"zlib": True, "complevel": 9},
-            "GHG_base_excl": {"zlib": True, "complevel": 9},
-            "CO2_base_incl": {"zlib": True, "complevel": 9},
-            "CO2_base_excl": {"zlib": True, "complevel": 9},
-            "GHG_ndc": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl": {"zlib": True, "complevel": 9},
-            "GHG_ndc_excl_CR": {"zlib": True, "complevel": 9},
-        },
+        encoding=ENCODING,
         format="NETCDF4",
         engine="netcdf4",
     )
@@ -1234,32 +1240,59 @@ def main(config_file):
 
     import effortsharing as es
 
+    countries, regions = _regions.read_general(config)
+
     # Read input data
     socioeconomic_data = es.input.socioeconomics.load_socioeconomics(config)
     emission_data, scenarios = es.input.emissions.load_emissions(config)
     ndc_data = es.input.ndcs.load_ndcs(config, emission_data)
 
     # Calculate global budgets and pathways
-    xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start = nonco2variation(config)
-    xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt = determine_global_nonco2_trajectories(
+    xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
+    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
         config, emission_data, scenarios, xr_temperatures
     )
-    xr_bud_co2, xr_co2_budgets = determine_global_budgets(
+    _, xr_co2_budgets = determine_global_budgets(
         config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
     )
-    global_co2_trajectories = determine_global_co2_trajectories(
+    (all_projected_gases,) = determine_global_co2_trajectories(
         config,
-        emission_data,
+        emissions=emission_data,
         scenarios=scenarios,
         xr_temperatures=xr_temperatures,
         xr_co2_budgets=xr_co2_budgets,
         xr_traj_nonco2=xr_traj_nonco2,
     )
 
-    logger.warning(xr_co2_budgets.sel(Temperature=1.5, Risk=0.5, NonCO2red=0.5))
-    # new_total, new_regions = add_country_groups(config, general.regions, xr_total)
-    # save(config, new_total, new_regions, general.countries)
-    # country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
+    # Merge all data into a single xrarray object
+    xr_total = (
+        merge_data(
+            xr_co2_budgets,
+            all_projected_gases,
+            emission_data,  # TODO: already stored elsewhere. Skip?
+            ndc_data,  # TODO: already stored elsewhere. Skip?
+            socioeconomic_data,  # TODO: already stored elsewhere. Skip?
+        )
+        .reindex(Region=list(regions.values()))
+        .reindex(Time=np.arange(1850, 2101))
+        .interpolate_na(dim="Time", method="linear")
+    )
+
+    # Add country groups
+    new_total, new_regions = add_country_groups(config, regions, xr_total)
+
+    # Save the data
+    save_temp = np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
+    xr_version = new_total.sel(Temperature=save_temp)
+    save_regions(config, new_regions, countries)
+    save_total(config, xr_version)
+    save_rbw(config, xr_version, countries)
+    save_rci(config, xr_version)
+
+    # Country-specific data readers
+    datareader_netherlands(config, new_total)
+    # TODO: make sure xr_primap is available
+    # datareader_norway(config, new_total, xr_primap=...)
 
 
 if __name__ == "__main__":

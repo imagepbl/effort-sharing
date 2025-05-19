@@ -14,12 +14,13 @@ Or use as standalone script:
 """
 
 import logging
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 
-from effortsharing.config import Config
 import effortsharing.regions as _regions
+from effortsharing.config import Config
 
 # Set up logging
 logger = logging.getLogger(__name__)
