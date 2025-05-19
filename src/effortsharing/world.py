@@ -1,18 +1,11 @@
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
 from effortsharing.config import Config
-
-
-# TODO: can't remember whether NonCO2 data was emissions or socio-economic or NDC data
-@dataclass
-class NonCO2Data:
-    xr_temperatures: xr.Dataset
-    xr_nonco2warmings: xr.Dataset
-    xr_nonco2warming_wrt_start: xr.Dataset
 
 
 # TODO: perhaps combine this class with the one before?
@@ -215,12 +208,14 @@ def nonco2variation(config: Config):
         .NonCO2warming
     )
 
-    return NonCO2Data(xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start)
+    return xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start
+
+    # TODO: can't do this? Datasets contain variables with same name but different values
+    # nonco2_data = xr.merge([xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start])
+    # return nonco2_data
 
 
-def determine_global_nonco2_trajectories(
-    config: Config, ar6data: AR6Data, xr_hist, xr_temperatures
-) -> NonCO2Trajectories:
+def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, temperatures):
     print("- Computing global nonco2 trajectories")
 
     # Shorthand for often-used expressions
@@ -233,14 +228,15 @@ def determine_global_nonco2_trajectories(
     dim_nonco2 = np.array(config.dimension_ranges.non_co2_reduction).round(2)
     dim_timing = np.array(config.dimension_ranges.timing_of_mitigation_action)
 
-    # Relationship between non-co2 reduction and budget is based on Rogelj et al and requires the year 2020 (even though startyear may be different) - not a problem
-
-    xr_ch4_raw = ar6data.xr_ar6.sel(Variable="Emissions|CH4") * config.params.gwp_ch4
-    xr_n2o_raw = ar6data.xr_ar6.sel(Variable="Emissions|N2O") * config.params.gwp_n2o / 1e3
-    n2o_start = xr_hist.sel(Region="EARTH").sel(Time=start_year).N2O_hist
-    ch4_start = xr_hist.sel(Region="EARTH").sel(Time=start_year).CH4_hist
-    n2o_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).N2O_hist
-    ch4_2020 = xr_hist.sel(Region="EARTH").sel(Time=2020).CH4_hist
+    # Relationship between non-co2 reduction and budget is based on Rogelj et al
+    # and requires the year 2020 (even though startyear may be different) - not
+    # a problem
+    xr_ch4_raw = emissions.xr_ar6.sel(Variable="Emissions|CH4") * config.params.gwp_ch4
+    xr_n2o_raw = emissions.xr_ar6.sel(Variable="Emissions|N2O") * config.params.gwp_n2o / 1e3
+    n2o_start = emissions.sel(Region="EARTH").sel(Time=start_year).N2O_hist
+    ch4_start = emissions.sel(Region="EARTH").sel(Time=start_year).CH4_hist
+    n2o_2020 = emissions.sel(Region="EARTH").sel(Time=2020).N2O_hist
+    ch4_2020 = emissions.sel(Region="EARTH").sel(Time=2020).CH4_hist
     tot_2020 = n2o_2020 + ch4_2020
     tot_start = n2o_start + ch4_start
 
@@ -258,8 +254,8 @@ def determine_global_nonco2_trajectories(
     xr_nonco2_raw = xr_nonco2_raw.sel(Time=np.arange(start_year, 2101))
 
     def ms_temp(temp, risk):
-        return xr_temperatures.ModelScenario[
-            np.where(np.abs(temp - xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
+        return temperatures.ModelScenario[
+            np.where(np.abs(temp - temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
         ].values
 
     def check_monotomy(traj):
@@ -290,9 +286,9 @@ def determine_global_nonco2_trajectories(
             ms1 = ms_temp(temp, p)
             for timing_i, timing in enumerate(dim_timing):
                 if timing == "Immediate" or temp in [1.5, 1.56, 1.6] and timing == "Delayed":
-                    mslist = ar6data.ms_immediate
+                    mslist = scenarios["Immediate"]
                 else:
-                    mslist = ar6data.ms_delayed
+                    mslist = scenarios["Delayed"]
                 ms2 = np.intersect1d(ms1, mslist)
                 if len(ms2) == 0:
                     for n_i, n in enumerate(dim_nonco2):
@@ -306,22 +302,21 @@ def determine_global_nonco2_trajectories(
                     reductions = xr_reductions.sel(
                         ModelScenario=np.intersect1d(xr_reductions.ModelScenario, ms2)
                     )
-                    reds = reductions.Value.quantile(dim_nonco2[::-1])
+                    # TODO: note that reductions may have length 1
+                    reds = reductions.quantile(dim_nonco2[::-1])
                     for n_i, n in enumerate(dim_nonco2):
                         red = reds[n_i]
-                        ms2 = reductions.ModelScenario[
-                            np.where(np.abs(reductions.Value - red) < 0.1)
-                        ]
+                        ms2 = reductions.ModelScenario[np.where(np.abs(reductions - red) < 0.1)]
                         trajs = xr_nonco2_raw.sel(
                             ModelScenario=ms2,
                             Time=np.arange(start_year, 2101),
                         )
-                        trajectory_mean = rescale(trajs.Value.mean(dim="ModelScenario"))
+                        trajectory_mean = rescale(trajs.mean(dim="ModelScenario"))
 
                         # Harmonize reduction
                         red_traj = (trajectory_mean.sel(Time=2040) - tot_2020) / tot_2020
                         traj2 = (
-                            -(1 - xr_comp) * (red_traj - red) * xr_nonco2_raw_start.mean().Value
+                            -(1 - xr_comp) * (red_traj - red) * xr_nonco2_raw_start.mean()
                             + trajectory_mean
                         )  # 1.5*red has been removed -> check effect
                         trajectory_mean2 = check_monotomy(np.array(traj2))
@@ -373,10 +368,10 @@ def determine_global_nonco2_trajectories(
     else:
         xr_traj_nonco2_adapt = None
 
-    return NonCO2Trajectories(xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt)
+    return xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt
 
 
-def determine_global_budgets(config: Config, xr_hist, nonco2data: NonCO2Data) -> GlobalBudgets:
+def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2warming_wrt_start):
     print("- Get global CO2 budgets")
 
     # Define input
@@ -406,11 +401,11 @@ def determine_global_budgets(config: Config, xr_hist, nonco2data: NonCO2Data) ->
     elif config.params.start_year_analysis > 2020:
         budgets = dummy["Budget"]
         for year in np.arange(2020, config.params.start_year_analysis):
-            budgets -= float(xr_hist.sel(Region="EARTH", Time=year).CO2_hist) / 1e3
+            budgets -= float(emissions.sel(Region="EARTH", Time=year).CO2_hist) / 1e3
     elif config.params.start_year_analysis < 2020:
         budgets = dummy["Budget"]
         for year in np.arange(config.params.start_year_analysis, 2020):
-            budgets += float(xr_hist.sel(Region="EARTH", Time=year).CO2_hist) / 1e3
+            budgets += float(emissions.sel(Region="EARTH", Time=year).CO2_hist) / 1e3
     dummy["Budget"] = budgets
 
     xr_bud_co2 = xr.Dataset.from_dataframe(dummy)
@@ -431,8 +426,8 @@ def determine_global_budgets(config: Config, xr_hist, nonco2data: NonCO2Data) ->
     def ms_temp(
         temp, risk
     ):  # 0.2 is quite wide, but useful for studying nonCO2 variation among scenarios (is a relatively metric anyway)
-        return nonco2data.xr_temperatures.ModelScenario[
-            np.where(np.abs(temp - nonco2data.xr_temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
+        return temperatures.ModelScenario[
+            np.where(np.abs(temp - temperatures.Temperature.sel(Risk=risk)) < 0.2)[0]
         ].values
 
     for p_i, p in enumerate(dim_prob):
@@ -444,11 +439,11 @@ def determine_global_budgets(config: Config, xr_hist, nonco2data: NonCO2Data) ->
 
             # This assumes that the budget from Forster implicitly includes the median nonCO2 warming among scenarios that meet that Temperature target
             # Hence, only deviation (dT) from this median is interesting to assess here
-            dT = nonco2data.xr_nonco2warming_wrt_start.sel(
+            dT = xr_nonco2warming_wrt_start.sel(
                 ModelScenario=ms, Risk=round(1 - p, 2)
-            ) - nonco2data.xr_nonco2warming_wrt_start.sel(
-                ModelScenario=ms, Risk=round(1 - p, 2)
-            ).median(dim="ModelScenario")
+            ) - xr_nonco2warming_wrt_start.sel(ModelScenario=ms, Risk=round(1 - p, 2)).median(
+                dim="ModelScenario"
+            )
             median_budget = (a * t + b) * (1 - bunker_subtraction[t_i])
             for n_i, n in enumerate(dim_nonco2):
                 dT_quantile = dT.quantile(
@@ -467,13 +462,13 @@ def determine_global_budgets(config: Config, xr_hist, nonco2data: NonCO2Data) ->
     )
     xr_co2_budgets = xr.Dataset({"Budget": data2})
 
-    return GlobalBudgets(xr_bud_co2, xr_co2_budgets)
+    return xr_bud_co2, xr_co2_budgets
 
 
 def determine_global_co2_trajectories(
     config: Config,
-    xr_hist,
-    ar6data: AR6Data,
+    emissions,
+    scenarios,
     xr_temperatures,
     xr_co2_budgets,
     xr_traj_nonco2,
@@ -491,7 +486,7 @@ def determine_global_co2_trajectories(
     dim_negemis = np.array(config.dimension_ranges.negative_emissions).round(2)
 
     # Initialize data arrays for co2
-    startpoint = xr_hist.sel(Time=start_year, Region="EARTH").CO2_hist
+    startpoint = emissions.sel(Time=start_year, Region="EARTH").CO2_hist
     # compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(start_year, 2101)))))#**1.1#+[1]*len(np.arange(2050, 2101)))
 
     hy = config.params.harmonization_year
@@ -552,7 +547,7 @@ def determine_global_co2_trajectories(
         ),
     }
     # CO2 emissions from AR6
-    xr_scen2_use = ar6data.xr_ar6.sel(Variable="Emissions|CO2")
+    xr_scen2_use = emissions.xr_ar6.sel(Variable="Emissions|CO2")
     xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101, 10))
     xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101))
     xr_scen2_use = xr_scen2_use.interpolate_na(dim="Time", method="linear")
@@ -586,7 +581,7 @@ def determine_global_co2_trajectories(
         emis_all = emis_all_adapt + fr
 
     # Negative emissions from AR6 (CCS + DAC)
-    xr_neg = ar6data.xr_ar6.sel(
+    xr_neg = emissions.xr_ar6.sel(
         Variable=["Carbon Sequestration|CCS", "Carbon Sequestration|Direct Air Capture"]
     ).sum(dim="Variable", skipna=False)
     xr_neg = xr_neg.reindex(Time=np.arange(2000, 2101, 10))
@@ -619,47 +614,42 @@ def determine_global_co2_trajectories(
         # Shape impacted by timing of action
         for timing_i, timing in enumerate(dim_timing):
             if timing == "Immediate" or temp in [1.5, 1.56, 1.6] and timing == "Delayed":
-                mslist = ar6data.ms_immediate
+                mslist = scenarios["Immediate"]
             else:
-                mslist = ar6data.ms_delayed
+                mslist = scenarios["Delayed"]
             ms2 = np.intersect1d(ms1, mslist)
             emis2100_i = emis2100.sel(ModelScenario=ms2)
 
             # The 90-percentile of 2100 emissions
-            ms_90 = ar6data.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
-                (emis2100_i >= emis2100_i.quantile(0.9 - 0.1)).Value
-                & (emis2100_i <= emis2100_i.quantile(0.9 + 0.1)).Value
+            ms_90 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
+                (emis2100_i >= emis2100_i.quantile(0.9 - 0.1))
+                & (emis2100_i <= emis2100_i.quantile(0.9 + 0.1))
             ]
 
             # The 50-percentile of 2100 emissions
-            ms_10 = ar6data.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
-                (emis2100_i >= emis2100_i.quantile(0.1 - 0.1)).Value
-                & (emis2100_i <= emis2100_i.quantile(0.1 + 0.1)).Value
+            ms_10 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
+                (emis2100_i >= emis2100_i.quantile(0.1 - 0.1))
+                & (emis2100_i <= emis2100_i.quantile(0.1 + 0.1))
             ]
 
             # Difference and smoothen this
-            surplus_factor = (
-                emis_all.sel(ModelScenario=np.intersect1d(ms_90, ms2))
-                .mean(dim="ModelScenario")
-                .Value
-                - emis_all.sel(ModelScenario=np.intersect1d(ms_10, ms2))
-                .mean(dim="ModelScenario")
-                .Value
-            )
+            surplus_factor = emis_all.sel(ModelScenario=np.intersect1d(ms_90, ms2)).mean(
+                dim="ModelScenario"
+            ) - emis_all.sel(ModelScenario=np.intersect1d(ms_10, ms2)).mean(dim="ModelScenario")
             surplus_factor2 = np.convolve(surplus_factor, np.ones(3) / 3, mode="valid")
             surplus_factor[1:-1] = surplus_factor2
 
             for neg_i, neg in enumerate(dim_negemis):
                 xset = emis_all.sel(ModelScenario=ms2) - surplus_factor * (neg - 0.5)
                 pathways_neg = xr_neg.sel(ModelScenario=ms1).quantile(neg, dim="ModelScenario")
-                pathways_data["CO2_neg_globe"][neg_i, temp_i, :] = np.array(pathways_neg.Value)
+                pathways_data["CO2_neg_globe"][neg_i, temp_i, :] = np.array(pathways_neg)
                 for risk_i, risk in enumerate(dim_prob):
                     for nonco2_i, nonco2 in enumerate(dim_nonco2):
                         factor = (
                             xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)
-                            - xset.where(xset.Value > 0).sum(dim="Time")
+                            - xset.where(xset > 0).sum(dim="Time")
                         ) / np.sum(compensation_form)
-                        all_pathways = (1e3 * (xset + factor * xr_comp)).Value / 1e3
+                        all_pathways = (1e3 * (xset + factor * xr_comp)) / 1e3
                         if len(all_pathways) > 0:
                             pathway = all_pathways.mean(dim="ModelScenario")
                             pathway_sep = np.convolve(pathway, np.ones(3) / 3, mode="valid")
@@ -728,15 +718,15 @@ def determine_global_co2_trajectories(
     # self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
 
     # projected land use emissions
-    landuse_ghg = ar6data.xr_ar6_landuse.mean(dim="ModelScenario").GHG_LULUCF
-    landuse_co2 = ar6data.xr_ar6_landuse.mean(dim="ModelScenario").CO2_LULUCF
+    landuse_ghg = emissions.mean(dim="ModelScenario").GHG_LULUCF
+    landuse_co2 = emissions.mean(dim="ModelScenario").CO2_LULUCF
 
     # historical land use emissions
     landuse_ghg_hist = (
-        xr_hist.sel(Region="EARTH").GHG_hist - xr_hist.sel(Region="EARTH").GHG_hist_excl
+        emissions.sel(Region="EARTH").GHG_hist - emissions.sel(Region="EARTH").GHG_hist_excl
     )
     landuse_co2_hist = (
-        xr_hist.sel(Region="EARTH").CO2_hist - xr_hist.sel(Region="EARTH").CO2_hist_excl
+        emissions.sel(Region="EARTH").CO2_hist - emissions.sel(Region="EARTH").CO2_hist_excl
     )
 
     # Harmonize on startyear
@@ -772,36 +762,16 @@ def determine_global_co2_trajectories(
 
 
 def merge_xr(
-    xr_ssp,
-    xr_hist,
-    xr_unp,
-    xr_hdish,
     xr_co2_budgets,
     all_projected_gases,
-    xr_base,
-    xr_ndc,
-    xr_ndc_excl,
-    xr_ndc_CR,
-    xr_ar6_C,
-    xr_ar6_C_bunkers,
     regions,
 ):
     regions_iso = list(regions.values())
     print("- Merging xrarray object")
     xr_total = xr.merge(
         [
-            xr_ssp,
-            xr_hist,
-            xr_unp,
-            xr_hdish,
             xr_co2_budgets,
             all_projected_gases,
-            xr_base,
-            xr_ndc,
-            xr_ndc_excl,
-            xr_ndc_CR,
-            xr_ar6_C,
-            xr_ar6_C_bunkers,
         ]
     )
     xr_total = xr_total.reindex(Region=regions_iso)
@@ -809,6 +779,7 @@ def merge_xr(
     xr_total["GHG_globe"] = xr_total["GHG_globe"].astype(float)
     xr_total = xr_total.interpolate_na(dim="Time", method="linear").drop_vars(["Variable"])
     return xr_total
+
 
 def add_country_groups(config: Config, regions, xr_total):
     print("- Add country groups")
@@ -923,6 +894,7 @@ def add_country_groups(config: Config, regions, xr_total):
 
     return new_total, new_regions
 
+
 def save(config: Config, xr_total, regions, countries):
     print("- Save important files")
 
@@ -942,7 +914,6 @@ def save(config: Config, xr_total, regions, countries):
         Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     )
     xr_version = xr_normal
-
 
     xr_version.to_netcdf(
         savepath / "xr_dataread.nc",
@@ -1259,55 +1230,40 @@ def country_specific_datareaders(config: Config, xr_total, xr_primap):
 def main(config_file):
     config = Config.from_file(config_file)
 
-    general = read_general(config)  # TODO combine with un_population?
-    xr_ssp = read_ssps(config, regions=general.regions)
-    un_pop = read_un_population(config, countries=general.countries)
-    xr_hdi, xr_hdish = read_hdi(config, general.countries, un_pop)
-    jonesdata = read_historicalemis_jones(config, regions=general.regions)
-    ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
-    nonco2data = nonco2variation(config)
-    nonco2trajectories = determine_global_nonco2_trajectories(
-        config, ar6data, jonesdata.xr_hist, nonco2data.xr_temperatures
+    import effortsharing as es
+
+    # Read input data
+    socioeconomic_data = es.input.socioeconomics.load_socioeconomics(config)
+    emission_data, scenarios = es.input.emissions.load_emissions(config)
+    ndc_data = es.input.ndcs.load_ndcs(config, emission_data)
+
+    # Calculate global budgets and pathways
+    xr_temperatures, xr_nonco2warmings, xr_nonco2warming_wrt_start = nonco2variation(config)
+    xr_traj_nonco2, xr_traj_nonco2_2, xr_traj_nonco2_adapt = determine_global_nonco2_trajectories(
+        config, emission_data, scenarios, xr_temperatures
     )
-    globalbudgets = determine_global_budgets(config, jonesdata.xr_hist, nonco2data)
+    xr_bud_co2, xr_co2_budgets = determine_global_budgets(
+        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
+    )
     global_co2_trajectories = determine_global_co2_trajectories(
         config,
-        jonesdata.xr_hist,
-        ar6data,
-        nonco2data.xr_temperatures,
-        globalbudgets.xr_co2_budgets,
-        nonco2trajectories.xr_traj_nonco2,
-    )
-    xr_base = read_baseline(
-        config,
-        general.countries,
-        jonesdata.xr_hist,
+        emission_data,
+        scenarios=scenarios,
+        xr_temperatures=xr_temperatures,
+        xr_co2_budgets=xr_co2_budgets,
+        xr_traj_nonco2=xr_traj_nonco2,
     )
 
-    xr_ndc_CR = read_ndc_climateresource(config, general.countries)
-    xr_ndc, xr_ndc_excl = read_ndc(config, general.countries, jonesdata.xr_hist)
-    xr_total = merge_xr(
-        xr_ssp,
-        jonesdata.xr_hist,
-        un_pop.population,
-        xr_hdish,
-        globalbudgets.xr_co2_budgets,
-        global_co2_trajectories.all_projected_gases,
-        xr_base,
-        xr_ndc,
-        xr_ndc_excl,
-        xr_ndc_CR,
-        ar6data.xr_ar6_C,
-        ar6data.xr_ar6_C_bunkers,
-        general.regions,
-    )
-    new_total, new_regions = add_country_groups(config, general.regions, xr_total)
-    save(config, new_total, new_regions, general.countries)
-    country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
+    # new_total, new_regions = add_country_groups(config, general.regions, xr_total)
+    # save(config, new_total, new_regions, general.countries)
+    # country_specific_datareaders(config, xr_total, jonesdata.xr_primap)
 
 
 if __name__ == "__main__":
     import sys
+
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
 
     config_file = sys.argv[1]
     main(config_file)

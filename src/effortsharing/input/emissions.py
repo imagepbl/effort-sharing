@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+import json
 import logging
 
 import numpy as np
@@ -190,7 +192,13 @@ def read_historicalemis_jones(config: Config, regions):
     group_eu = countries_iso[np.array(df["EU"]) == 1]
     xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
 
-    return xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap
+    return (
+        xr_hist,
+        # xr_ghg_afolu,  # TODO: not used, remove?
+        # xr_ghg_agri,  # TODO: not used, remove?
+        # xr_edgar,  # TODO: not used, remove?
+        xr_primap,
+    )
 
 
 def read_ar6(config: Config, xr_hist):
@@ -456,15 +464,22 @@ def read_ar6(config: Config, xr_hist):
     xr_all = xr_all.assign_coords(Category=["C1", "C1+C2", "C2", "C3", "C6", "C7", "C8"])
     xr_ar6_C_bunkers = xr_all
 
-    return (
-        xr_ar6_prevet,
-        xr_ar6,
-        ms_immediate,
-        ms_delayed,
-        xr_ar6_landuse,
-        xr_ar6_C,
-        xr_ar6_C_bunkers,
+    ar6_data = xr.merge(
+        [
+            # xr_ar6_prevet.rename_vars({"Value": "xr_ar6_prevet"}),
+            xr_ar6.rename_vars({"Value": "xr_ar6"}),  # TODO: better name?
+            xr_ar6_landuse,
+            xr_ar6_C,
+            xr_ar6_C_bunkers,
+        ]
     )
+
+    scenarios = {
+        "Immediate": ms_immediate.tolist(),
+        "Delayed": ms_delayed.tolist(),
+    }
+
+    return ar6_data, scenarios
 
 
 def read_baseline(
@@ -589,39 +604,35 @@ def load_emissions(config: Config, from_intermediate=True, save=True):
     """
 
     save_path = config.paths.intermediate / "emissions.nc"
+    save_path_scenarios = config.paths.intermediate / "emissions.json"
 
     # Check if we can load from intermediate file
     if from_intermediate and save_path.exists():
         logger.info(f"Loading emission data from {save_path}")
-        return xr.load_dataset(save_path)
+
+        emission_data = xr.load_dataset(save_path)
+
+        logger.info(f"Loading emission scenarios from {save_path_scenarios}")
+        with open(save_path_scenarios) as f:
+            scenarios = json.load(f)
+
+        return emission_data, scenarios
 
     # Otherwise, process raw input files
     logger.info("Processing emission input data")
 
     countries, regions = _regions.read_general(config)
 
-    xr_hist, xr_ghg_afolu, xr_ghg_agri, xr_edgar, xr_primap = read_historicalemis_jones(
-        config, regions
-    )
-
+    xr_hist, xr_primap = read_historicalemis_jones(config, regions)
     xr_base = read_baseline(config, countries, xr_hist)
-    (
-        xr_ar6_prevet,
-        xr_ar6,
-        ms_immediate,
-        ms_delayed,
-        xr_ar6_landuse,
-        xr_ar6_C,
-        xr_ar6_C_bunkers,
-    ) = read_ar6(config, xr_hist)
+    xr_ar6, scenarios = read_ar6(config, xr_hist)
 
     # Merge datasets
     emission_data = xr.merge(
         [
             xr_hist,
             xr_base,
-            xr_ar6_C,
-            xr_ar6_C_bunkers,
+            xr_ar6,
         ]
     )
     # TODO: Reindex time and regions??
@@ -634,7 +645,13 @@ def load_emissions(config: Config, from_intermediate=True, save=True):
         emission_data.to_netcdf(save_path)
         # TODO: add compression
 
-    return emission_data
+        # Also save scenarios to JSON
+        # TODO: maybe we can derive them on the fly rather than saving them?
+        logger.info(f"Saving scenarios to {save_path_scenarios}")
+        with open(save_path_scenarios, "w") as f:
+            json.dump(scenarios, f)
+
+    return emission_data, scenarios
 
 
 if __name__ == "__main__":

@@ -304,7 +304,7 @@ if __name__ == "__main__":
     config = Config.from_file(args.config)
 
     # Needs historical emission data as input, so first load that
-    emissions = load_emissions(config, save=False)
+    emissions, scenarios = load_emissions(config, save=False)
 
     # Process NDC data and save to intermediate file
     load_ndcs(config, emissions, from_intermediate=False, save=True)
