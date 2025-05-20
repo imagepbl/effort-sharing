@@ -1,4 +1,12 @@
 import xarray as xr
+import logging
+
+# Configure the logger
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def compare_netcdf_files(file1, file2):
@@ -16,10 +24,10 @@ def compare_netcdf_files(file1, file2):
     # Compare the datasets
     try:
         xr.testing.assert_equal(ds1, ds2)
-        print("The NetCDF files are identical.")
+        logger.info("The NetCDF files are identical.")
     except AssertionError as e:
-        print("The NetCDF files are different.")
-        print(e)
+        logger.info("The NetCDF files are different.")
+        logger.info(e)
 
     # Close the datasets
     ds1.close()
