@@ -73,16 +73,24 @@ class policyscenadding(object):
         logger.info("Reading and filtering ELEVATE scenario data")
 
         # Read the raw data
-        file_path = pooch.retrieve(
-            url="https://zenodo.org/records/15114066/files/Data_D2.3_vetted_20250211.csv?download=1",
-            known_hash="SHA256:2b203c67b1f8ff7084dc5d6fd1fed07933d5766b66017cda741894e08d9b74e1",
-            fname="ELEVATE_Data_D2.3_vetted_20250211.csv",
-        )
+        # file_path = pooch.retrieve(
+        #     url="https://zenodo.org/records/15114066/files/Data_D2.3_vetted_20250211.csv?download=1",
+        #     known_hash="SHA256:2b203c67b1f8ff7084dc5d6fd1fed07933d5766b66017cda741894e08d9b74e1",
+        #     fname="ELEVATE_Data_D2.3_vetted_20250211.csv",
+        # )
 
-        df_scenarios_raw = pd.read_csv(
-            file_path,
-            header=0,
+        # df_scenarios_raw = pd.read_csv(
+        #     file_path,
+        #     header=0,
+        # )
+
+        # Tryout with Elena's dataset
+        data_path = (
+            Path(self.settings["paths"]["data"]["external"])
+            / "ELEVATE"
+            / "ELEVATE_Data_D2.3_vetted_20250513_EH.csv"
         )
+        df_scenarios_raw = pd.read_csv(data_path, header=0, encoding="utf-8")
 
         # Filter for scenarios and variables
         variables = ["Emissions|Kyoto Gases", "Emissions|CO2"]
@@ -138,44 +146,72 @@ class policyscenadding(object):
         """
         logger.info("Deduplicating regions")
 
+        # # Split the region column by '|' and expand into new columns
+        # split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
+        # split_columns.columns = ["Model_2", "Region_2"]
+
+        # # Add the new columns to the original DataFrame
+        # df_scenarios_renamed = pd.concat([df_scenarios_renamed, split_columns], axis=1)
+
+        # # If a region was Model|Region, we don't need the model name twice so replace with NaN
+        # df_scenarios_renamed["Model_2"] = np.where(
+        #     df_scenarios_renamed["Model_2"] == df_scenarios_renamed["Model"],
+        #     np.nan,
+        #     df_scenarios_renamed["Model_2"],
+        # )
+
+        # # Merge the data on region into a new column 'Region_cleaned'
+        # df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed["Model_2"].combine_first(
+        #     df_scenarios_renamed["Region_2"]
+        # )
+
         # Split the region column by '|' and expand into new columns
         split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
-        split_columns.columns = ["Model_2", "Region_2"]
 
-        # Add the new columns to the original DataFrame
-        df_scenarios_renamed = pd.concat([df_scenarios_renamed, split_columns], axis=1)
+        # To check if regions are already cleaned up or not:
+        if split_columns.shape[1] == 2:
+            split_columns.columns = ["Model_2", "Region_2"]
+            # Add the new columns to the original DataFrame
+            df_scenarios_renamed = pd.concat([df_scenarios_renamed, split_columns], axis=1)
 
-        # If a region was Model|Region, we don't need the model name twice so replace with NaN
-        df_scenarios_renamed["Model_2"] = np.where(
-            df_scenarios_renamed["Model_2"] == df_scenarios_renamed["Model"],
-            np.nan,
-            df_scenarios_renamed["Model_2"],
-        )
+            # If a region was Model|Region, we don't need the model name twice so replace with NaN
+            df_scenarios_renamed["Model_2"] = np.where(
+                df_scenarios_renamed["Model_2"] == df_scenarios_renamed["Model"],
+                np.nan,
+                df_scenarios_renamed["Model_2"],
+            )
 
-        # Merge the data on region into a new column 'Region_cleaned'
-        df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed["Model_2"].combine_first(
-            df_scenarios_renamed["Region_2"]
-        )
+            # Merge the data on region into a new column 'Region_cleaned'
+            df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed["Model_2"].combine_first(
+                df_scenarios_renamed["Region_2"]
+            )
 
-        # Sort the dataframe by 'Region_cleaned' and reset the index
+            # Drop helper columns and reorder the DataFrame
+            df_scenarios_renamed.drop(columns=["Model_2", "Region_2", "Region"], inplace=True)
+            df_scenarios_renamed = df_scenarios_renamed.rename(columns={"Region_cleaned": "Region"})
+        elif split_columns.shape[1] == 1:
+            # Only one column, region format seems fine so no action needed
+            pass
+        else:
+            raise ValueError(
+                f"Unexpected number of columns after splitting 'Region': {split_columns.shape[1]}. "
+                "Expected {region} or {model}|{region} so 1 or 2 columns after splitting. "
+                "Check the format of the 'Region' column."
+            )
+
+        # Sort the dataframe by 'Region' and reset the index
         # Sorting it to give preference to e.g. "India" over "India (AR10)"
-        df_scenarios_renamed.sort_values(by=["Region_cleaned"], inplace=True)
+        df_scenarios_renamed.sort_values(by=["Region"], inplace=True)
         df_scenarios_renamed.reset_index(drop=True, inplace=True)
 
         # TODO figure out why some duplicates are not the same, maybe problems from modelling teams?
         # For now this keeps the first duplicate and removes the rest
         df_scenarios_deduplicated = df_scenarios_renamed.groupby(
-            ["Model", "Scenario", "Variable", "Region_cleaned"], as_index=True
+            ["Model", "Scenario", "Variable", "Region"], as_index=True
         ).first()
 
         # Removing columns from index
         df_scenarios_deduplicated.reset_index(inplace=True)
-
-        # Drop helper columns and reorder the DataFrame
-        df_scenarios_deduplicated.drop(columns=["Model_2", "Region_2", "Region"], inplace=True)
-        df_scenarios_deduplicated = df_scenarios_deduplicated.rename(
-            columns={"Region_cleaned": "Region"}
-        )
 
         # # Convert countries to ISO3 codes and leave regions as is
         logger.info("Converting country names to ISO3 codes")
@@ -308,16 +344,16 @@ class policyscenadding(object):
             self.settings["paths"]["data"]["datadrive"] + "xr_policyscen.nc"
         )
 
-        # CO2 version
-        xr_total2 = self.xr_total.assign(NDC=xr_co2["Value"].sel(Scenario="NDC"))
-        xr_total2 = xr_total2.assign(CurPol=xr_co2["Value"].sel(Scenario="CurPol"))
-        xr_total2 = xr_total2.assign(NetZero=xr_co2["Value"].sel(Scenario="NetZero"))
-        xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
-        self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
-        xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
-        xr_total_onlyalloc_co2.to_netcdf(
-            self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
-        )
+        # # CO2 version
+        # xr_total2 = self.xr_total.assign(NDC=xr_co2["Value"].sel(Scenario="NDC"))
+        # xr_total2 = xr_total2.assign(CurPol=xr_co2["Value"].sel(Scenario="CurPol"))
+        # xr_total2 = xr_total2.assign(NetZero=xr_co2["Value"].sel(Scenario="NetZero"))
+        # xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
+        # self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
+        # xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
+        # xr_total_onlyalloc_co2.to_netcdf(
+        #     self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
+        # )
 
         self.xr_total.close()
 
