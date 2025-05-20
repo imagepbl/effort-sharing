@@ -54,7 +54,7 @@ def extract_primap_agri(primap: xr.Dataset):
     return primap_agri
 
 
-def extract_primap_co2(primap: xr.Dataset):
+def extract_primap_agri_co2(primap: xr.Dataset):
     """Extract CO2 emissions from PRIMAP data."""
     primap_agri_co2 = (
         primap["CO2"]
@@ -125,26 +125,16 @@ def read_nwc(config: Config, xr_primap_agri, xr_primap_agri_co2):
     return xr_hist * 1e3
 
 
-def read_jones_alternative(config: Config, regions):
-    # No harmonization with the KEV anymore, but it's also much closer now
-    logger.info("Reading historical emissions (jones)")
+def read_edgar(config: Config):
+    """Read EDGAR data."""
+
+    logger.info("Reading EDGAR data")
 
     # Define input
-    # TODO: separate functions for reading each of these files?
     data_root = config.paths.input
     edgar_file = "EDGARv8.0_FT2022_GHG_booklet_2023.xlsx"
-    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
 
-    # Read primap data
-    xr_primap = read_primap(config)
-    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
-    xr_primap_agri_co2 = extract_primap_co2(xr_primap) / 1e6
-
-    # Read NWC data
-    xr_hist = read_nwc(config, xr_primap_agri, xr_primap_agri_co2)
-
-    # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
-    # TODO: move to separate function?
+    # Read data
     df_edgar = (
         pd.read_excel(data_root / edgar_file, sheet_name="GHG_totals_by_country")
         .drop(["Country"], axis=1)
@@ -168,6 +158,29 @@ def read_jones_alternative(config: Config, regions):
     # Convert to xarray
     xr_edgar = df_edgar.to_xarray()
 
+    return xr_edgar
+
+
+def read_jones_alternative(config: Config, regions):
+    # No harmonization with the KEV anymore, but it's also much closer now
+    logger.info("Reading historical emissions (jones)")
+
+    # Define input
+    # TODO: separate functions for reading each of these files?
+    data_root = config.paths.input
+    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    # Read primap data
+    xr_primap = read_primap(config)
+    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
+    xr_primap_agri_co2 = extract_primap_agri_co2(xr_primap) / 1e6
+
+    # Read NWC data
+    xr_hist = read_nwc(config, xr_primap_agri, xr_primap_agri_co2)
+
+    # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
+    xr_edgar = read_edgar(config)
+
     regions_iso = list(regions.values())
     xr_hist = xr_hist.reindex({"Region": regions_iso})
 
@@ -177,6 +190,7 @@ def read_jones_alternative(config: Config, regions):
     group_eu = countries_iso[np.array(df["EU"]) == 1]
     xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
 
+    # TODO: could call individual functions from outer scope
     return (
         xr_hist,
         # xr_ghg_afolu,  # TODO: not used, remove?

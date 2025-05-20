@@ -623,8 +623,8 @@ def load_emissions(config: Config, from_intermediate=True, save=True):
     countries, regions = _regions.read_general(config)
 
     xr_hist, xr_primap = read_historicalemis_jones(config, regions)
-    # xr_base = read_baseline(config, countries, xr_hist)
-    # xr_ar6, scenarios = read_ar6(config, xr_hist)
+    xr_base = read_baseline(config, countries, xr_hist)
+    xr_ar6, scenarios = read_ar6(config, xr_hist)
 
     # Developing alternative implementation of read_historicalemis_jones
     from effortsharing.input.historical_emissions import read_jones_alternative
