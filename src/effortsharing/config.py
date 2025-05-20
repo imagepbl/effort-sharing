@@ -7,6 +7,7 @@ import yaml
 @dataclass
 class DataPaths:
     input: Path
+    intermediate: Path
     output: Path
 
 
