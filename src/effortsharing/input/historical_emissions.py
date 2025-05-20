@@ -56,7 +56,7 @@ def extract_primap_agri(primap: xr.Dataset):
 
 def extract_primap_co2(primap: xr.Dataset):
     """Extract CO2 emissions from PRIMAP data."""
-    primap_co2 = (
+    primap_agri_co2 = (
         primap["CO2"]
         .sel(Scenario="HISTTP", Category=["M.AG"])
         .sum(dim="Category")
@@ -64,7 +64,65 @@ def extract_primap_co2(primap: xr.Dataset):
         .rename({"time": "Time"})
     )
 
-    return primap_co2
+    return primap_agri_co2
+
+
+def read_nwc(config: Config, xr_primap_agri, xr_primap_agri_co2):
+    """Read NWC historical emission data."""
+    logger.info("Reading NWC historical emission data")
+
+    # Define input
+    data_root = config.paths.input
+    emissions_file = "EMISSIONS_ANNUAL_1830-2022.csv"
+
+    # Read data
+    df = pd.read_csv(data_root / emissions_file)
+    ds = (
+        df.drop(columns=["CNTR_NAME", "Unit"])
+        .set_index(["ISO3", "Gas", "Component", "Year"])
+        .to_xarray()
+    )
+    da = ds["Data"].rename({"ISO3": "Region", "Year": "Time"})
+
+    # Rename GLOBAL to EARTH
+    regs = np.array(da.Region)
+    regs[regs == "GLOBAL"] = "EARTH"
+    da["Region"] = regs
+
+    # Calculate individual and total contributions
+    xr_nwc_co2 = da.sel(Gas="CO[2]", drop=True)
+    xr_nwc_ch4 = da.sel(Gas="CH[4]", drop=True) * config.params.gwp_ch4 / 1e3
+    xr_nwc_n2o = da.sel(Gas="N[2]*O", drop=True) * config.params.gwp_n2o / 1e3
+    xr_nwc_tot = xr_nwc_co2 + xr_nwc_ch4 + xr_nwc_n2o
+
+    # Select historical data
+    xr_ghghist = xr_nwc_tot.sel(Component="Total", drop=True)
+    xr_co2hist = xr_nwc_co2.sel(Component="Total", drop=True)
+    xr_ch4hist = xr_nwc_ch4.sel(Component="Total", drop=True)
+    xr_n2ohist = xr_nwc_n2o.sel(Component="Total", drop=True)
+
+    # Store LULUCF (?)
+    xr_ghg_afolu = xr_nwc_tot.sel(Component="LULUCF", drop=True)
+    xr_co2_afolu = xr_nwc_co2.sel(Component="LULUCF", drop=True)
+
+    # Calculate emissions excluding LULUCF
+    xr_ghgexcl = xr_nwc_tot.sel(Component="Total", drop=True) - xr_ghg_afolu + xr_primap_agri
+    xr_co2excl = xr_nwc_co2.sel(Component="Total", drop=True) - xr_co2_afolu + xr_primap_agri_co2
+
+    # Combine historical data into single xarray dataset
+    xr_hist = xr.Dataset(
+        {
+            "GHG_hist": xr_ghghist,
+            "GHG_hist_excl": xr_ghgexcl,
+            "CO2_hist": xr_co2hist,
+            "CO2_hist_excl": xr_co2excl,
+            "CH4_hist": xr_ch4hist,
+            "N2O_hist": xr_n2ohist,
+        }
+    )
+
+    # Convert units to ...
+    return xr_hist * 1e3
 
 
 def read_jones_alternative(config: Config, regions):
@@ -74,96 +132,16 @@ def read_jones_alternative(config: Config, regions):
     # Define input
     # TODO: separate functions for reading each of these files?
     data_root = config.paths.input
-    emissions_file = "EMISSIONS_ANNUAL_1830-2022.csv"
     edgar_file = "EDGARv8.0_FT2022_GHG_booklet_2023.xlsx"
     country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
 
     # Read primap data
     xr_primap = read_primap(config)
-    xr_primap_agri = extract_primap_agri(xr_primap)
-    xr_primap_agri_co2 = extract_primap_co2(xr_primap)
+    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
+    xr_primap_agri_co2 = extract_primap_co2(xr_primap) / 1e6
 
-    df_nwc = pd.read_csv(data_root / emissions_file)
-    xr_nwc = xr.Dataset.from_dataframe(
-        df_nwc.drop(columns=["CNTR_NAME", "Unit"]).set_index(["ISO3", "Gas", "Component", "Year"])
-    )
-
-    # Rename GLOBAL to EARTH
-    regs = np.array(xr_nwc.ISO3)
-    regs[regs == "GLOBAL"] = "EARTH"
-    xr_nwc["ISO3"] = regs
-
-    # Calculate total(?)
-    xr_nwc_tot = (
-        xr_nwc.sel(Gas="CH[4]") * config.params.gwp_ch4 / 1e3
-        + xr_nwc.sel(Gas="N[2]*O") * config.params.gwp_n2o / 1e3
-        + xr_nwc.sel(Gas="CO[2]") * 1
-    ).drop_vars(["Gas"])
-
-    # Calculate individual contributions
-    # TODO: adding these will yield same total as above and seems cleaner
-    xr_nwc_co2 = xr_nwc.sel(Gas="CO[2]").drop_vars(["Gas"])
-    xr_nwc_ch4 = xr_nwc.sel(Gas="CH[4]").drop_vars(["Gas"]) * config.params.gwp_ch4 / 1e3
-    xr_nwc_n2o = xr_nwc.sel(Gas="N[2]*O").drop_vars(["Gas"]) * config.params.gwp_n2o / 1e3
-
-    # Select historical data from NWC
-    xr_ghghist = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time", "Data": "GHG_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_co2hist = (
-        xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time", "Data": "CO2_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_ch4hist = (
-        xr_nwc_ch4.rename({"ISO3": "Region", "Year": "Time", "Data": "CH4_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_n2ohist = (
-        xr_nwc_n2o.rename({"ISO3": "Region", "Year": "Time", "Data": "N2O_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-
-    # Calculate emissions excluding LULUCF
-    xr_ghgexcl = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-        - xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
-        + xr_primap_agri / 1e6
-    ).rename({"Data": "GHG_hist_excl"})
-    xr_co2excl = (
-        xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-        - xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
-        + xr_primap_agri_co2 / 1e6
-    ).rename({"Data": "CO2_hist_excl"})
-
-    # Combine historical data into single xarray dataset
-    regions_iso = list(regions.values())
-    xr_hist = (
-        xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist, xr_co2excl, xr_ch4hist, xr_n2ohist]) * 1e3
-    ).reindex({"Region": regions_iso})
-
-    # Store LULUCF (?)
-    xr_ghg_afolu = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
-    )
-
-    # Change units of agri
-    # TODO: move this line closer to other agri steps?
-    xr_ghg_agri = xr_primap_agri / 1e6
+    # Read NWC data
+    xr_hist = read_nwc(config, xr_primap_agri, xr_primap_agri_co2)
 
     # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
     # TODO: move to separate function?
@@ -189,6 +167,9 @@ def read_jones_alternative(config: Config, regions):
 
     # Convert to xarray
     xr_edgar = df_edgar.to_xarray()
+
+    regions_iso = list(regions.values())
+    xr_hist = xr_hist.reindex({"Region": regions_iso})
 
     # Add EU (this is required for the NDC data reading)
     df = pd.read_excel(data_root / country_groups_file, sheet_name="Country groups")
