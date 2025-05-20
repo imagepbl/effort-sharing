@@ -626,6 +626,13 @@ def load_emissions(config: Config, from_intermediate=True, save=True):
     xr_base = read_baseline(config, countries, xr_hist)
     xr_ar6, scenarios = read_ar6(config, xr_hist)
 
+    # Developing alternative implementation of read_historicalemis_jones
+    from effortsharing.input.historical_emissions import read_jones_alternative
+
+    xr_hist2, xr_primap2 = read_jones_alternative(config, regions)
+    xr.testing.assert_equal(xr_hist, xr_hist2)
+    xr.testing.assert_equal(xr_primap, xr_primap2)
+
     # Merge datasets
     emission_data = xr.merge(
         [

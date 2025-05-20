@@ -1291,7 +1291,9 @@ def main(config_file):
 
     # Country-specific data readers
     datareader_netherlands(config, new_total)
+
     # TODO: make sure xr_primap is available
+    # Maybe store as separate file? Maybe
     # datareader_norway(config, new_total, xr_primap=...)
 
 
