@@ -8,11 +8,19 @@
 # =========================================================== #
 
 from pathlib import Path
+import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
+
+# Configure the logger
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # =========================================================== #
 # CLASS OBJECT
