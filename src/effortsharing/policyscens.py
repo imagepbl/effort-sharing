@@ -73,24 +73,16 @@ class policyscenadding(object):
         logger.info("Reading and filtering ELEVATE scenario data")
 
         # Read the raw data
-        # file_path = pooch.retrieve(
-        #     url="https://zenodo.org/records/15114066/files/Data_D2.3_vetted_20250211.csv?download=1",
-        #     known_hash="SHA256:2b203c67b1f8ff7084dc5d6fd1fed07933d5766b66017cda741894e08d9b74e1",
-        #     fname="ELEVATE_Data_D2.3_vetted_20250211.csv",
-        # )
-
-        # df_scenarios_raw = pd.read_csv(
-        #     file_path,
-        #     header=0,
-        # )
-
-        # Tryout with Elena's dataset
-        data_path = (
-            Path(self.settings["paths"]["data"]["external"])
-            / "ELEVATE"
-            / "ELEVATE_Data_D2.3_vetted_20250513_EH.csv"
+        file_path = pooch.retrieve(
+            url="https://zenodo.org/records/15478922/files/Data_D2.3_vetted_20250519.csv?download=1",
+            known_hash="SHA256:77f01ccde860860320a6d4e2cb7449848bb3a5c043e6e576628f7fa3a7cbdcf6",
+            fname="Data_D2.3_vetted_20250519.csv",
         )
-        df_scenarios_raw = pd.read_csv(data_path, header=0, encoding="utf-8")
+
+        df_scenarios_raw = pd.read_csv(
+            file_path,
+            header=0,
+        )
 
         # Filter for scenarios and variables
         variables = ["Emissions|Kyoto Gases", "Emissions|CO2"]
@@ -146,25 +138,6 @@ class policyscenadding(object):
         """
         logger.info("Deduplicating regions")
 
-        # # Split the region column by '|' and expand into new columns
-        # split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
-        # split_columns.columns = ["Model_2", "Region_2"]
-
-        # # Add the new columns to the original DataFrame
-        # df_scenarios_renamed = pd.concat([df_scenarios_renamed, split_columns], axis=1)
-
-        # # If a region was Model|Region, we don't need the model name twice so replace with NaN
-        # df_scenarios_renamed["Model_2"] = np.where(
-        #     df_scenarios_renamed["Model_2"] == df_scenarios_renamed["Model"],
-        #     np.nan,
-        #     df_scenarios_renamed["Model_2"],
-        # )
-
-        # # Merge the data on region into a new column 'Region_cleaned'
-        # df_scenarios_renamed["Region_cleaned"] = df_scenarios_renamed["Model_2"].combine_first(
-        #     df_scenarios_renamed["Region_2"]
-        # )
-
         # Split the region column by '|' and expand into new columns
         split_columns = df_scenarios_renamed["Region"].str.split("|", expand=True)
 
@@ -213,11 +186,10 @@ class policyscenadding(object):
         # Removing columns from index
         df_scenarios_deduplicated.reset_index(inplace=True)
 
-        # # Convert countries to ISO3 codes and leave regions as is
+        # Convert countries to ISO3 codes only if "R10" is not in the column
         logger.info("Converting country names to ISO3 codes")
         cc = coco.CountryConverter()
 
-        # Convert countries to ISO3 codes only if "R10" is not in the column
         def conditional_convert(region):
             if "R10" in region:
                 return region  # Keep the original value if "R10" is present
@@ -320,7 +292,7 @@ class policyscenadding(object):
 
         # Convert to xarray objects
         xr_kyoto = self.format_to_xarray(df_scenarios_kyoto)
-        xr_co2 = self.format_to_xarray(df_scenarios_co2)
+        xr_co2 = self.format_to_xarray(df_scenarios_co2) if not df_scenarios_co2.empty else None
 
         return xr_kyoto, xr_co2
 
@@ -344,21 +316,21 @@ class policyscenadding(object):
             self.settings["paths"]["data"]["datadrive"] + "xr_policyscen.nc"
         )
 
-        # # CO2 version
-        # xr_total2 = self.xr_total.assign(NDC=xr_co2["Value"].sel(Scenario="NDC"))
-        # xr_total2 = xr_total2.assign(CurPol=xr_co2["Value"].sel(Scenario="CurPol"))
-        # xr_total2 = xr_total2.assign(NetZero=xr_co2["Value"].sel(Scenario="NetZero"))
-        # xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
-        # self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
-        # xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
-        # xr_total_onlyalloc_co2.to_netcdf(
-        #     self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
-        # )
+        # CO2 version (not all datasets have CO2 data)
+        if xr_co2 is not None:
+            xr_total2 = self.xr_total.assign(NDC=xr_co2["Value"].sel(Scenario="NDC"))
+            xr_total2 = xr_total2.assign(CurPol=xr_co2["Value"].sel(Scenario="CurPol"))
+            xr_total2 = xr_total2.assign(NetZero=xr_co2["Value"].sel(Scenario="NetZero"))
+            xr_total2 = xr_total2.reindex(Time=np.arange(1850, 2101))
+            self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
+            xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
+            xr_total_onlyalloc_co2.to_netcdf(
+                self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
+            )
 
         self.xr_total.close()
 
         return xr_total, xr_total_onlyalloc
-
 
 if __name__ == "__main__":
     # Create an instance of the class
