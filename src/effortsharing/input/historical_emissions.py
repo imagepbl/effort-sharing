@@ -67,7 +67,7 @@ def extract_primap_agri_co2(primap: xr.Dataset):
     return primap_agri_co2
 
 
-def read_nwc(config: Config, xr_primap_agri, xr_primap_agri_co2):
+def read_jones(config: Config, xr_primap_agri, xr_primap_agri_co2):
     """Read NWC historical emission data."""
     logger.info("Reading NWC historical emission data")
 
@@ -176,7 +176,7 @@ def read_jones_alternative(config: Config, regions):
     xr_primap_agri_co2 = extract_primap_agri_co2(xr_primap) / 1e6
 
     # Read NWC data
-    xr_hist = read_nwc(config, xr_primap_agri, xr_primap_agri_co2)
+    xr_hist = read_jones(config, xr_primap_agri, xr_primap_agri_co2)
 
     # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
     xr_edgar = read_edgar(config)

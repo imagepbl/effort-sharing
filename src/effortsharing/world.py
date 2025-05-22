@@ -449,7 +449,7 @@ def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2w
     xr_co2_budgets = xr.Dataset({"Budget": data2})
 
     return (
-        xr_bud_co2,  # TODO: not used, remove?
+        xr_bud_co2,  # TODO: not used, remove? Fine
         xr_co2_budgets,
     )
 
@@ -698,13 +698,9 @@ def determine_global_co2_trajectories(
                             pathways_data["CO2_globe"][
                                 neg_i, nonco2_i, temp_i, risk_i, timing_i, :
                             ] = pathway_final2
+
     xr_traj_co2 = xr_traj_co2.update(pathways_data)
     xr_traj_ghg = (xr_traj_co2.CO2_globe + xr_traj_nonco2.NonCO2_globe).to_dataset(name="GHG_globe")
-    # self.xr_traj_ghg = xr.merge([self.xr_traj_ghg_ds.to_dataset(name="GHG_globe"), self.xr_traj_co2.CO2_globe, self.xr_traj_co2.CO2_neg_globe, self.xr_traj_nonco2.NonCO2_globe])
-    # x = (self.xr_ar6_landuse / self.xr_ar6.sel(Variable='Emissions|Kyoto Gases')).mean(dim='ModelScenario').Value
-    # zero = np.arange(self.settings['params']['start_year_analysis'],2101)[np.where(x.sel(Time=np.arange(self.settings['params']['start_year_analysis'],2101))<0)[0][0]]
-    # x0 = x*np.array(list(np.ones(zero-2000))+list(np.zeros(2101-zero)))
-    # self.xr_traj_ghg_excl = (self.xr_traj_ghg.GHG_globe*(1-x0)).to_dataset(name='GHG_globe_excl')
 
     # projected land use emissions
     landuse_ghg = emissions.mean(dim="ModelScenario").GHG_LULUCF
@@ -728,6 +724,7 @@ def determine_global_co2_trajectories(
 
     xr_traj_ghg_excl = (xr_traj_ghg.GHG_globe - landuse_ghg_corr).to_dataset(name="GHG_globe_excl")
     xr_traj_co2_excl = (xr_traj_co2.CO2_globe - landuse_co2_corr).to_dataset(name="CO2_globe_excl")
+
     all_projected_gases = xr.merge(
         [
             xr_traj_ghg,
