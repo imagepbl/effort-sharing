@@ -21,6 +21,7 @@ import xarray as xr
 
 import effortsharing.regions as _regions
 from effortsharing.config import Config
+from effortsharing.cache import intermediate_file
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -389,28 +390,16 @@ def read_hdi(config, countries, population_long):
     return xr_hdi, xr_hdish
 
 
-def load_socioeconomics(config: Config, from_intermediate=True, save=True):
+@intermediate_file("socioeconomics.nc")
+def load_socioeconomics(config: Config):
     """Collect socio-economic input data from various sources to intermediate file.
 
     Args:
         config: effortsharing.config.Config object
-        from_intermediate: Whether to read from intermediate files if available (default: True)
-        save: Whether to save intermediate data to disk (default: True)
 
     Returns:
         xarray.Dataset: Socio-economic data
     """
-
-    save_path = config.paths.intermediate / "socioeconomics.nc"
-
-    # Check if we can load from intermediate file
-    if from_intermediate and save_path.exists():
-        logger.info(f"Loading socio-economic data from {save_path}")
-        return xr.load_dataset(save_path)
-
-    # Otherwise, process raw input files
-    logger.info("Processing socio-economic input data")
-
     countries, regions = _regions.read_general(config)
 
     ssps = read_ssps(config, regions)
@@ -421,13 +410,6 @@ def load_socioeconomics(config: Config, from_intermediate=True, save=True):
     socioeconomic_data = xr.merge([ssps, population, hdi_sh])
     # TODO: Reindex time and regions??
 
-    # Save to disk
-    if save:
-        logger.info(f"Saving socio-economic data to {save_path}")
-
-        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
-        socioeconomic_data.to_netcdf(save_path)
-        # TODO: add compression
 
     return socioeconomic_data
 
@@ -449,4 +431,5 @@ if __name__ == "__main__":
     config = Config.from_file(args.config)
 
     # Process socio-economic data and save to intermediate file
-    load_socioeconomics(config, from_intermediate=False, save=True)
+    # Note: `load_intermediate` argument is added by the decorator
+    load_socioeconomics(config, load_intermediate=False)
