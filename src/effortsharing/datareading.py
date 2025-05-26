@@ -24,7 +24,8 @@ class datareading:
     # =========================================================== #
 
     def __init__(self, input_file='input.yml'):
-        logger.info("# DATAREADING class  #")
+        print("# ==================================== #")
+        print("# DATAREADING class                    #")
 
         # Read in Input YAML file
         with open(input_file) as file:
@@ -53,13 +54,14 @@ class datareading:
             np.floor(self.settings["params"]["start_year_analysis"] / 5) * 5
         )
 
-        logger.info("# startyear: ", self.settings["params"]["start_year_analysis"])
+        print("# startyear: ", self.settings["params"]["start_year_analysis"])
+        print("# ==================================== #")
 
     # =========================================================== #
     # =========================================================== #
 
     def read_general(self):
-        logger.info("- Reading general data")
+        print("- Reading general data")
         df_gen = pd.read_excel(
             self.settings["paths"]["data"]["external"] + "UNFCCC_Parties_Groups_noeu.xlsx",
             sheet_name="Country groups",
@@ -73,7 +75,7 @@ class datareading:
     # =========================================================== #
 
     def read_ssps(self):
-        logger.info("- Reading GDP and population data from SSPs")
+        print("- Reading GDP and population data from SSPs")
         for i in range(6):
             df_ssp = pd.read_excel(
                 self.settings["paths"]["data"]["external"] + "SSPs_v2023.xlsx",
@@ -195,7 +197,7 @@ class datareading:
     # =========================================================== #
 
     def read_undata(self):
-        logger.info("- Reading UN population data and gapminder, processed by OWID (for past population)")
+        print("- Reading UN population data and gapminder, processed by OWID (for past population)")
         df_pop = pd.read_csv(
             self.settings["paths"]["data"]["external"] + "population_HYDE_UNP_Gapminder.csv"
         )[["Code", "Year", "Population (historical)"]].rename(
@@ -225,7 +227,7 @@ class datareading:
     # =========================================================== #
 
     def read_hdi(self):
-        logger.info("- Read Human Development Index data")
+        print("- Read Human Development Index data")
         df_regions = pd.read_excel(
             self.settings["paths"]["data"]["external"] + "AR6_regionclasses.xlsx"
         )
@@ -430,7 +432,7 @@ class datareading:
     # =========================================================== #
 
     def read_historicalemis_jones(self):
-        logger.info(
+        print(
             "- Reading historical emissions (jones)"
         )  # No harmonization with the KEV anymore, but it's also much closer now
         xr_primap2 = xr.open_dataset(
@@ -603,7 +605,7 @@ class datareading:
     # =========================================================== #
 
     def read_ar6(self):
-        logger.info("- Read AR6 data")
+        print("- Read AR6 data")
         df_ar6raw = pd.read_csv(
             self.settings["paths"]["data"]["external"] + "AR6_Scenarios_Database_World_v1.1.csv"
         )
@@ -1059,7 +1061,7 @@ class datareading:
     # =========================================================== #
 
     def determine_global_nonco2_trajectories(self):
-        logger.info("- Computing global nonco2 trajectories")
+        print("- Computing global nonco2 trajectories")
         # Relationship between non-co2 reduction and budget is based on Rogelj et al and requires the year 2020 (even though startyear may be different) - not a problem
         xr_ch4_raw = self.xr_ar6.sel(Variable="Emissions|CH4") * self.settings["params"]["gwp_ch4"]
         xr_n2o_raw = (
@@ -1265,7 +1267,7 @@ class datareading:
     # =========================================================== #
 
     def determine_global_budgets(self):
-        logger.info("- Get global CO2 budgets")
+        print("- Get global CO2 budgets")
         # CO2 budgets from Forster
         df_budgets = pd.read_csv(
             self.settings["paths"]["data"]["external"] + "update_MAGICC_and_scenarios-budget.csv"
@@ -1352,7 +1354,7 @@ class datareading:
     # =========================================================== #
 
     def determine_global_co2_trajectories(self):
-        logger.info("- Computing global co2 trajectories")
+        print("- Computing global co2 trajectories")
         # Initialize data arrays for co2
         startpoint = self.xr_hist.sel(
             Time=self.settings["params"]["start_year_analysis"], Region="EARTH"
@@ -1667,7 +1669,7 @@ class datareading:
     # =========================================================== #
 
     def read_baseline(self):
-        logger.info("- Reading baseline emissions")
+        print("- Reading baseline emissions")
         xr_bases = []
         for i in range(
             3
@@ -1771,7 +1773,7 @@ class datareading:
     # =========================================================== #
 
     def read_ndc_climateresource(self):
-        logger.info("- Reading NDC data from Climate resource")
+        print("- Reading NDC data from Climate resource")
         ghg_data = np.zeros(
             shape=(len(self.countries_iso) + 1, 3, 2, 2, len(np.arange(2010, 2051)))
         )
@@ -1857,7 +1859,7 @@ class datareading:
     # =========================================================== #
 
     def read_ndc(self):
-        logger.info("- Reading NDC data")
+        print("- Reading NDC data")
         df_ndc_raw = pd.read_excel(
             self.settings["paths"]["data"]["external"]
             + "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx",
@@ -2003,7 +2005,7 @@ class datareading:
     # =========================================================== #
 
     def merge_xr(self):
-        logger.info("- Merging xrarray object")
+        print("- Merging xrarray object")
         xr_total = xr.merge(
             [
                 self.xr_ssp,
@@ -2029,7 +2031,7 @@ class datareading:
     # =========================================================== #
 
     def add_country_groups(self):
-        logger.info("- Add country groups")
+        print("- Add country groups")
         path_ctygroups = (
             self.settings["paths"]["data"]["external"] + "/UNFCCC_Parties_Groups_noeu.xlsx"
         )
@@ -2143,7 +2145,7 @@ class datareading:
     # =========================================================== #
 
     def save(self):
-        logger.info("- Save important files")
+        print("- Save important files")
 
         xr_normal = self.xr_total.sel(
             Temperature=np.array(self.settings["dimension_ranges"]["peak_temperature_saved"])
