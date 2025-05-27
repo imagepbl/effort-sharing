@@ -17,11 +17,7 @@ import yaml
 from tqdm import tqdm
 
 # Configure the logger
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -651,6 +647,14 @@ class dataexportcl:
 
 
 if __name__ == "__main__":
+    from rich.logging import RichHandler
+    # Set up logging
+    logging.basicConfig(
+        level="INFO",
+        format="%(message)s",
+        handlers=[RichHandler(show_time=False)],
+    )
+
     dataexporter = dataexportcl()
     dataexporter.global_default()
     dataexporter.negative_nonlulucf_emissions()
