@@ -23,11 +23,8 @@ from tqdm import tqdm
 warnings.simplefilter(action="ignore")
 
 # Configure the logger
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
 
 # =========================================================== #
 # CLASS OBJECT
@@ -199,3 +196,9 @@ class vardecomposing:
             format="NETCDF4",
             engine="netcdf4",
         )
+
+if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
