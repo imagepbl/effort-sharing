@@ -17,11 +17,7 @@ import yaml
 from tqdm import tqdm
 
 # Configure the logger
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -132,3 +128,10 @@ class tempaligning:
     def save(self):
         logger.info("- Save")
         self.xr_temps.to_netcdf(self.settings["paths"]["data"]["datadrive"] + "xr_temps.nc")
+
+
+if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
