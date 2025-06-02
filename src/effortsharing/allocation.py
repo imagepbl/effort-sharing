@@ -664,6 +664,30 @@ def gdr(aconfig: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
     gdr_total = gdr_total.rename({"Value": "GDR"})
     return gdr_total.GDR
 
+def allocation(config: AllocationConfig) -> dict[str, xr.DataArray]:
+    """
+    Run all allocation methods and return dict with key for each method and value as xr.DataArray
+    """
+    # TODO report progress with logger.info or tqdm
+    gf_da = gf(config)
+    pc_da = pc(config)
+    pcc_da = pcc(config, gf_da, pc_da)
+    pcb_da, pcb_lin_da = pcb(config)
+    ecpc_da = ecpc(config)
+    ap_da = ap(config)
+    gdr_da = gdr(config, ap_da)
+
+    return dict(
+        gf=gf_da,
+        pc=pc_da,
+        pcc=pcc_da,
+        pcb=pcb_da,
+        pcb_lin=pcb_lin_da,
+        ecpc=ecpc_da,
+        ap=ap_da,
+        gdr=gdr_da,
+    )
+
 
 def save(config: AllocationConfig, 
          dss: dict[str, xr.DataArray]
@@ -687,8 +711,6 @@ def save(config: AllocationConfig,
             .astype("float32")
     )
     combined.to_netcdf(save_path, format="NETCDF4")
-
-
         
 
 if __name__ == "__main__":
