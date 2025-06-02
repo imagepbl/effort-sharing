@@ -37,6 +37,24 @@ class AllocationConfig:
 # =========================================================== #
 # =========================================================== #
 
+def config2base_var(config: AllocationConfig) -> Literal['CO2_base_incl', 'CO2_base_excl',
+                                                            'GHG_base_incl', 'GHG_base_excl']:
+    base_var = ''
+    if config.lulucf == "incl" and config.gas == "CO2":
+        base_var = "CO2_base_incl"
+    elif config.lulucf == "incl" and config.gas == "GHG":
+        base_var = "GHG_base_incl"
+    elif config.lulucf == "excl" and config.gas == "CO2":
+        base_var = "CO2_base_excl"
+    elif config.lulucf == "excl" and config.gas == "GHG":
+        base_var = "GHG_base_excl"
+    else:
+        raise ValueError(
+            "Invalid combination of LULUCF and gas. "
+            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+        )
+    return base_var
+
 def config2hist_var(config: AllocationConfig) -> Literal['GHG_hist', 'GHG_hist_excl', 
                                                          'CO2_hist', 'CO2_hist_excl']:
     hist_var = ''
@@ -519,6 +537,58 @@ def ecpc(config: AllocationConfig) -> xr.DataArray:
 
 
 # =========================================================== #
+# =========================================================== #
+
+def ap(config: AllocationConfig) -> xr.DataArray:
+    """
+    Ability to Pay: Uses GDP per capita to allocate the global budget
+    Equation from van den Berg et al. (2020)
+    """
+    start_year_analysis= config.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+    focus_region = config.region
+    # Step 1: Reductions before correction factor
+
+    # TODO replace with load_socioeconomics() function
+    xrt = load_dataread(config.config).sel(Time=analysis_timeframe)
+    GDP_sum_w = xrt.GDP.sel(Region="EARTH")
+    pop_sum_w = xrt.Population.sel(Region="EARTH")
+    # Global average GDP per capita
+    r1_nom = GDP_sum_w / pop_sum_w
+
+    emission_data, scenarios = load_emissions(config.config)
+    emis_base_var = config2base_var(config)
+    emis_base = emission_data[emis_base_var]
+    emis_fut = load_future_emissions(config, emission_data, scenarios)
+
+    base_worldsum = emis_base.sel(Time=analysis_timeframe).sel(Region="EARTH")
+    rb_part1 = (
+        xrt.GDP.sel(Region=focus_region)
+        / xrt.Population.sel(Region=focus_region)
+        / r1_nom
+    ) ** (1 / 3.0)
+    rb_part2 = (
+        emis_base.sel(Time=analysis_timeframe).sel(Region=focus_region)
+        * (base_worldsum - emis_fut.sel(Time=analysis_timeframe))
+        / base_worldsum
+    )
+    rb = rb_part1 * rb_part2
+
+    # Step 2: Correction factor
+    # TODO replace open with load_rbw() function, will need to find where files are written
+    rbw_path = config.config.paths.output / f"startyear_{start_year_analysis}" / f"xr_rbw_{config.gas}_{config.lulucf}.nc"
+    rbw = xr.open_dataset(rbw_path).load()
+    corr_factor = (1e-9 + rbw.__xarray_dataarray_variable__) / (
+        base_worldsum - emis_fut.sel(Time=analysis_timeframe)
+    )
+
+    # Step 3: Budget after correction factor
+    ap = emis_base.sel(Region=focus_region) - rb / corr_factor
+
+    ap = ap.sel(Time=analysis_timeframe)
+    return ap
+
+# =========================================================== #
 # CLASS OBJECT
 # =========================================================== #
 
@@ -588,45 +658,7 @@ class allocation:
 
 
 
-    # =========================================================== #
-    # =========================================================== #
 
-    def ap(self):
-        """
-        Ability to Pay: Uses GDP per capita to allocate the global budget
-        Equation from van den Berg et al. (2020)
-        """
-        # Step 1: Reductions before correction factor
-        xrt = self.xr_total.sel(Time=self.analysis_timeframe)
-        GDP_sum_w = xrt.GDP.sel(Region="EARTH")
-        pop_sum_w = xrt.Population.sel(Region="EARTH")
-        # Global average GDP per capita
-        r1_nom = GDP_sum_w / pop_sum_w
-
-        base_worldsum = self.emis_base.sel(Time=self.analysis_timeframe).sel(Region="EARTH")
-        rb_part1 = (
-            xrt.GDP.sel(Region=self.focus_region)
-            / xrt.Population.sel(Region=self.focus_region)
-            / r1_nom
-        ) ** (1 / 3.0)
-        rb_part2 = (
-            self.emis_base.sel(Time=self.analysis_timeframe).sel(Region=self.focus_region)
-            * (base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe))
-            / base_worldsum
-        )
-        rb = rb_part1 * rb_part2
-
-        # Step 2: Correction factor
-        corr_factor = (1e-9 + self.rbw.__xarray_dataarray_variable__) / (
-            base_worldsum - self.emis_fut.sel(Time=self.analysis_timeframe)
-        )
-
-        # Step 3: Budget after correction factor
-        ap = self.emis_base.sel(Region=self.focus_region) - rb / corr_factor
-
-        ap = ap.sel(Time=self.analysis_timeframe)
-        self.xr_total = self.xr_total.assign(AP=ap)
-        self.rbw.close()
 
     # =========================================================== #
     # =========================================================== #
@@ -731,9 +763,9 @@ if __name__ == "__main__":
     # pc_da = pc(aconfig)
     # pcc_da = pcc(aconfig, gf_da, pc_da)
     # pcb_da, pcb_lin_da = pcb(aconfig)
-    ecpc_da = ecpc(aconfig)
-    print(ecpc_da)
-    # ap_da = ap(aconfig)
+    # ecpc_da = ecpc(aconfig)
+    ap_da = ap(aconfig)
+    print(ap_da)
     # gdr_da = gdr(aconfig)
     # save(
     #     config=aconfig,
