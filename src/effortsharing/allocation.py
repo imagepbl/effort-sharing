@@ -13,7 +13,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 import xarray as xr
-import yaml
 
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions
@@ -37,7 +36,7 @@ class AllocationConfig:
 # =========================================================== #
 # =========================================================== #
 
-# TODO move config@_var elsewhere. 
+# TODO move config2*_var elsewhere. 
 
 def config2base_var(aconfig: AllocationConfig) -> Literal['CO2_base_incl', 'CO2_base_excl',
                                                             'GHG_base_incl', 'GHG_base_excl']:
@@ -173,6 +172,7 @@ def pc(aconfig: AllocationConfig) -> xr.DataArray:
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
     population = load_population(aconfig.config)
+    # TODO use function compute countries or read from file
     countries_iso_path = aconfig.config.paths.output / "all_countries.npy"
     countries_iso = np.load(
             countries_iso_path, allow_pickle=True
@@ -304,7 +304,7 @@ def pcb(aconfig: AllocationConfig) -> xr.DataArray:
         emis_fut.where(emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time")
         * pop_fraction
     ).sel(Region=focus_region)
-
+    # TODO compute budget on the fly or read from file. Instea of reading xr_dataread.nc
     xr_total = load_dataread(aconfig.config)
     co2_budget_left = (xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
 
