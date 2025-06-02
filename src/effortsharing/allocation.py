@@ -57,21 +57,7 @@ def load_emissions_and_scenarios(config: AllocationConfig):
 
 
 def load_future_emissions(config: AllocationConfig, emission_data, scenarios):
-    xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config.config)
-    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
-        config.config, emission_data, scenarios, xr_temperatures
-    )
-    _, xr_co2_budgets = determine_global_budgets(
-        config.config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
-    )
-    (all_projected_gases,) = determine_global_co2_trajectories(
-        config=config.config,
-        emissions=emission_data,
-        scenarios=scenarios,
-        xr_temperatures=xr_temperatures,
-        xr_co2_budgets=xr_co2_budgets,
-        xr_traj_nonco2=xr_traj_nonco2,
-    )
+    all_projected_gases = load_global_co2_trajectories(config.config, emission_data, scenarios)
     globe_var = ''
     if config.lulucf == "incl" and config.gas == "GHG":
         globe_var = "GHG_globe"
@@ -88,6 +74,25 @@ def load_future_emissions(config: AllocationConfig, emission_data, scenarios):
         )
     emis_fut = all_projected_gases[globe_var]
     return emis_fut
+
+def load_global_co2_trajectories(config: Config, emission_data, scenarios):
+    xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
+    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
+        config, emission_data, scenarios, xr_temperatures
+    )
+    _, xr_co2_budgets = determine_global_budgets(
+        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
+    )
+    (all_projected_gases,) = determine_global_co2_trajectories(
+        config=config,
+        emissions=emission_data,
+        scenarios=scenarios,
+        xr_temperatures=xr_temperatures,
+        xr_co2_budgets=xr_co2_budgets,
+        xr_traj_nonco2=xr_traj_nonco2,
+    )
+    
+    return all_projected_gases
 
 def gf(config: AllocationConfig) -> xr.DataArray:
     """
@@ -113,7 +118,20 @@ def gf(config: AllocationConfig) -> xr.DataArray:
     return xr_new_co2
 
 
+def load_dataread(config: Config) -> xr.Dataset:
+    start_year_analysis= config.params.start_year_analysis
+    total_xr = xr.open_dataset(
+        config.paths.output / f'startyear_{start_year_analysis}' / "xr_dataread.nc"
+    ).load()
+    return total_xr
 
+def load_population(config: Config) -> xr.DataArray:
+    socioeconomic_data = load_dataread(config)
+    # TODO find socioeconomic_data that has Time=2021 as socioeconomics.nc does not, 
+    # TODO and remove reading of xr_dataread.nc
+    # socioeconomic_data = load_socioeconomics(config.config)
+
+    return socioeconomic_data.Population
 
 # =========================================================== #
 # =========================================================== #
@@ -125,24 +143,17 @@ def pc(config: AllocationConfig) -> xr.DataArray:
     start_year_analysis= config.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
-    total_xr = xr.open_dataset(
-        config.config.paths.output / f'startyear_{start_year_analysis}' / "xr_dataread.nc"
-    ).load()
-    socioeconomic_data = total_xr
-    # TODO find socioeconomic_data that has Time=2021 as socioeconomics.nc does not, 
-    # TODO and remove reading of xr_dataread.nc
-    # socioeconomic_data = load_socioeconomics(config.config)
+    population = load_population(config.config)
     countries_iso_path = config.config.paths.output / "all_countries.npy"
     countries_iso = np.load(
             countries_iso_path, allow_pickle=True
     )
-
-    pop_region = socioeconomic_data.sel(
+    pop_region = population.sel(
         Region=config.region, Time=start_year_analysis
     ).Population
-    pop_earth = socioeconomic_data.sel(
+    pop_earth = population.sel(
         Region=countries_iso, Time=start_year_analysis
-    ).Population.sum(dim=["Region"])
+    ).sum(dim=["Region"])
     pop_fraction = pop_region / pop_earth
 
     # Multiplying the global budget with the population fraction to create
@@ -203,6 +214,162 @@ def pcc(config: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> x
     # with existing GF and PC allocations
     xr_new = (gfdeel_single * gf_da + pcdeel_single * pc_da)["PCC"]
     return xr_new
+
+# =========================================================== #
+# =========================================================== #
+
+def pcb(config: AllocationConfig) -> xr.DataArray:
+    """
+    Per capita on a budget basis
+    """
+    start_year= config.config.params.start_year_analysis
+    focus_region = config.region
+
+    # co2 part
+    def budget_harm(nz):
+        end_year = 2101
+        compensation_form = np.sqrt(np.arange(0, end_year - start_year))
+        xr_comp2 = xr.DataArray(
+            compensation_form, dims=["Time"], coords={"Time": np.arange(start_year, end_year)}
+        )
+        return xr_comp2 / ((nz - start_year) ** (3 / 2) * (2 / 3))
+        # TODO later: should be , but I now calibrated to 0.5.
+        # Not a problem because we have the while loop later.
+
+    def pcb_new_factor(path, f):
+        positive_path = path.where(path > 0, 0)
+        negative_path = positive_path.where(path < 0, 1)
+
+        netzeros = start_year + negative_path.sum(dim="Time")
+        netzeros = netzeros.where(netzeros < 2100, 2100)
+
+        return path + budget_harm(netzeros) * f
+
+    population = load_population(config.config)
+    pop_region = population.sel(Time=start_year)
+    pop_earth = population.sel(Region="EARTH", Time=start_year)
+    pop_fraction = (pop_region / pop_earth).mean(dim="Scenario")
+
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
+    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    globalpath = emis_fut
+
+    hist_var_co2, emission_data_co2, scenarios_co2 = load_emissions_and_scenarios(
+        # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
+        AllocationConfig(
+            config=config.config, 
+            region=config.region, 
+            lulucf=config.lulucf,
+            gas="CO2",
+        )
+    )
+    emis_start_i = emission_data_co2[hist_var_co2].sel(Time=start_year)
+    emis_start_w = emission_data_co2[hist_var_co2].sel(Time=start_year, Region="EARTH")
+
+    time_range = np.arange(start_year, 2101)
+    path_scaled_0 = (
+        (emis_start_i / emis_start_w * globalpath).sel(Time=time_range).sel(Region=focus_region)
+    )
+
+    budget_left = (
+        emis_fut.where(emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time")
+        * pop_fraction
+    ).sel(Region=focus_region)
+
+    xr_total = load_dataread(config.config)
+    co2_budget_left = (xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
+
+    budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(
+        dim="Time"
+    )
+
+    budget_surplus = co2_budget_left - budget_without_assumptions_prepeak
+    pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name="PCB")
+
+    # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
+    iterations = 3
+
+    for _ in range(iterations):
+        # Calculate the positive part of the CO2 path
+        pcb_pos = pcb.where(pcb > 0, 0).sum(dim="Time")
+
+        # Calculate the budget surplus
+        budget_surplus = (co2_budget_left - pcb_pos).PCB
+
+        # Adjust the CO2 path based on the budget surplus
+        pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name="PCB")
+
+    # CO2, but now linear
+    co2_hist = emission_data_co2[hist_var_co2].sel(Region=focus_region, Time=start_year)
+    time_range = np.arange(start_year, 2101)
+
+    nz = co2_budget_left * 2 / co2_hist + start_year - 1
+    coef = co2_hist / (nz - start_year)
+
+    linear_co2 = (
+        -coef
+        * xr.DataArray(
+            np.arange(0, 2101 - start_year), dims=["Time"], coords={"Time": time_range}
+        )
+        + co2_hist
+    )
+
+    linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name="PCB_lin")
+
+    # Now, if we want GHG, the non-CO2 part is added:
+    if config.gas == "GHG":
+        # Non-co2 part
+        hist_var_ghg, emission_data_ghg, scenarios_ghg = load_emissions_and_scenarios(
+            # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
+            AllocationConfig(
+                config=config.config, 
+                region=config.region, 
+                lulucf=config.lulucf,
+                gas="GHG",
+            )
+        )
+        nonco2_current = emission_data_ghg[hist_var_ghg].sel(
+            Time=start_year
+        ) - emission_data_co2[hist_var_co2].sel(Time=start_year)
+
+        nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
+        nonco2_globe = load_global_co2_trajectories(
+            config=config.config,
+            emission_data=emission_data_ghg,
+            scenarios=scenarios_ghg
+        ).NonCO2_globe
+        nonco2_part_gf = nonco2_fraction * nonco2_globe
+
+        pc_fraction = pop_region / pop_earth
+        nonco2_part_pc = pc_fraction * nonco2_globe
+
+        # Create an array that transitions linearly from 0 to 1 from start_year to 2039,
+        # and then remains constant at 1 from 2040 to 2100.
+        compensation_form = np.concatenate(
+            [
+                np.linspace(0, 1, len(np.arange(start_year, 2040))),
+                np.ones(len(np.arange(2040, 2101))),
+            ]
+        )
+
+        xr_comp = xr.DataArray(compensation_form, dims=["Time"], coords={"Time": time_range})
+
+        nonco2_part = nonco2_part_gf * (1 - xr_comp) + nonco2_part_pc * xr_comp
+
+        # together:
+        nonco2_focus_region = nonco2_part.sel(Region=focus_region)
+        ghg_pcb = pcb + nonco2_focus_region
+        ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
+    elif config.gas == "_CO2":
+        # together:
+        ghg_pcb = pcb
+        ghg_pcb_lin = linear_co2_pos
+    else:
+        raise ValueError(
+            "Invalid gas type. Please use 'GHG' or 'CO2'."
+        )
+
+    return ghg_pcb.PCB, ghg_pcb_lin.PCB_lin
 
 
 # =========================================================== #
@@ -273,146 +440,6 @@ class allocation:
         self.dim_discountrates = self.settings["dimension_ranges"]["discount_rates"]
         self.dim_convyears = self.settings["dimension_ranges"]["convergence_years"]
 
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def pcb(self):
-        """
-        Per capita on a budget basis
-        """
-        start_year = self.start_year_analysis
-        focus_region = self.focus_region
-
-        # co2 part
-        def budget_harm(nz):
-            end_year = 2101
-            compensation_form = np.sqrt(np.arange(0, end_year - start_year))
-            xr_comp2 = xr.DataArray(
-                compensation_form, dims=["Time"], coords={"Time": np.arange(start_year, end_year)}
-            )
-            return xr_comp2 / ((nz - start_year) ** (3 / 2) * (2 / 3))
-            # TODO later: should be , but I now calibrated to 0.5.
-            # Not a problem because we have the while loop later.
-
-        def pcb_new_factor(path, f):
-            positive_path = path.where(path > 0, 0)
-            negative_path = positive_path.where(path < 0, 1)
-
-            netzeros = start_year + negative_path.sum(dim="Time")
-            netzeros = netzeros.where(netzeros < 2100, 2100)
-
-            return path + budget_harm(netzeros) * f
-
-        pop_region = self.xr_total.sel(Time=start_year).Population
-        pop_earth = self.xr_total.sel(Region="EARTH", Time=start_year).Population
-        pop_fraction = (pop_region / pop_earth).mean(dim="Scenario")
-        globalpath = self.emis_fut
-
-        if self.lulucf_indicator == "incl":
-            emis_start_i = self.xr_total.CO2_hist.sel(Time=start_year)
-            emis_start_w = self.xr_total.CO2_hist.sel(Time=start_year, Region="EARTH")
-        elif self.lulucf_indicator == "excl":
-            emis_start_i = self.xr_total.CO2_hist_excl.sel(Time=start_year)
-            emis_start_w = self.xr_total.CO2_hist_excl.sel(Time=start_year, Region="EARTH")
-
-        time_range = np.arange(start_year, 2101)
-        path_scaled_0 = (
-            (emis_start_i / emis_start_w * globalpath).sel(Time=time_range).sel(Region=focus_region)
-        )
-
-        budget_left = (
-            self.emis_fut.where(self.emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time")
-            * pop_fraction
-        ).sel(Region=focus_region)
-
-        co2_budget_left = (self.xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
-
-        budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(
-            dim="Time"
-        )
-
-        budget_surplus = co2_budget_left - budget_without_assumptions_prepeak
-        pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name="PCB")
-
-        # Optimize to bend the CO2 curves as close as possible to the CO2 budgets
-        iterations = 3
-
-        for _ in range(iterations):
-            # Calculate the positive part of the CO2 path
-            pcb_pos = pcb.where(pcb > 0, 0).sum(dim="Time")
-
-            # Calculate the budget surplus
-            budget_surplus = (co2_budget_left - pcb_pos).PCB
-
-            # Adjust the CO2 path based on the budget surplus
-            pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name="PCB")
-
-        # CO2, but now linear
-        if self.lulucf_indicator == "incl":
-            co2_hist = self.xr_total.CO2_hist.sel(Region=focus_region, Time=start_year)
-        elif self.lulucf_indicator == "excl":
-            co2_hist = self.xr_total.CO2_hist_excl.sel(Region=focus_region, Time=start_year)
-        time_range = np.arange(start_year, 2101)
-
-        self.co2_budget_left = co2_budget_left
-        nz = co2_budget_left * 2 / co2_hist + start_year - 1
-        coef = co2_hist / (nz - start_year)
-
-        linear_co2 = (
-            -coef
-            * xr.DataArray(
-                np.arange(0, 2101 - start_year), dims=["Time"], coords={"Time": time_range}
-            )
-            + co2_hist
-        )
-
-        linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name="PCB_lin")
-        self.linear_co2 = linear_co2_pos
-
-        # Now, if we want GHG, the non-CO2 part is added:
-        if self.gas_indicator == "_GHG":
-            # Non-co2 part
-            if self.lulucf_indicator == "incl":
-                nonco2_current = self.xr_total.GHG_hist.sel(
-                    Time=start_year
-                ) - self.xr_total.CO2_hist.sel(Time=start_year)
-            elif self.lulucf_indicator == "excl":
-                nonco2_current = self.xr_total.GHG_hist_excl.sel(
-                    Time=start_year
-                ) - self.xr_total.CO2_hist_excl.sel(Time=start_year)
-
-            nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
-            nonco2_part_gf = nonco2_fraction * self.xr_total.NonCO2_globe
-
-            pc_fraction = self.xr_total.Population.sel(
-                Time=start_year
-            ) / self.xr_total.Population.sel(Time=start_year, Region="EARTH")
-            nonco2_part_pc = pc_fraction * self.xr_total.NonCO2_globe
-
-            # Create an array that transitions linearly from 0 to 1 from start_year to 2039,
-            # and then remains constant at 1 from 2040 to 2100.
-            compensation_form = np.concatenate(
-                [
-                    np.linspace(0, 1, len(np.arange(start_year, 2040))),
-                    np.ones(len(np.arange(2040, 2101))),
-                ]
-            )
-
-            xr_comp = xr.DataArray(compensation_form, dims=["Time"], coords={"Time": time_range})
-
-            nonco2_part = nonco2_part_gf * (1 - xr_comp) + nonco2_part_pc * xr_comp
-
-            # together:
-            nonco2_focus_region = nonco2_part.sel(Region=focus_region)
-            self.ghg_pcb = pcb + nonco2_focus_region
-            self.ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
-        elif self.gas_indicator == "_CO2":
-            # together:
-            self.ghg_pcb = pcb
-            self.ghg_pcb_lin = linear_co2_pos
-
-        self.xr_total = self.xr_total.assign(PCB=self.ghg_pcb.PCB, PCB_lin=self.ghg_pcb_lin.PCB_lin)
 
     # =========================================================== #
     # =========================================================== #
