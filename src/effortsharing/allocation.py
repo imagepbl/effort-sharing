@@ -37,17 +37,36 @@ class AllocationConfig:
 # =========================================================== #
 # =========================================================== #
 
-def load_future_emissions(config, emission_data, scenarios):
+def load_emissions_and_scenarios(config: AllocationConfig):
+    hist_var = ''
+    if config.lulucf == "incl" and config.gas == "GHG":
+        hist_var = "GHG_hist"
+    elif config.lulucf == "excl" and config.gas == "GHG":
+        hist_var = "GHG_hist_excl"
+    elif config.lulucf == "incl" and config.gas == "CO2":
+        hist_var = "CO2_hist"
+    elif config.lulucf == "excl" and config.gas == "CO2":
+        hist_var = "CO2_hist_excl"
+    else:
+        raise ValueError(
+            "Invalid combination of LULUCF and gas. "
+            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+        )
+    emission_data, scenarios = load_emissions(config.config)
+    return hist_var,emission_data,scenarios
+
+
+def load_future_emissions(config: AllocationConfig, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config.config)
     (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
-        config, emission_data, scenarios, xr_temperatures
+        config.config, emission_data, scenarios, xr_temperatures
     )
     _, xr_co2_budgets = determine_global_budgets(
-        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
+        config.config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
     )
     (all_projected_gases,) = determine_global_co2_trajectories(
         config=config.config,
-        emmissions=emission_data,
+        emissions=emission_data,
         scenarios=scenarios,
         xr_temperatures=xr_temperatures,
         xr_co2_budgets=xr_co2_budgets,
@@ -93,23 +112,6 @@ def gf(config: AllocationConfig) -> xr.DataArray:
 
     return xr_new_co2
 
-def load_emissions_and_scenarios(config):
-    hist_var = ''
-    if config.lulucf == "incl" and config.gas == "GHG":
-        hist_var = "GHG_hist"
-    elif config.lulucf == "excl" and config.gas == "GHG":
-        hist_var = "GHG_hist_excl"
-    elif config.lulucf == "incl" and config.gas == "CO2":
-        hist_var = "CO2_hist"
-    elif config.lulucf == "excl" and config.gas == "CO2":
-        hist_var = "CO2_hist_excl"
-    else:
-        raise ValueError(
-            "Invalid combination of LULUCF and gas. "
-            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-        )
-    emission_data, scenarios = load_emissions(config.config)
-    return hist_var,emission_data,scenarios
 
 
 
@@ -123,7 +125,13 @@ def pc(config: AllocationConfig) -> xr.DataArray:
     start_year_analysis= config.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
-    socioeconomic_data = load_socioeconomics(config.config)
+    total_xr = xr.open_dataset(
+        config.config.paths.output / f'startyear_{start_year_analysis}' / "xr_dataread.nc"
+    ).load()
+    socioeconomic_data = total_xr
+    # TODO find socioeconomic_data that has Time=2021 as socioeconomics.nc does not, 
+    # TODO and remove reading of xr_dataread.nc
+    # socioeconomic_data = load_socioeconomics(config.config)
     countries_iso_path = config.config.paths.output / "all_countries.npy"
     countries_iso = np.load(
             countries_iso_path, allow_pickle=True
@@ -144,6 +152,58 @@ def pc(config: AllocationConfig) -> xr.DataArray:
 
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
     return xr_new
+
+# =========================================================== #
+# =========================================================== #
+
+def pcc(config: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> xr.DataArray:
+    """
+    Per Capita Convergence: Grandfathering converging into per capita
+    """
+    start_year_analysis= config.config.params.start_year_analysis
+
+    def transform_time(time, convyear):
+        """
+        Function that calculates the convergence based on the convergence time frame
+        """
+        fractions = pd.DataFrame({"Year": time, "Convergence": 0}, dtype=float)
+
+        before_analysis_year = fractions["Year"] < start_year_analysis + 1
+        fractions.loc[before_analysis_year, "Convergence"] = 1.0
+
+        start_conv = start_year_analysis + 1
+
+        during_conv = (fractions["Year"] >= start_conv) & (fractions["Year"] < convyear)
+        year_diff = fractions["Year"] - start_year_analysis
+        conv_range = convyear - start_year_analysis
+        fractions.loc[during_conv, "Convergence"] = 1.0 - (year_diff / conv_range)
+
+        return fractions["Convergence"].tolist()
+
+    gfdeel = []
+    pcdeel = []
+
+    dim_convyears = config.config.dimension_ranges.convergence_years
+
+    times=np.arange(1850, 2101)
+    for year in dim_convyears:
+        ar = np.array([transform_time(times, year)]).T
+        coords = {"Time": times, "Convergence_year": [year]}
+        dims = ["Time", "Convergence_year"]
+        gfdeel.append(xr.DataArray(data=ar, dims=dims, coords=coords).to_dataset(name="PCC"))
+        pcdeel.append(
+            xr.DataArray(data=1 - ar, dims=dims, coords=coords).to_dataset(name="PCC")
+        )
+
+    # Merging the list of DataArays into one Dataset
+    gfdeel_single = xr.merge(gfdeel)
+    pcdeel_single = xr.merge(pcdeel)
+
+    # Creating new allocation time series by multiplying convergence fractions
+    # with existing GF and PC allocations
+    xr_new = (gfdeel_single * gf_da + pcdeel_single * pc_da)["PCC"]
+    return xr_new
+
 
 # =========================================================== #
 # CLASS OBJECT
@@ -213,56 +273,6 @@ class allocation:
         self.dim_discountrates = self.settings["dimension_ranges"]["discount_rates"]
         self.dim_convyears = self.settings["dimension_ranges"]["convergence_years"]
 
-
-
-
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def pcc(self):
-        """
-        Per Capita Convergence: Grandfathering converging into per capita
-        """
-
-        def transform_time(time, convyear):
-            """
-            Function that calculates the convergence based on the convergence time frame
-            """
-            fractions = pd.DataFrame({"Year": time, "Convergence": 0}, dtype=float)
-
-            before_analysis_year = fractions["Year"] < self.start_year_analysis + 1
-            fractions.loc[before_analysis_year, "Convergence"] = 1.0
-
-            start_conv = self.start_year_analysis + 1
-
-            during_conv = (fractions["Year"] >= start_conv) & (fractions["Year"] < convyear)
-            year_diff = fractions["Year"] - self.start_year_analysis
-            conv_range = convyear - self.start_year_analysis
-            fractions.loc[during_conv, "Convergence"] = 1.0 - (year_diff / conv_range)
-
-            return fractions["Convergence"].tolist()
-
-        gfdeel = []
-        pcdeel = []
-
-        for year in self.dim_convyears:
-            ar = np.array([transform_time(self.xr_total.Time, year)]).T
-            coords = {"Time": self.xr_total.Time, "Convergence_year": [year]}
-            dims = ["Time", "Convergence_year"]
-            gfdeel.append(xr.DataArray(data=ar, dims=dims, coords=coords).to_dataset(name="PCC"))
-            pcdeel.append(
-                xr.DataArray(data=1 - ar, dims=dims, coords=coords).to_dataset(name="PCC")
-            )
-
-        # Merging the list of DataArays into one Dataset
-        gfdeel_single = xr.merge(gfdeel)
-        pcdeel_single = xr.merge(pcdeel)
-
-        # Creating new allocation time series by multiplying convergence fractions
-        # with existing GF and PC allocations
-        xr_new = (gfdeel_single * self.xr_total.GF + pcdeel_single * self.xr_total.PC)["PCC"]
-        self.xr_total = self.xr_total.assign(PCC=xr_new)
 
     # =========================================================== #
     # =========================================================== #
@@ -664,7 +674,7 @@ if __name__ == "__main__":
     )
     gf_da = gf(aconfig)
     pc_da = pc(aconfig)
-    pcc_da = pcc(aconfig)
+    pcc_da = pcc(aconfig, gf_da, pc_da)
     pcb_da, pcb_lin_da = pcb(aconfig)
     ecpc_da = ecpc(aconfig)
     ap_da = ap(aconfig)
