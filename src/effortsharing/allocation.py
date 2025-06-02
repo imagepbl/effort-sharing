@@ -547,8 +547,8 @@ def ap(config: AllocationConfig) -> xr.DataArray:
     start_year_analysis= config.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
     focus_region = config.region
-    # Step 1: Reductions before correction factor
 
+    # Step 1: Reductions before correction factor
     # TODO replace with load_socioeconomics() function
     xrt = load_dataread(config.config).sel(Time=analysis_timeframe)
     GDP_sum_w = xrt.GDP.sel(Region="EARTH")
@@ -589,138 +589,74 @@ def ap(config: AllocationConfig) -> xr.DataArray:
     return ap
 
 # =========================================================== #
-# CLASS OBJECT
 # =========================================================== #
 
-
-
-class allocation:
+def gdr(config: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
     """
-    Class that allocates the global CO2 budget to regions based on different allocation methods
+    Greenhouse Development Rights: Uses the Responsibility-Capability Index
+    (RCI) weighed at 50/50 to allocate the global budget
+    Calculations from van den Berg et al. (2020)
     """
+    start_year_analysis= config.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+    focus_region = config.region
+    convergence_year_gdr = config.config.params.convergence_year_gdr
 
-    # =========================================================== #
-    # =========================================================== #
-
-    def __init__(
-        self,
-        reg,
-        lulucf="incl",
-        dataread_file="xr_dataread.nc",
-        gas="GHG",
-        input_file="input.yml",
-    ):
-        # Read in Input YAML file
-        with open(input_file) as file:
-            self.settings = yaml.load(file, Loader=yaml.FullLoader)
-        self.countries_iso = np.load(
-            self.settings["paths"]["data"]["datadrive"] + "all_countries.npy", allow_pickle=True
-        )
-        self.savepath = (
-            self.settings["paths"]["data"]["datadrive"]
-            + "startyear_"
-            + str(self.settings["params"]["start_year_analysis"])
-            + "/"
-        )
-        self.xr_total = xr.open_dataset(self.savepath + dataread_file).load()
-        self.dataread_file = dataread_file
-
-        # Region and Time variables
-        self.focus_region = reg
-        self.start_year_analysis = self.settings["params"]["start_year_analysis"]
-        self.analysis_timeframe = np.arange(self.start_year_analysis, 2101)
-
-        # Historical emissions
-        if lulucf == "incl" and gas == "CO2":
-            self.emis_hist = self.xr_total.CO2_hist
-            self.emis_fut = self.xr_total.CO2_globe
-            self.emis_base = self.xr_total.CO2_base_incl
-        elif lulucf == "incl" and gas == "GHG":
-            self.emis_hist = self.xr_total.GHG_hist
-            self.emis_fut = self.xr_total.GHG_globe
-            self.emis_base = self.xr_total.GHG_base_incl
-        elif lulucf == "excl" and gas == "CO2":
-            self.emis_hist = self.xr_total.CO2_hist_excl
-            self.emis_fut = self.xr_total.CO2_globe_excl
-            self.emis_base = self.xr_total.CO2_base_excl
-        elif lulucf == "excl" and gas == "GHG":
-            self.emis_hist = self.xr_total.GHG_hist_excl
-            self.emis_fut = self.xr_total.GHG_globe_excl
-            self.emis_base = self.xr_total.GHG_base_excl
-        self.rbw = xr.open_dataset(self.savepath + "xr_rbw_" + gas + "_" + lulucf + ".nc").load()
-        self.lulucf_indicator = lulucf
-        self.gas_indicator = "_" + gas
-
-        # Get dimension lists
-        self.dim_histstartyear = self.settings["dimension_ranges"]["hist_emissions_startyears"]
-        self.dim_discountrates = self.settings["dimension_ranges"]["discount_rates"]
-        self.dim_convyears = self.settings["dimension_ranges"]["convergence_years"]
-
-
-
-
-
-    # =========================================================== #
-    # =========================================================== #
-
-    def gdr(self):
-        """
-        Greenhouse Development Rights: Uses the Responsibility-Capability Index
-        (RCI) weighed at 50/50 to allocate the global budget
-        Calculations from van den Berg et al. (2020)
-        """
-        xr_rci = xr.open_dataset(self.settings["paths"]["data"]["datadrive"] + "xr_rci.nc").load()
-        yearfracs = xr.Dataset(
-            data_vars={
-                "Value": (
-                    ["Time"],
-                    (self.analysis_timeframe - 2030)
-                    / (self.settings["params"]["convergence_year_gdr"] - 2030),
-                )
-            },
-            coords={"Time": self.analysis_timeframe},
-        )
-
-        # Get the regional RCI values
-        # If region is EU, we have to sum over the EU countries
-        if self.focus_region != "EU":
-            rci_reg = xr_rci.rci.sel(Region=self.focus_region)
-        else:
-            df = pd.read_excel(
-                "X:/user/dekkerm/Data/UNFCCC_Parties_Groups_noeu.xlsx", sheet_name="Country groups"
+    # TODO if file does not exist, create it with world.save_rci() + @intermediate_file decorator
+    xr_rci_path = config.config.paths.output / "xr_rci.nc"
+    xr_rci = xr.open_dataset(xr_rci_path).load()
+    yearfracs = xr.Dataset(
+        data_vars={
+            "Value": (
+                ["Time"],
+                (analysis_timeframe - 2030)
+                / (convergence_year_gdr - 2030),
             )
-            countries_iso = np.array(df["Country ISO Code"])
-            group_eu = countries_iso[np.array(df["EU"]) == 1]
-            rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim="Region")
+        },
+        coords={"Time": analysis_timeframe},
+    )
 
-        # Compute GDR until 2030
-        baseline = self.emis_base
-        global_traject = self.emis_fut
-
-        gdr = (
-            baseline.sel(Region=self.focus_region)
-            - (baseline.sel(Region="EARTH") - global_traject) * rci_reg
+    # Get the regional RCI values
+    # If region is EU, we have to sum over the EU countries
+    if focus_region != "EU":
+        rci_reg = xr_rci.rci.sel(Region=focus_region)
+    else:
+        fn = config.config.paths.input / "UNFCCC_Parties_Groups_noeu.xlsx"
+        df = pd.read_excel(
+            fn, sheet_name="Country groups"
         )
-        gdr = gdr.rename("Value")
+        countries_iso = np.array(df["Country ISO Code"])
+        group_eu = countries_iso[np.array(df["EU"]) == 1]
+        rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim="Region")
 
-        # GDR Post 2030
-        # Calculate the baseline difference
-        baseline_earth = baseline.sel(Region="EARTH", Time=self.analysis_timeframe)
-        global_traject_time = global_traject.sel(Time=self.analysis_timeframe)
-        baseline_diff = baseline_earth - global_traject_time
+    # Compute GDR until 2030
+    emission_data, scenarios = load_emissions(config.config)
+    emis_base_var = config2base_var(config)
+    emis_base = emission_data[emis_base_var]
+    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    baseline = emis_base
+    global_traject = emis_fut
 
-        rci_2030 = baseline_diff * rci_reg.sel(Time=2030)
-        part1 = (1 - yearfracs) * (baseline.sel(Region=self.focus_region) - rci_2030)
-        part2 = yearfracs * self.xr_total.AP.sel(Time=self.analysis_timeframe)
-        gdr_post2030 = (part1 + part2).sel(Time=np.arange(2031, 2101))
+    gdr = (
+        baseline.sel(Region=focus_region)
+        - (baseline.sel(Region="EARTH") - global_traject) * rci_reg
+    )
+    gdr = gdr.rename("Value")
 
-        gdr_total = xr.merge([gdr, gdr_post2030])
-        gdr_total = gdr_total.rename({"Value": "GDR"})
-        self.xr_total = self.xr_total.assign(GDR=gdr_total.GDR)
-        xr_rci.close()
+    # GDR Post 2030
+    # Calculate the baseline difference
+    baseline_earth = baseline.sel(Region="EARTH", Time=analysis_timeframe)
+    global_traject_time = global_traject.sel(Time=analysis_timeframe)
+    baseline_diff = baseline_earth - global_traject_time
 
-    # =========================================================== #
-    # =========================================================== #
+    rci_2030 = baseline_diff * rci_reg.sel(Time=2030)
+    part1 = (1 - yearfracs) * (baseline.sel(Region=focus_region) - rci_2030)
+    part2 = yearfracs * ap_da.sel(Time=analysis_timeframe)
+    gdr_post2030 = (part1 + part2).sel(Time=np.arange(2031, 2101))
+
+    gdr_total = xr.merge([gdr, gdr_post2030])
+    gdr_total = gdr_total.rename({"Value": "GDR"})
+    return gdr_total.GDR
 
 
 def save(config: AllocationConfig, 
@@ -765,8 +701,9 @@ if __name__ == "__main__":
     # pcb_da, pcb_lin_da = pcb(aconfig)
     # ecpc_da = ecpc(aconfig)
     ap_da = ap(aconfig)
-    print(ap_da)
-    # gdr_da = gdr(aconfig)
+    # print(ap_da)
+    gdr_da = gdr(aconfig, ap_da)
+    print(gdr_da)
     # save(
     #     config=aconfig,
     #     dss=dict(
