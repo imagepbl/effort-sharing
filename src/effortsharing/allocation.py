@@ -17,6 +17,7 @@ import yaml
 
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions
+from effortsharing.input.socioeconomics import load_socioeconomics
 from effortsharing.world import (
     determine_global_budgets,
     determine_global_co2_trajectories,
@@ -36,33 +37,7 @@ class AllocationConfig:
 # =========================================================== #
 # =========================================================== #
 
-
-def gf(config: AllocationConfig) -> xr.DataArray:
-    """
-    Grandfathering: Divide the global budget over the regions based on
-    their historical CO2 emissions
-    """
-    start_year_analysis= config.config.params.start_year_analysis
-    analysis_timeframe = np.arange(start_year_analysis, 2101)
-    
-
-    hist_var = ''
-    if config.lulucf == "incl" and config.gas == "GHG":
-        hist_var = "GHG_hist"
-    elif config.lulucf == "excl" and config.gas == "GHG":
-        hist_var = "GHG_hist_excl"
-    elif config.lulucf == "incl" and config.gas == "CO2":
-        hist_var = "CO2_hist"
-    elif config.lulucf == "excl" and config.gas == "CO2":
-        hist_var = "CO2_hist_excl"
-    else:
-        raise ValueError(
-            "Invalid combination of LULUCF and gas. "
-            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-        )
-    emission_data, scenarios = load_emissions(config.config)
-
-    # TODO wrap into load_global_co2_trajectories() for reuse
+def load_future_emissions(config, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config.config)
     (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
         config, emission_data, scenarios, xr_temperatures
@@ -92,6 +67,19 @@ def gf(config: AllocationConfig) -> xr.DataArray:
             "Invalid combination of LULUCF and gas. "
             "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
         )
+    emis_fut = all_projected_gases[globe_var]
+    return emis_fut
+
+def gf(config: AllocationConfig) -> xr.DataArray:
+    """
+    Grandfathering: Divide the global budget over the regions based on
+    their historical CO2 emissions
+    """
+    start_year_analysis= config.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
+    emis_fut = load_future_emissions(config, emission_data, scenarios)
 
     # Calculating the current CO2 fraction for region and world based on start_year_analysis
     current_co2_region = emission_data[hist_var].sel(Region=config.region, Time=start_year_analysis)
@@ -101,10 +89,61 @@ def gf(config: AllocationConfig) -> xr.DataArray:
     co2_fraction = current_co2_region / current_co2_earth
 
     # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
-    emis_fut = all_projected_gases[globe_var].sel(Time=analysis_timeframe)
-    xr_new_co2 = (co2_fraction * emis_fut)
+    xr_new_co2 = (co2_fraction * emis_fut.sel(Time=analysis_timeframe))
 
     return xr_new_co2
+
+def load_emissions_and_scenarios(config):
+    hist_var = ''
+    if config.lulucf == "incl" and config.gas == "GHG":
+        hist_var = "GHG_hist"
+    elif config.lulucf == "excl" and config.gas == "GHG":
+        hist_var = "GHG_hist_excl"
+    elif config.lulucf == "incl" and config.gas == "CO2":
+        hist_var = "CO2_hist"
+    elif config.lulucf == "excl" and config.gas == "CO2":
+        hist_var = "CO2_hist_excl"
+    else:
+        raise ValueError(
+            "Invalid combination of LULUCF and gas. "
+            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+        )
+    emission_data, scenarios = load_emissions(config.config)
+    return hist_var,emission_data,scenarios
+
+
+
+# =========================================================== #
+# =========================================================== #
+
+def pc(config: AllocationConfig) -> xr.DataArray:
+    """
+    Per Capita: Divide the global budget equally per capita
+    """
+    start_year_analysis= config.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+
+    socioeconomic_data = load_socioeconomics(config.config)
+    countries_iso_path = config.config.paths.output / "all_countries.npy"
+    countries_iso = np.load(
+            countries_iso_path, allow_pickle=True
+    )
+
+    pop_region = socioeconomic_data.sel(
+        Region=config.region, Time=start_year_analysis
+    ).Population
+    pop_earth = socioeconomic_data.sel(
+        Region=countries_iso, Time=start_year_analysis
+    ).Population.sum(dim=["Region"])
+    pop_fraction = pop_region / pop_earth
+
+    # Multiplying the global budget with the population fraction to create
+    # new allocation time series from start_year to 2101
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
+    emis_fut = load_future_emissions(config, emission_data, scenarios)
+
+    xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
+    return xr_new
 
 # =========================================================== #
 # CLASS OBJECT
@@ -176,26 +215,7 @@ class allocation:
 
 
 
-    # =========================================================== #
-    # =========================================================== #
 
-    def pc(self):
-        """
-        Per Capita: Divide the global budget equally per capita
-        """
-
-        pop_region = self.xr_total.sel(
-            Region=self.focus_region, Time=self.start_year_analysis
-        ).Population
-        pop_earth = self.xr_total.sel(
-            Region=self.countries_iso, Time=self.start_year_analysis
-        ).Population.sum(dim=["Region"])
-        pop_fraction = pop_region / pop_earth
-
-        # Multiplying the global budget with the population fraction to create
-        # new allocation time series from start_year to 2101
-        xr_new = (pop_fraction * self.emis_fut).sel(Time=self.analysis_timeframe)
-        self.xr_total = self.xr_total.assign(PC=xr_new)
 
     # =========================================================== #
     # =========================================================== #
