@@ -7,16 +7,109 @@
 # Put in packages that we need
 # =========================================================== #
 
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
 
+from effortsharing.config import Config
+from effortsharing.input.emissions import load_emissions
+from effortsharing.world import (
+    determine_global_budgets,
+    determine_global_co2_trajectories,
+    determine_global_nonco2_trajectories,
+    nonco2variation,
+)
+
+
+@dataclass
+class AllocationConfig:
+    config: Config
+    region: str
+    gas: Literal["CO2", "GHG"] = "GHG"
+    lulucf: Literal["incl", "excl"] = "incl"
+
+
+# =========================================================== #
+# =========================================================== #
+
+
+def gf(config: AllocationConfig) -> xr.DataArray:
+    """
+    Grandfathering: Divide the global budget over the regions based on
+    their historical CO2 emissions
+    """
+    start_year_analysis= config.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+    
+
+    hist_var = ''
+    if config.lulucf == "incl" and config.gas == "GHG":
+        hist_var = "GHG_hist"
+    elif config.lulucf == "excl" and config.gas == "GHG":
+        hist_var = "GHG_hist_excl"
+    elif config.lulucf == "incl" and config.gas == "CO2":
+        hist_var = "CO2_hist"
+    elif config.lulucf == "excl" and config.gas == "CO2":
+        hist_var = "CO2_hist_excl"
+    else:
+        raise ValueError(
+            "Invalid combination of LULUCF and gas. "
+            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+        )
+    emission_data, scenarios = load_emissions(config.config)
+
+    # TODO wrap into load_global_co2_trajectories() for reuse
+    xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config.config)
+    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
+        config, emission_data, scenarios, xr_temperatures
+    )
+    _, xr_co2_budgets = determine_global_budgets(
+        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
+    )
+    (all_projected_gases,) = determine_global_co2_trajectories(
+        config=config.config,
+        emmissions=emission_data,
+        scenarios=scenarios,
+        xr_temperatures=xr_temperatures,
+        xr_co2_budgets=xr_co2_budgets,
+        xr_traj_nonco2=xr_traj_nonco2,
+    )
+    globe_var = ''
+    if config.lulucf == "incl" and config.gas == "GHG":
+        globe_var = "GHG_globe"
+    elif config.lulucf == "excl" and config.gas == "GHG":
+        globe_var = "GHG_globe_excl"
+    elif config.lulucf == "incl" and config.gas == "CO2":
+        globe_var = "CO2_globe"
+    elif config.lulucf == "excl" and config.gas == "CO2":
+        globe_var = "CO2_globe_excl"
+    else:
+        raise ValueError(
+            "Invalid combination of LULUCF and gas. "
+            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+        )
+
+    # Calculating the current CO2 fraction for region and world based on start_year_analysis
+    current_co2_region = emission_data[hist_var].sel(Region=config.region, Time=start_year_analysis)
+
+    current_co2_earth = 1e-9 + emission_data[hist_var].sel(Region="EARTH", Time=start_year_analysis)
+
+    co2_fraction = current_co2_region / current_co2_earth
+
+    # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
+    emis_fut = all_projected_gases[globe_var].sel(Time=analysis_timeframe)
+    xr_new_co2 = (co2_fraction * emis_fut)
+
+    return xr_new_co2
+
 # =========================================================== #
 # CLASS OBJECT
 # =========================================================== #
+
 
 
 class allocation:
@@ -81,29 +174,7 @@ class allocation:
         self.dim_discountrates = self.settings["dimension_ranges"]["discount_rates"]
         self.dim_convyears = self.settings["dimension_ranges"]["convergence_years"]
 
-    # =========================================================== #
-    # =========================================================== #
 
-    def gf(self):
-        """
-        Grandfathering: Divide the global budget over the regions based on
-        their historical CO2 emissions
-        """
-
-        # Calculating the current CO2 fraction for region and world based on start_year_analysis
-        current_co2_region = self.emis_hist.sel(
-            Region=self.focus_region, Time=self.start_year_analysis
-        )
-
-        current_co2_earth = 1e-9 + self.emis_hist.sel(Region="EARTH", Time=self.start_year_analysis)
-
-        co2_fraction = current_co2_region / current_co2_earth
-
-        # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
-        xr_new_co2 = (co2_fraction * self.emis_fut).sel(Time=self.analysis_timeframe)
-
-        # Adds the new CO2 time series to the xr_total dataset
-        self.xr_total = self.xr_total.assign(GF=xr_new_co2)
 
     # =========================================================== #
     # =========================================================== #
@@ -535,34 +606,59 @@ class allocation:
     # =========================================================== #
     # =========================================================== #
 
-    def save(self):
-        """
-        Extract variables from xr_total dataset and save allocation data to a NetCDF file
-        """
-        foldername = "Allocations" + self.gas_indicator + "_" + self.lulucf_indicator
-        savename = "xr_alloc_" + self.focus_region + ".nc"
-        if self.dataread_file != "xr_dataread.nc":
-            savename = "xr_alloc_" + self.focus_region + "_adapt.nc"
-        savepath = self.savepath + foldername + "/" + savename
 
-        xr_total_onlyalloc = (
-            self.xr_total[["GF", "PC", "PCC", "ECPC", "AP", "GDR", "PCB", "PCB_lin"]]
-            .sel(Time=np.arange(self.settings["params"]["start_year_analysis"], 2101))
+def save(config: AllocationConfig, 
+         dss: dict[str, xr.DataArray]
+         ):
+    """
+    Combine data arrays returned by each allocation method into a NetCDF file
+    """
+    fn = f"xr_alloc_{config.region}.nc"
+    # TODO refactor or remove?
+    # if self.dataread_file != "xr_dataread.nc":
+    #     savename = "xr_alloc_" + self.focus_region + "_adapt.nc"
+    save_path = config.config.paths.output / f"Allocations_{config.gas}_{config.lulucf}" / fn
+
+    start_year_analysis = config.config.params.start_year_analysis
+    # TODO move to config.config.params
+    end_year_analysis = 2101
+
+    combined = (
+        xr.Dataset(data_vars=dss)
+            .sel(Time=np.arange(start_year_analysis, end_year_analysis))
             .astype("float32")
-        )
-        xr_total_onlyalloc.to_netcdf(savepath, format="NETCDF4")
-        self.xr_alloc = xr_total_onlyalloc
-        self.xr_total.close()
+    )
+    combined.to_netcdf(save_path, format="NETCDF4")
 
+
+        
 
 if __name__ == "__main__":
     region = input("Choose a focus country or region: ")
-    allocator = allocation(region)
-    allocator.gf()
-    allocator.pc()
-    allocator.pcc()
-    allocator.pcb()
-    allocator.ecpc()
-    allocator.ap()
-    allocator.gdr()
-    allocator.save()
+    config = Config.from_file("config.yml")
+    aconfig = AllocationConfig(
+        config=config,
+        region=region,
+        gas="GHG",
+        lulucf="incl"
+    )
+    gf_da = gf(aconfig)
+    pc_da = pc(aconfig)
+    pcc_da = pcc(aconfig)
+    pcb_da, pcb_lin_da = pcb(aconfig)
+    ecpc_da = ecpc(aconfig)
+    ap_da = ap(aconfig)
+    gdr_da = gdr(aconfig)
+    save(
+        config=aconfig,
+        dss=dict(
+            gf=gf_da,
+            pc=pc_da,
+            pcc=pcc_da,
+            pcb=pcb_da,
+            ecpc=ecpc_da,
+            ap=ap_da,
+            gdr=gdr_da,
+        )
+    )
+
