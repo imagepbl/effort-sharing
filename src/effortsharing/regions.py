@@ -37,8 +37,8 @@ ADDITIONAL_REGIONS_HDI = {
     "Bahamas": "BHS",
     "Bolivia (Plurinational State of)": "BOL",
     "Cabo Verde": "CPV",
-    # "China": "CHN",  # TODO: check which one it should be
-    "China": "TWN",
+    "China": "CHN",
+    # "China": "TWN",    # TODO: maybe map Taiwan as well, but currently not in countries_iso
     "Congo (Democratic Republic of the)": "COD",
     "Congo": "COG",
     "Czechia": "CZE",
