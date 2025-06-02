@@ -37,66 +37,67 @@ class AllocationConfig:
 # =========================================================== #
 # =========================================================== #
 
-def config2base_var(config: AllocationConfig) -> Literal['CO2_base_incl', 'CO2_base_excl',
+# TODO move config@_var elsewhere. 
+
+def config2base_var(aconfig: AllocationConfig) -> Literal['CO2_base_incl', 'CO2_base_excl',
                                                             'GHG_base_incl', 'GHG_base_excl']:
-    base_var = ''
-    if config.lulucf == "incl" and config.gas == "CO2":
-        base_var = "CO2_base_incl"
-    elif config.lulucf == "incl" and config.gas == "GHG":
-        base_var = "GHG_base_incl"
-    elif config.lulucf == "excl" and config.gas == "CO2":
-        base_var = "CO2_base_excl"
-    elif config.lulucf == "excl" and config.gas == "GHG":
-        base_var = "GHG_base_excl"
-    else:
-        raise ValueError(
-            "Invalid combination of LULUCF and gas. "
-            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-        )
-    return base_var
+    if aconfig.lulucf == "incl" and aconfig.gas == "CO2":
+        return "CO2_base_incl"
+    elif aconfig.lulucf == "incl" and aconfig.gas == "GHG":
+        return "GHG_base_incl"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "CO2":
+        return "CO2_base_excl"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "GHG":
+        return "GHG_base_excl"
+    raise ValueError(
+        "Invalid combination of LULUCF and gas. "
+        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+    )
 
-def config2hist_var(config: AllocationConfig) -> Literal['GHG_hist', 'GHG_hist_excl', 
+
+def config2hist_var(aconfig: AllocationConfig) -> Literal['GHG_hist', 'GHG_hist_excl', 
                                                          'CO2_hist', 'CO2_hist_excl']:
-    hist_var = ''
-    if config.lulucf == "incl" and config.gas == "GHG":
-        hist_var = "GHG_hist"
-    elif config.lulucf == "excl" and config.gas == "GHG":
-        hist_var = "GHG_hist_excl"
-    elif config.lulucf == "incl" and config.gas == "CO2":
-        hist_var = "CO2_hist"
-    elif config.lulucf == "excl" and config.gas == "CO2":
-        hist_var = "CO2_hist_excl"
-    else:
-        raise ValueError(
-            "Invalid combination of LULUCF and gas. "
-            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-        )
-    return hist_var
-
-def load_emissions_and_scenarios(config: AllocationConfig):
-    hist_var = config2hist_var(config)
-    emission_data, scenarios = load_emissions(config.config)
-    return hist_var,emission_data,scenarios
+    if aconfig.lulucf == "incl" and aconfig.gas == "GHG":
+        return "GHG_hist"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "GHG":
+        return "GHG_hist_excl"
+    elif aconfig.lulucf == "incl" and aconfig.gas == "CO2":
+        return "CO2_hist"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "CO2":
+        return "CO2_hist_excl"
+    raise ValueError(
+        "Invalid combination of LULUCF and gas. "
+        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+    )
 
 
-def load_future_emissions(config: AllocationConfig, emission_data, scenarios):
-    all_projected_gases = load_global_co2_trajectories(config.config, emission_data, scenarios)
-    globe_var = ''
-    if config.lulucf == "incl" and config.gas == "GHG":
-        globe_var = "GHG_globe"
-    elif config.lulucf == "excl" and config.gas == "GHG":
-        globe_var = "GHG_globe_excl"
-    elif config.lulucf == "incl" and config.gas == "CO2":
-        globe_var = "CO2_globe"
-    elif config.lulucf == "excl" and config.gas == "CO2":
-        globe_var = "CO2_globe_excl"
-    else:
-        raise ValueError(
-            "Invalid combination of LULUCF and gas. "
-            "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-        )
-    emis_fut = all_projected_gases[globe_var]
-    return emis_fut
+def config2globe_var(aconfig: AllocationConfig) -> Literal['GHG_globe', 'GHG_globe_excl',
+                                                            'CO2_globe', 'CO2_globe_excl']:
+    if aconfig.lulucf == "incl" and aconfig.gas == "GHG":
+        return "GHG_globe"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "GHG":
+        return "GHG_globe_excl"
+    elif aconfig.lulucf == "incl" and aconfig.gas == "CO2":
+        return "CO2_globe"
+    elif aconfig.lulucf == "excl" and aconfig.gas == "CO2":
+        return "CO2_globe_excl"
+    raise ValueError(
+        "Invalid combination of LULUCF and gas. "
+        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
+    )
+
+# TODO Move load functions elsewhere
+
+def load_emissions_and_scenarios(aconfig: AllocationConfig):
+    hist_var = config2hist_var(aconfig)
+    emission_data, scenarios = load_emissions(aconfig.config)
+    return hist_var, emission_data, scenarios
+
+
+def load_future_emissions(aconfig: AllocationConfig, emission_data, scenarios):
+    all_projected_gases = load_global_co2_trajectories(aconfig.config, emission_data, scenarios)
+    globe_var = config2globe_var(aconfig)
+    return all_projected_gases[globe_var]
 
 def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
@@ -117,29 +118,6 @@ def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     
     return all_projected_gases
 
-def gf(config: AllocationConfig) -> xr.DataArray:
-    """
-    Grandfathering: Divide the global budget over the regions based on
-    their historical CO2 emissions
-    """
-    start_year_analysis= config.config.params.start_year_analysis
-    analysis_timeframe = np.arange(start_year_analysis, 2101)
-
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
-    emis_fut = load_future_emissions(config, emission_data, scenarios)
-
-    # Calculating the current CO2 fraction for region and world based on start_year_analysis
-    current_co2_region = emission_data[hist_var].sel(Region=config.region, Time=start_year_analysis)
-
-    current_co2_earth = 1e-9 + emission_data[hist_var].sel(Region="EARTH", Time=start_year_analysis)
-
-    co2_fraction = current_co2_region / current_co2_earth
-
-    # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
-    xr_new_co2 = (co2_fraction * emis_fut.sel(Time=analysis_timeframe))
-
-    return xr_new_co2
-
 
 def load_dataread(config: Config) -> xr.Dataset:
     start_year_analysis= config.params.start_year_analysis
@@ -157,22 +135,50 @@ def load_population(config: Config) -> xr.DataArray:
     return socioeconomic_data.Population
 
 # =========================================================== #
+# allocation methods
 # =========================================================== #
 
-def pc(config: AllocationConfig) -> xr.DataArray:
+def gf(aconfig: AllocationConfig) -> xr.DataArray:
+    """
+    Grandfathering: Divide the global budget over the regions based on
+    their historical CO2 emissions
+    """
+    start_year_analysis= aconfig.config.params.start_year_analysis
+    analysis_timeframe = np.arange(start_year_analysis, 2101)
+
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(aconfig)
+    emis_fut = load_future_emissions(aconfig, emission_data, scenarios)
+
+    # Calculating the current CO2 fraction for region and world based on start_year_analysis
+    current_co2_region = emission_data[hist_var].sel(Region=aconfig.region, Time=start_year_analysis)
+
+    current_co2_earth = 1e-9 + emission_data[hist_var].sel(Region="EARTH", Time=start_year_analysis)
+
+    co2_fraction = current_co2_region / current_co2_earth
+
+    # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
+    xr_new_co2 = (co2_fraction * emis_fut.sel(Time=analysis_timeframe))
+
+    return xr_new_co2
+
+
+# =========================================================== #
+# =========================================================== #
+
+def pc(aconfig: AllocationConfig) -> xr.DataArray:
     """
     Per Capita: Divide the global budget equally per capita
     """
-    start_year_analysis= config.config.params.start_year_analysis
+    start_year_analysis= aconfig.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
-    population = load_population(config.config)
-    countries_iso_path = config.config.paths.output / "all_countries.npy"
+    population = load_population(aconfig.config)
+    countries_iso_path = aconfig.config.paths.output / "all_countries.npy"
     countries_iso = np.load(
             countries_iso_path, allow_pickle=True
     )
     pop_region = population.sel(
-        Region=config.region, Time=start_year_analysis
+        Region=aconfig.region, Time=start_year_analysis
     ).Population
     pop_earth = population.sel(
         Region=countries_iso, Time=start_year_analysis
@@ -181,8 +187,8 @@ def pc(config: AllocationConfig) -> xr.DataArray:
 
     # Multiplying the global budget with the population fraction to create
     # new allocation time series from start_year to 2101
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
-    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(aconfig)
+    emis_fut = load_future_emissions(aconfig, emission_data, scenarios)
 
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
     return xr_new
@@ -190,11 +196,11 @@ def pc(config: AllocationConfig) -> xr.DataArray:
 # =========================================================== #
 # =========================================================== #
 
-def pcc(config: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> xr.DataArray:
+def pcc(aconfig: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> xr.DataArray:
     """
     Per Capita Convergence: Grandfathering converging into per capita
     """
-    start_year_analysis= config.config.params.start_year_analysis
+    start_year_analysis= aconfig.config.params.start_year_analysis
 
     def transform_time(time, convyear):
         """
@@ -217,7 +223,7 @@ def pcc(config: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> x
     gfdeel = []
     pcdeel = []
 
-    dim_convyears = config.config.dimension_ranges.convergence_years
+    dim_convyears = aconfig.config.dimension_ranges.convergence_years
 
     times=np.arange(1850, 2101)
     for year in dim_convyears:
@@ -241,12 +247,12 @@ def pcc(config: AllocationConfig, gf_da: xr.DataArray, pc_da: xr.DataArray) -> x
 # =========================================================== #
 # =========================================================== #
 
-def pcb(config: AllocationConfig) -> xr.DataArray:
+def pcb(aconfig: AllocationConfig) -> xr.DataArray:
     """
     Per capita on a budget basis
     """
-    start_year= config.config.params.start_year_analysis
-    focus_region = config.region
+    start_year= aconfig.config.params.start_year_analysis
+    focus_region = aconfig.region
 
     # co2 part
     def budget_harm(nz):
@@ -268,21 +274,21 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
 
         return path + budget_harm(netzeros) * f
 
-    population = load_population(config.config)
+    population = load_population(aconfig.config)
     pop_region = population.sel(Time=start_year)
     pop_earth = population.sel(Region="EARTH", Time=start_year)
     pop_fraction = (pop_region / pop_earth).mean(dim="Scenario")
 
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config)
-    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    hist_var, emission_data, scenarios = load_emissions_and_scenarios(aconfig)
+    emis_fut = load_future_emissions(aconfig, emission_data, scenarios)
     globalpath = emis_fut
 
     hist_var_co2, emission_data_co2, scenarios_co2 = load_emissions_and_scenarios(
         # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
         AllocationConfig(
-            config=config.config, 
-            region=config.region, 
-            lulucf=config.lulucf,
+            config=aconfig.config, 
+            region=aconfig.region, 
+            lulucf=aconfig.lulucf,
             gas="CO2",
         )
     )
@@ -299,7 +305,7 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
         * pop_fraction
     ).sel(Region=focus_region)
 
-    xr_total = load_dataread(config.config)
+    xr_total = load_dataread(aconfig.config)
     co2_budget_left = (xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
 
     budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(
@@ -340,14 +346,14 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
     linear_co2_pos = linear_co2.where(linear_co2 > 0, 0).to_dataset(name="PCB_lin")
 
     # Now, if we want GHG, the non-CO2 part is added:
-    if config.gas == "GHG":
+    if aconfig.gas == "GHG":
         # Non-co2 part
         hist_var_ghg, emission_data_ghg, scenarios_ghg = load_emissions_and_scenarios(
             # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
             AllocationConfig(
-                config=config.config, 
-                region=config.region, 
-                lulucf=config.lulucf,
+                config=aconfig.config, 
+                region=aconfig.region, 
+                lulucf=aconfig.lulucf,
                 gas="GHG",
             )
         )
@@ -357,7 +363,7 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
 
         nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
         nonco2_globe = load_global_co2_trajectories(
-            config=config.config,
+            config=aconfig.config,
             emission_data=emission_data_ghg,
             scenarios=scenarios_ghg
         ).NonCO2_globe
@@ -383,7 +389,7 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
         nonco2_focus_region = nonco2_part.sel(Region=focus_region)
         ghg_pcb = pcb + nonco2_focus_region
         ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
-    elif config.gas == "_CO2":
+    elif aconfig.gas == "_CO2":
         # together:
         ghg_pcb = pcb
         ghg_pcb_lin = linear_co2_pos
@@ -397,26 +403,26 @@ def pcb(config: AllocationConfig) -> xr.DataArray:
 
 # =========================================================== #
 # =========================================================== #
-def ecpc(config: AllocationConfig) -> xr.DataArray:
+def ecpc(aconfig: AllocationConfig) -> xr.DataArray:
     """
     Equal Cumulative per Capita: Uses historical emissions, discount factors and
     population shares to allocate the global budget
     """
-    start_year_analysis= config.config.params.start_year_analysis
-    focus_region = config.region
-    dim_discountrates = config.config.dimension_ranges.discount_rates
-    dim_histstartyear = config.config.dimension_ranges.hist_emissions_startyears
-    dim_convyears = config.config.dimension_ranges.convergence_years
+    start_year_analysis= aconfig.config.params.start_year_analysis
+    focus_region = aconfig.region
+    dim_discountrates = aconfig.config.dimension_ranges.discount_rates
+    dim_histstartyear = aconfig.config.dimension_ranges.hist_emissions_startyears
+    dim_convyears = aconfig.config.dimension_ranges.convergence_years
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
     # Defining the timeframes for historical and future emissions
-    population_data = load_population(config.config)
+    population_data = load_population(aconfig.config)
     current_population_data = population_data.sel(Time=analysis_timeframe)
 
-    hist_var = config2hist_var(config)
-    emission_data, scenarios = load_emissions(config.config)
+    hist_var = config2hist_var(aconfig)
+    emission_data, scenarios = load_emissions(aconfig.config)
     global_emissions_future = load_future_emissions(AllocationConfig(
-        config=config.config,
+        config=aconfig.config,
         region=focus_region,
         lulucf='incl',
         gas='GHG'
@@ -539,27 +545,27 @@ def ecpc(config: AllocationConfig) -> xr.DataArray:
 # =========================================================== #
 # =========================================================== #
 
-def ap(config: AllocationConfig) -> xr.DataArray:
+def ap(aconfig: AllocationConfig) -> xr.DataArray:
     """
     Ability to Pay: Uses GDP per capita to allocate the global budget
     Equation from van den Berg et al. (2020)
     """
-    start_year_analysis= config.config.params.start_year_analysis
+    start_year_analysis= aconfig.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
-    focus_region = config.region
+    focus_region = aconfig.region
 
     # Step 1: Reductions before correction factor
     # TODO replace with load_socioeconomics() function
-    xrt = load_dataread(config.config).sel(Time=analysis_timeframe)
+    xrt = load_dataread(aconfig.config).sel(Time=analysis_timeframe)
     GDP_sum_w = xrt.GDP.sel(Region="EARTH")
     pop_sum_w = xrt.Population.sel(Region="EARTH")
     # Global average GDP per capita
     r1_nom = GDP_sum_w / pop_sum_w
 
-    emission_data, scenarios = load_emissions(config.config)
-    emis_base_var = config2base_var(config)
+    emission_data, scenarios = load_emissions(aconfig.config)
+    emis_base_var = config2base_var(aconfig)
     emis_base = emission_data[emis_base_var]
-    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    emis_fut = load_future_emissions(aconfig, emission_data, scenarios)
 
     base_worldsum = emis_base.sel(Time=analysis_timeframe).sel(Region="EARTH")
     rb_part1 = (
@@ -576,7 +582,7 @@ def ap(config: AllocationConfig) -> xr.DataArray:
 
     # Step 2: Correction factor
     # TODO replace open with load_rbw() function, will need to find where files are written
-    rbw_path = config.config.paths.output / f"startyear_{start_year_analysis}" / f"xr_rbw_{config.gas}_{config.lulucf}.nc"
+    rbw_path = aconfig.config.paths.output / f"startyear_{start_year_analysis}" / f"xr_rbw_{aconfig.gas}_{aconfig.lulucf}.nc"
     rbw = xr.open_dataset(rbw_path).load()
     corr_factor = (1e-9 + rbw.__xarray_dataarray_variable__) / (
         base_worldsum - emis_fut.sel(Time=analysis_timeframe)
@@ -591,19 +597,19 @@ def ap(config: AllocationConfig) -> xr.DataArray:
 # =========================================================== #
 # =========================================================== #
 
-def gdr(config: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
+def gdr(aconfig: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
     """
     Greenhouse Development Rights: Uses the Responsibility-Capability Index
     (RCI) weighed at 50/50 to allocate the global budget
     Calculations from van den Berg et al. (2020)
     """
-    start_year_analysis= config.config.params.start_year_analysis
+    start_year_analysis= aconfig.config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
-    focus_region = config.region
-    convergence_year_gdr = config.config.params.convergence_year_gdr
+    focus_region = aconfig.region
+    convergence_year_gdr = aconfig.config.params.convergence_year_gdr
 
     # TODO if file does not exist, create it with world.save_rci() + @intermediate_file decorator
-    xr_rci_path = config.config.paths.output / "xr_rci.nc"
+    xr_rci_path = aconfig.config.paths.output / "xr_rci.nc"
     xr_rci = xr.open_dataset(xr_rci_path).load()
     yearfracs = xr.Dataset(
         data_vars={
@@ -621,7 +627,7 @@ def gdr(config: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
     if focus_region != "EU":
         rci_reg = xr_rci.rci.sel(Region=focus_region)
     else:
-        fn = config.config.paths.input / "UNFCCC_Parties_Groups_noeu.xlsx"
+        fn = aconfig.config.paths.input / "UNFCCC_Parties_Groups_noeu.xlsx"
         df = pd.read_excel(
             fn, sheet_name="Country groups"
         )
@@ -630,10 +636,10 @@ def gdr(config: AllocationConfig, ap_da: xr.DataArray) -> xr.DataArray:
         rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim="Region")
 
     # Compute GDR until 2030
-    emission_data, scenarios = load_emissions(config.config)
-    emis_base_var = config2base_var(config)
+    emission_data, scenarios = load_emissions(aconfig.config)
+    emis_base_var = config2base_var(aconfig)
     emis_base = emission_data[emis_base_var]
-    emis_fut = load_future_emissions(config, emission_data, scenarios)
+    emis_fut = load_future_emissions(aconfig, emission_data, scenarios)
     baseline = emis_base
     global_traject = emis_fut
 
