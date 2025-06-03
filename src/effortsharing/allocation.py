@@ -91,6 +91,7 @@ def load_future_emissions(config: Config, emission_data, scenarios, gas: Gas, lu
     globe_var = config2globe_var(gas, lulucf)
     return all_projected_gases[globe_var]
 
+
 def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
     (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
@@ -115,7 +116,7 @@ def load_dataread(config: Config) -> xr.Dataset:
     start_year_analysis= config.params.start_year_analysis
     total_xr = xr.open_dataset(
         config.paths.output / f'startyear_{start_year_analysis}' / "xr_dataread.nc"
-    ).load()
+    )
     return total_xr
 
 def load_population(config: Config) -> xr.DataArray:
@@ -130,6 +131,30 @@ def load_population(config: Config) -> xr.DataArray:
 # =========================================================== #
 # allocation methods
 # =========================================================== #
+
+def allocation(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> dict[str, xr.DataArray]:
+    """
+    Run all allocation methods and return dict with key for each method and value as xr.DataArray
+    """
+    # TODO report progress with logger.info or tqdm
+    gf_da = gf(config, region, gas, lulucf)
+    pc_da = pc(config, region, gas, lulucf)
+    pcc_da = pcc(config=config, region=region, gas=gas, lulucf=lulucf, gf_da=gf_da, pc_da=pc_da)
+    pcb_da, pcb_lin_da = pcb(config, region, gas, lulucf)
+    ecpc_da = ecpc(config, region, gas, lulucf)
+    ap_da = ap(config, region, gas, lulucf)
+    gdr_da = gdr(config=config, region=region, gas=gas, lulucf=lulucf, ap_da=ap_da)
+
+    return dict(
+        gf=gf_da,
+        pc=pc_da,
+        pcc=pcc_da,
+        pcb=pcb_da,
+        pcb_lin=pcb_lin_da,
+        ecpc=ecpc_da,
+        ap=ap_da,
+        gdr=gdr_da,
+    )
 
 def gf(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
     """
@@ -173,7 +198,7 @@ def pc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
     )
     pop_region = population.sel(
         Region=region, Time=start_year_analysis
-    ).Population
+    )
     pop_earth = population.sel(
         Region=countries_iso, Time=start_year_analysis
     ).sum(dim=["Region"])
@@ -660,30 +685,6 @@ def gdr(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', ap_da
     gdr_total = gdr_total.rename({"Value": "GDR"})
     return gdr_total.GDR
 
-def allocation(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> dict[str, xr.DataArray]:
-    """
-    Run all allocation methods and return dict with key for each method and value as xr.DataArray
-    """
-    # TODO report progress with logger.info or tqdm
-    gf_da = gf(config, region, gas, lulucf)
-    pc_da = pc(config, region, gas, lulucf)
-    pcc_da = pcc(config=config, region=region, gas=gas, lulucf=lulucf, gf_da=gf_da, pc_da=pc_da)
-    pcb_da, pcb_lin_da = pcb(config, region, gas, lulucf)
-    ecpc_da = ecpc(config, region, gas, lulucf)
-    ap_da = ap(config, region, gas, lulucf)
-    gdr_da = gdr(config=config, region=region, gas=gas, lulucf=lulucf, ap_da=ap_da)
-
-    return dict(
-        gf=gf_da,
-        pc=pc_da,
-        pcc=pcc_da,
-        pcb=pcb_da,
-        pcb_lin=pcb_lin_da,
-        ecpc=ecpc_da,
-        ap=ap_da,
-        gdr=gdr_da,
-    )
-
 
 def save(config: Config, 
          region: str,
@@ -705,7 +706,7 @@ def save(config: Config,
     end_year_analysis = 2101
 
     combined = (
-        xr.Dataset(data_vars=dss)
+        xr.Dataset(data_vars=dss, compat='override')
             .sel(Time=np.arange(start_year_analysis, end_year_analysis))
             .astype("float32")
     )
@@ -716,8 +717,8 @@ if __name__ == "__main__":
     # region = input("Choose a focus country or region: ")
     region = 'BRA'
     config = Config.from_file("notebooks/config.yml")
-    gas = 'GHG'
-    lulucf = 'incl'
+    gas: Gas = 'GHG'
+    lulucf: LULUCF = 'incl'
     gf_da = gf(config, region, gas, lulucf)
     pc_da = pc(config, region, gas, lulucf)
     pcc_da = pcc(config, region, gas, lulucf)
