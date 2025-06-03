@@ -1235,8 +1235,7 @@ def datareader_norway(config: Config, xr_total, xr_primap):
     )
 
 
-def main(config_file):
-    config = Config.from_file(config_file)
+def main(config: Config):
 
     import effortsharing as es
 
@@ -1297,12 +1296,17 @@ def main(config_file):
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
     from rich.logging import RichHandler
 
     # Set up logging
     logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
 
-    config_file = sys.argv[1]
-    main(config_file)
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process all input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    config = Config.from_file(args.config)
+    main(config)
