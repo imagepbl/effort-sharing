@@ -52,6 +52,8 @@ class Config:
 
     """
 
+    load_intermediate_files: bool
+    save_intermediate_files: bool
     paths: DataPaths
     params: Parameters
     dimension_ranges: DimensionRanges
@@ -73,6 +75,8 @@ class Config:
 
         # Forge settings into a new Config object
         return Config(
+            load_intermediate_files=config.get("load_intermediate_files", True),
+            save_intermediate_files=config.get("save_intermediate_files", True),
             paths=DataPaths(**paths),
             params=Parameters(**config.get("params")),
             dimension_ranges=DimensionRanges(**config.get("dimension_ranges")),

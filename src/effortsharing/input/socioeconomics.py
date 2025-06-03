@@ -20,14 +20,14 @@ import pandas as pd
 import xarray as xr
 
 import effortsharing.regions as _regions
-from effortsharing.config import Config
 from effortsharing.cache import intermediate_file
+from effortsharing.config import Config
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-# TODO: check why different from refactored version; fix; remove.
+@intermediate_file("ssps.nc")
 def read_ssps(config, regions):
     logger.info("Reading GDP and population data from SSPs")
 
@@ -333,4 +333,4 @@ if __name__ == "__main__":
 
     # Process socio-economic data and save to intermediate file
     # Note: `load_intermediate` argument is added by the decorator
-    load_socioeconomics(config, load_intermediate=False)
+    load_socioeconomics(config)
