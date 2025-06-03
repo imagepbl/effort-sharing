@@ -250,6 +250,8 @@ def read_un_population(config, countries) -> UNPopulation:
 def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
     print("- Read Human Development Index data")
 
+    import country_converter as coco
+
     # Define input
     data_root = config.paths.input
     hdi_file = "HDR21-22_Statistical_Annex_HDI_Table.xlsx"
@@ -260,32 +262,11 @@ def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
     df.loc[df.HDI == "..", "HDI"] = np.nan
 
     # Convert country to region ISO codes
-    def get_iso(x):
-        extended_countries = {**countries, **_regions.ADDITIONAL_REGIONS_HDI}
-        return extended_countries.get(x, "unknown")
-
-    df["Region"] = df.Country.map(get_iso)
-    df = df[~(df.Region == "unknown")]
+    df["Region"] = coco.convert(names=df.Country.values, to="ISO3")
+    df = df[~(df.Region == "not found")]
 
     # Prepare for conversion to xarray
     df = df.drop(columns="Country").set_index("Region")
-
-    # Insert NaN countries (TODO: I think we could just skip this??)
-    # fmt: off
-    nan_countries = [
-        "ALA", "ASM", "AIA", "ABW", "BMU", "ANT", "SCG", "BES", "BVT", "IOT", "VGB",
-        "CYM", "CXR", "CCK", "COK", "CUW", "FLK", "FRO", "GUF", "PYF", "ATF", #"GMB",
-        "GIB", "GRL", "GLP", "GUM", "GGY", "HMD", "VAT", "IMN", "JEY", "MAC", "MTQ",
-        "MYT", "MSR", "NCL", "NIU", "NFK", "MNP", "PCN", "PRI", "REU", "BLM", "SHN",
-        "SPM", "SXM", "SGS", "MAF", "SJM", "TKL", "TCA", "UMI", "VIR", "WLF", "ESH",
-    ]
-    # fmt: on
-    df = pd.concat(
-        [
-            df,
-            pd.Series(index=nan_countries, name="HDI").rename_axis("Region"),
-        ]
-    )
 
     # Convert to xarray
     hdi = df.to_xarray().dropna("Region")
@@ -297,7 +278,6 @@ def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
         # missing in one of the terms (data will be NaN)
         hdi_sh = (hdi.HDI / hdi.HDI.sum() * pop_2019).to_dataset(name="HDIsh")
 
-    # TODO: add NaN entries for ISO codes from countries that are not available in HDI data
     return hdi, hdi_sh
 
 
@@ -2488,6 +2468,11 @@ def main(config_file):
     xr_ssp = read_ssps(config, regions=general.regions)
     un_pop = read_un_population(config, countries=general.countries)
     xr_hdi, xr_hdish = read_hdi(config, general.countries, un_pop)
+    xr_hdi_new, xr_hdish_new = read_hdi_refactor(config, general.countries, un_pop)
+    import IPython
+
+    IPython.embed()
+    quit()
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
     ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
     nonco2data = nonco2variation(config)
