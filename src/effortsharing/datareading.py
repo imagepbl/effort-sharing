@@ -105,51 +105,6 @@ def read_general(config: Config) -> General:
     return General(countries, regions)
 
 
-def read_ssps_refactor(config, regions):
-    """Read GDP and population data from SSPs."""
-    print("- Reading GDP and population data from SSPs")
-
-    # Define input
-    data_root = config.paths.input
-    filename = "SSPs_v2023.xlsx"
-
-    # Read data
-    df = pd.read_excel(data_root / filename, sheet_name="data")
-
-    # Filter for relevant models
-    df = df[(df.Model.isin(["OECD ENV-Growth 2023", "IIASA-WiC POP 2023"]))].drop(
-        columns=["Model", "Unit"]
-    )
-
-    # Convert year columns into row indexes
-    melted = df.melt(id_vars=["Scenario", "Region", "Variable"], var_name="Time")
-    melted["Time"] = melted["Time"].astype(int)
-
-    # Transform to xarray dataset
-    ds = melted.pivot(
-        index=["Scenario", "Region", "Time"], columns="Variable", values="value"
-    ).to_xarray()
-
-    # Split historical from future scenarios
-    hist = ds.sel(Scenario="Historical Reference", Time=slice(1980, 2020))
-    ds = ds.drop_sel(Scenario="Historical Reference")
-
-    # Substitute historical data into the corresponding years of each scenario
-    historical_expanded = hist.expand_dims(Scenario=ds.Scenario)
-    ds.loc[dict(Time=slice(1980, 2020))] = historical_expanded
-
-    # Rename variable
-    ds = ds.rename_vars({"GDP|PPP": "GDP"})
-
-    # Replace region names with ISO codes
-    region_lookup_table = {**regions, **_regions.ADDITIONAL_REGIONS_SSPS}
-    ds["Region"] = list(map(lambda name: region_lookup_table.get(name, "oeps"), ds.Region.values))
-    ds = ds.sortby(ds.Region)
-
-    return ds
-
-
-# TODO: check why different from refactored version; fix; remove.
 def read_ssps(config, regions):
     print("- Reading GDP and population data from SSPs")
 
@@ -245,40 +200,6 @@ def read_un_population(config, countries) -> UNPopulation:
     )
     xr_unp = xr_unp_long.sel(Time=np.arange(1850, 2000))
     return UNPopulation(xr_unp, xr_unp_long)
-
-
-def read_hdi_refactor(config, countries, unpopulation: UNPopulation):
-    print("- Read Human Development Index data")
-
-    import country_converter as coco
-
-    # Define input
-    data_root = config.paths.input
-    hdi_file = "HDR21-22_Statistical_Annex_HDI_Table.xlsx"
-
-    df = pd.read_excel(data_root / hdi_file, sheet_name="Rawdata")
-
-    # Convert missing data to NaN
-    df.loc[df.HDI == "..", "HDI"] = np.nan
-
-    # Convert country to region ISO codes
-    df["Region"] = coco.convert(names=df.Country.values, to="ISO3")
-    df = df[~(df.Region == "not found")]
-
-    # Prepare for conversion to xarray
-    df = df.drop(columns="Country").set_index("Region")
-
-    # Convert to xarray
-    hdi = df.to_xarray().dropna("Region")
-
-    # Add hdi_sh
-    pop_2019 = unpopulation.population_long.sel(Time=2019).Population.drop("Time")
-    with xr.set_options(arithmetic_join="outer"):
-        # "outer join" ensures that all regions are kept, even if they are
-        # missing in one of the terms (data will be NaN)
-        hdi_sh = (hdi.HDI / hdi.HDI.sum() * pop_2019).to_dataset(name="HDIsh")
-
-    return hdi, hdi_sh
 
 
 def read_hdi(config, countries, unpopulation):
@@ -2468,11 +2389,6 @@ def main(config_file):
     xr_ssp = read_ssps(config, regions=general.regions)
     un_pop = read_un_population(config, countries=general.countries)
     xr_hdi, xr_hdish = read_hdi(config, general.countries, un_pop)
-    xr_hdi_new, xr_hdish_new = read_hdi_refactor(config, general.countries, un_pop)
-    import IPython
-
-    IPython.embed()
-    quit()
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
     ar6data = read_ar6(config, xr_hist=jonesdata.xr_hist)
     nonco2data = nonco2variation(config)
