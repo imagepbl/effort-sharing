@@ -86,17 +86,10 @@ def config2globe_var(
 # TODO Move load functions elsewhere
 
 
-def load_emissions_and_scenarios(config: Config, gas: Gas, lulucf: LULUCF):
-    hist_var = config2hist_var(gas, lulucf)
-    emission_data, scenarios = load_emissions(config)
-    return hist_var, emission_data, scenarios
-
-
 def load_future_emissions(config: Config, emission_data, scenarios, gas: Gas, lulucf: LULUCF):
     all_projected_gases = load_global_co2_trajectories(config, emission_data, scenarios)
     globe_var = config2globe_var(gas, lulucf)
     return all_projected_gases[globe_var]
-
 
 
 def load_global_co2_trajectories(config: Config, emission_data, scenarios):
@@ -178,7 +171,8 @@ def gf(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     start_year_analysis = config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config, gas, lulucf)
+    emission_data, scenarios = load_emissions(config)
+    hist_var = config2hist_var(gas, lulucf)
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
 
     # Calculating the current CO2 fraction for region and world based on start_year_analysis
@@ -214,7 +208,7 @@ def pc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
 
     # Multiplying the global budget with the population fraction to create
     # new allocation time series from start_year to 2101
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config, gas, lulucf)
+    emission_data, scenarios = load_emissions(config)
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
 
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
@@ -319,18 +313,14 @@ def pcb(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr
     pop_earth = population.sel(Region="EARTH", Time=start_year)
     pop_fraction = (pop_region / pop_earth).mean(dim="Scenario")
 
-    hist_var, emission_data, scenarios = load_emissions_and_scenarios(config, gas, lulucf)
+    emission_data, scenarios = load_emissions(config)
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
     globalpath = emis_fut
 
-    hist_var_co2, emission_data_co2, scenarios_co2 = load_emissions_and_scenarios(
-        config,
-        # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
-        gas="CO2",
-        lulucf=lulucf,
-    )
-    emis_start_i = emission_data_co2[hist_var_co2].sel(Time=start_year)
-    emis_start_w = emission_data_co2[hist_var_co2].sel(Time=start_year, Region="EARTH")
+    # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
+    hist_var_co2 = config2hist_var(gas="CO2", lulucf=lulucf)
+    emis_start_i = emission_data[hist_var_co2].sel(Time=start_year)
+    emis_start_w = emission_data[hist_var_co2].sel(Time=start_year, Region="EARTH")
 
     time_range = np.arange(start_year, 2101)
     path_scaled_0 = (
@@ -363,7 +353,7 @@ def pcb(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr
         pcb = pcb_new_factor(pcb.PCB, budget_surplus).to_dataset(name="PCB")
 
     # CO2, but now linear
-    co2_hist = emission_data_co2[hist_var_co2].sel(Region=focus_region, Time=start_year)
+    co2_hist = emission_data[hist_var_co2].sel(Region=focus_region, Time=start_year)
     time_range = np.arange(start_year, 2101)
 
     nz = co2_budget_left * 2 / co2_hist + start_year - 1
@@ -380,19 +370,15 @@ def pcb(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr
     # Now, if we want GHG, the non-CO2 part is added:
     if gas == "GHG":
         # Non-co2 part
-        hist_var_ghg, emission_data_ghg, scenarios_ghg = load_emissions_and_scenarios(
-            config,
-            # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
-            gas="GHG",
-            lulucf=lulucf,
-        )
-        nonco2_current = emission_data_ghg[hist_var_ghg].sel(Time=start_year) - emission_data_co2[
+        # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
+        hist_var_ghg = config2hist_var(gas="GHG", lulucf=lulucf)
+        nonco2_current = emission_data[hist_var_ghg].sel(Time=start_year) - emission_data[
             hist_var_co2
         ].sel(Time=start_year)
 
         nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
         nonco2_globe = load_global_co2_trajectories(
-            config=config, emission_data=emission_data_ghg, scenarios=scenarios_ghg
+            config=config, emission_data=emission_data, scenarios=scenarios
         ).NonCO2_globe
         nonco2_part_gf = nonco2_fraction * nonco2_globe
 
@@ -540,7 +526,8 @@ def ecpc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> x
                     es.append(emissions_ecpc.expand_dims({"Time": [time_step]}))
 
             # TODO is coords='minimal' correct here? Without gave error:
-            # ValueError: 'Region' not present in all datasets and coords='different'. Either add 'Region' to datasets where it is missing or specify coords='minimal'.
+            # ValueError: 'Region' not present in all datasets and coords='different'.
+            #   Either add 'Region' to datasets where it is missing or specify coords='minimal'.
             xr_ecpc_alloc = xr.concat(es, dim="Time", coords="minimal")
             xr_ecpc_all_list.append(
                 xr_ecpc_alloc.expand_dims(
@@ -716,7 +703,7 @@ def save_allocations(
     save_path = dir / fn
 
     start_year_analysis = config.params.start_year_analysis
-    # TODO move to config.config.params
+    # TODO move to config.config.params?
     end_year_analysis = 2101
 
     combined = (
