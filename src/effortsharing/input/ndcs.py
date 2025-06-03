@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 import effortsharing.regions as _regions
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions
@@ -12,6 +13,7 @@ from effortsharing.input.emissions import load_emissions
 logger = logging.getLogger(__name__)
 
 
+@intermediate_file("ncd_CR.nc")
 def read_ndc_climateresource(config: Config, countries):
     logger.info("Reading NDC data from Climate resource")
 
@@ -97,6 +99,7 @@ def read_ndc_climateresource(config: Config, countries):
     return xr_ndc_CR
 
 
+@intermediate_file("ncd.nc")
 def read_ndc(config: Config, countries, xr_hist):
     logger.info("Reading NDC data")
 
@@ -173,6 +176,22 @@ def read_ndc(config: Config, countries, xr_hist):
     df_ndc = pd.DataFrame(dict_ndc)
     xr_ndc = xr.Dataset.from_dataframe(df_ndc.set_index(["Region", "Ambition", "Conditionality"]))
 
+    return xr_ndc
+
+
+# TODO: can we make this a variant of read_ndc? Seems to be the exact same code
+# except reading a different sheet.
+@intermediate_file("ncd_excl.nc")
+def read_ndc_excl(config: Config, countries, xr_hist):
+    logger.info("Reading NDC data excl")
+
+    data_root = config.paths.input
+    filename = "Infographics PBL NDC Tool 4Oct2024_for CarbonBudgetExplorer.xlsx"
+
+    # TODO: use package or better dict mapping method instead
+    countries_name = np.array(list(countries.keys()))
+    countries_iso = np.array(list(countries.values()))
+
     # Now for GHG excluding LULUCF
     df_ndc_raw = pd.read_excel(
         data_root / filename, sheet_name="Reduction All_GHG_excl", header=[0, 1]
@@ -241,11 +260,11 @@ def read_ndc(config: Config, countries, xr_hist):
         df_ndc.set_index(["Region", "Ambition", "Conditionality"])
     )
 
-    return xr_ndc, xr_ndc_excl
+    return xr_ndc_excl
 
 ########################
 
-
+@intermediate_file("ndcs.nc")
 def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
     """Collect NDC input data from various sources to intermediate file.
 
@@ -258,33 +277,17 @@ def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
     Returns:
         xarray.Dataset: NDC data
     """
-
-    save_path = config.paths.intermediate / "ndcs.nc"
-
-    # Check if we can load from intermediate file
-    if from_intermediate and save_path.exists():
-        logger.info(f"Loading NDC data from {save_path}")
-        return xr.load_dataset(save_path)
-
-    # Otherwise, process raw input files
     logger.info("Processing NDC input data")
 
     countries, regions = _regions.read_general(config)
 
-    xr_ndc, xr_ndc_excl = read_ndc(config, countries, xr_hist)
+    xr_ndc = read_ndc(config, countries, xr_hist)
+    xr_ndc_excl = read_ndc_excl(config, countries, xr_hist)
     xr_ndc_CR = read_ndc_climateresource(config, countries)
 
     # Merge datasets
     ncd_data = xr.merge([xr_ndc, xr_ndc_excl, xr_ndc_CR])
     # TODO: Reindex time and regions??
-
-    # Save to disk
-    if save:
-        logger.info(f"Saving NDC data to {save_path}")
-
-        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
-        ncd_data.to_netcdf(save_path)
-        # TODO: add compression
 
     return ncd_data
 
@@ -306,7 +309,7 @@ if __name__ == "__main__":
     config = Config.from_file(args.config)
 
     # Needs historical emission data as input, so first load that
-    emissions, scenarios = load_emissions(config, save=False)
+    emissions = load_emissions(config)
 
     # Process NDC data and save to intermediate file
-    load_ndcs(config, emissions, from_intermediate=False, save=True)
+    load_ndcs(config, emissions)
