@@ -141,7 +141,7 @@ def read_ndc(config: Config, countries, xr_hist):
     df_abs = []
     df_inv = []
     histemis = xr_hist.GHG_hist.sel(Time=2015)
-    for r in list(countries_iso) + ["EU"]:
+    for r in countries_iso.tolist() + ["EU"]:
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
@@ -223,7 +223,7 @@ def read_ndc_excl(config: Config, countries, xr_hist):
     df_abs = []
     df_inv = []
     histemis = xr_hist.GHG_hist.sel(Time=2015)
-    for r in list(countries_iso) + ["EU"]:
+    for r in countries_iso.tolist() + ["EU"]:
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
