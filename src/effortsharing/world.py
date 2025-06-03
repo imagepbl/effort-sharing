@@ -467,12 +467,11 @@ def determine_global_co2_trajectories(
     # Shorthand for often-used expressions
     start_year = config.params.start_year_analysis
 
-    # TODO: this can probably do without the rounding or casting to array
-    dim_temp = np.array(config.dimension_ranges.peak_temperature).astype(float).round(2)
-    dim_prob = np.array(config.dimension_ranges.risk_of_exceedance).round(2)
-    dim_nonco2 = np.array(config.dimension_ranges.non_co2_reduction).round(2)
-    dim_timing = np.array(config.dimension_ranges.timing_of_mitigation_action)
-    dim_negemis = np.array(config.dimension_ranges.negative_emissions).round(2)
+    dim_temp = config.dimension_ranges.peak_temperature
+    dim_prob = config.dimension_ranges.risk_of_exceedance
+    dim_nonco2 = config.dimension_ranges.non_co2_reduction
+    dim_timing = config.dimension_ranges.timing_of_mitigation_action
+    dim_negemis = config.dimension_ranges.negative_emissions
 
     # Initialize data arrays for co2
     startpoint = emissions.sel(Time=start_year, Region="EARTH").CO2_hist
@@ -535,6 +534,7 @@ def determine_global_co2_trajectories(
             attrs={"description": "Pathway data"},
         ),
     }
+
     # CO2 emissions from AR6
     xr_scen2_use = emissions.xr_ar6.sel(Variable="Emissions|CO2")
     xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101, 10))
@@ -607,26 +607,8 @@ def determine_global_co2_trajectories(
             else:
                 mslist = scenarios["Delayed"]
             ms2 = np.intersect1d(ms1, mslist)
-            emis2100_i = emis2100.sel(ModelScenario=ms2)
 
-            # The 90-percentile of 2100 emissions
-            ms_90 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
-                (emis2100_i >= emis2100_i.quantile(0.9 - 0.1))
-                & (emis2100_i <= emis2100_i.quantile(0.9 + 0.1))
-            ]
-
-            # The 50-percentile of 2100 emissions
-            ms_10 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
-                (emis2100_i >= emis2100_i.quantile(0.1 - 0.1))
-                & (emis2100_i <= emis2100_i.quantile(0.1 + 0.1))
-            ]
-
-            # Difference and smoothen this
-            surplus_factor = emis_all.sel(ModelScenario=np.intersect1d(ms_90, ms2)).mean(
-                dim="ModelScenario"
-            ) - emis_all.sel(ModelScenario=np.intersect1d(ms_10, ms2)).mean(dim="ModelScenario")
-            surplus_factor2 = np.convolve(surplus_factor, np.ones(3) / 3, mode="valid")
-            surplus_factor[1:-1] = surplus_factor2
+            surplus_factor = calculate_surplus_factor(emissions, emis_all, emis2100, ms2)
 
             for neg_i, neg in enumerate(dim_negemis):
                 xset = emis_all.sel(ModelScenario=ms2) - surplus_factor * (neg - 0.5)
@@ -661,9 +643,7 @@ def determine_global_co2_trajectories(
                                 * 1e3
                                 - pathway_final[pathway_final > 0].sum()
                             )
-                            pathway_final2 = np.array(
-                                (1e3 * (pathway_final + factor * budget_harm(nz))) / 1e3
-                            )
+                            pathway_final2 = (pathway_final + factor * budget_harm(nz)).values
 
                             try:
                                 nz = start_year + np.where(pathway_final2 <= 0)[0][0]
@@ -745,6 +725,29 @@ def determine_global_co2_trajectories(
         # xr_traj_co2_excl,  # TODO: not used. Remove?
         all_projected_gases,
     )
+
+def calculate_surplus_factor(emissions, emis_all, emis2100, ms2):
+    emis2100_i = emis2100.sel(ModelScenario=ms2)
+
+    # The 90-percentile of 2100 emissions
+    ms_90 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
+        (emis2100_i >= emis2100_i.quantile(0.9 - 0.1))
+        & (emis2100_i <= emis2100_i.quantile(0.9 + 0.1))
+    ]
+
+    # The 10-percentile of 2100 emissions
+    ms_10 = emissions.xr_ar6.sel(ModelScenario=ms2).ModelScenario[
+        (emis2100_i >= emis2100_i.quantile(0.1 - 0.1))
+        & (emis2100_i <= emis2100_i.quantile(0.1 + 0.1))
+    ]
+
+    # Difference and smoothen this
+    surplus_factor = emis_all.sel(ModelScenario=np.intersect1d(ms_90, ms2)).mean(
+        dim="ModelScenario"
+    ) - emis_all.sel(ModelScenario=np.intersect1d(ms_10, ms2)).mean(dim="ModelScenario")
+    surplus_factor2 = np.convolve(surplus_factor, np.ones(3) / 3, mode="valid")
+    surplus_factor[1:-1] = surplus_factor2
+    return surplus_factor
 
     # Merge all data into a single xrarray object
 
