@@ -29,10 +29,12 @@ LULUCF = Literal["incl", "excl"]
 # =========================================================== #
 # =========================================================== #
 
-# TODO move config2*_var elsewhere. 
+# TODO move config2*_var elsewhere.
 
-def config2base_var(gas: Gas, lulucf: LULUCF) -> Literal['CO2_base_incl', 'CO2_base_excl',
-                                                            'GHG_base_incl', 'GHG_base_excl']:
+
+def config2base_var(
+    gas: Gas, lulucf: LULUCF
+) -> Literal["CO2_base_incl", "CO2_base_excl", "GHG_base_incl", "GHG_base_excl"]:
     if lulucf == "incl" and gas == "CO2":
         return "CO2_base_incl"
     elif lulucf == "incl" and gas == "GHG":
@@ -47,8 +49,9 @@ def config2base_var(gas: Gas, lulucf: LULUCF) -> Literal['CO2_base_incl', 'CO2_b
     )
 
 
-def config2hist_var(gas: Gas, lulucf: LULUCF) -> Literal['GHG_hist', 'GHG_hist_excl', 
-                                                         'CO2_hist', 'CO2_hist_excl']:
+def config2hist_var(
+    gas: Gas, lulucf: LULUCF
+) -> Literal["GHG_hist", "GHG_hist_excl", "CO2_hist", "CO2_hist_excl"]:
     if lulucf == "incl" and gas == "GHG":
         return "GHG_hist"
     elif lulucf == "excl" and gas == "GHG":
@@ -63,8 +66,9 @@ def config2hist_var(gas: Gas, lulucf: LULUCF) -> Literal['GHG_hist', 'GHG_hist_e
     )
 
 
-def config2globe_var(gas: Gas, lulucf: LULUCF) -> Literal['GHG_globe', 'GHG_globe_excl',
-                                                            'CO2_globe', 'CO2_globe_excl']:
+def config2globe_var(
+    gas: Gas, lulucf: LULUCF
+) -> Literal["GHG_globe", "GHG_globe_excl", "CO2_globe", "CO2_globe_excl"]:
     if lulucf == "incl" and gas == "GHG":
         return "GHG_globe"
     elif lulucf == "excl" and gas == "GHG":
@@ -78,7 +82,9 @@ def config2globe_var(gas: Gas, lulucf: LULUCF) -> Literal['GHG_globe', 'GHG_glob
         "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
     )
 
+
 # TODO Move load functions elsewhere
+
 
 def load_emissions_and_scenarios(config: Config, gas: Gas, lulucf: LULUCF):
     hist_var = config2hist_var(gas, lulucf)
@@ -108,21 +114,22 @@ def load_global_co2_trajectories(config: Config, emission_data, scenarios):
         xr_co2_budgets=xr_co2_budgets,
         xr_traj_nonco2=xr_traj_nonco2,
     )
-    
+
     return all_projected_gases
 
 
 def load_dataread(config: Config) -> xr.Dataset:
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     total_xr = xr.open_dataset(
-        config.paths.output / f'startyear_{start_year_analysis}' / "xr_dataread.nc"
+        config.paths.output / f"startyear_{start_year_analysis}" / "xr_dataread.nc"
     )
     return total_xr
+
 
 def load_population(config: Config) -> xr.DataArray:
     socioeconomic_data = load_dataread(config)
     return socioeconomic_data.Population
-    # TODO find socioeconomic_data that has Time=2021 as socioeconomics.nc does not, 
+    # TODO find socioeconomic_data that has Time=2021 as socioeconomics.nc does not,
     # TODO and remove reading of xr_dataread.nc
     socioeconomic_data = load_socioeconomics(config.config)
     return socioeconomic_data.Population
@@ -132,7 +139,10 @@ def load_population(config: Config) -> xr.DataArray:
 # allocation methods
 # =========================================================== #
 
-def allocation(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> dict[str, xr.DataArray]:
+
+def allocation(
+    config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl"
+) -> dict[str, xr.DataArray]:
     """
     Run all allocation methods and return dict with key for each method and value as xr.DataArray
     """
@@ -156,12 +166,13 @@ def allocation(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl'
         gdr=gdr_da,
     )
 
-def gf(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
+
+def gf(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
     """
     Grandfathering: Divide the global budget over the regions based on
     their historical CO2 emissions
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
     hist_var, emission_data, scenarios = load_emissions_and_scenarios(config, gas, lulucf)
@@ -175,7 +186,7 @@ def gf(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
     co2_fraction = current_co2_region / current_co2_earth
 
     # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
-    xr_new_co2 = (co2_fraction * emis_fut.sel(Time=analysis_timeframe))
+    xr_new_co2 = co2_fraction * emis_fut.sel(Time=analysis_timeframe)
 
     return xr_new_co2
 
@@ -183,25 +194,20 @@ def gf(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
 # =========================================================== #
 # =========================================================== #
 
-def pc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
+
+def pc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
     """
     Per Capita: Divide the global budget equally per capita
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
     population = load_population(config)
     # TODO use function compute countries or read from file
     countries_iso_path = config.paths.output / "all_countries.npy"
-    countries_iso = np.load(
-            countries_iso_path, allow_pickle=True
-    )
-    pop_region = population.sel(
-        Region=region, Time=start_year_analysis
-    )
-    pop_earth = population.sel(
-        Region=countries_iso, Time=start_year_analysis
-    ).sum(dim=["Region"])
+    countries_iso = np.load(countries_iso_path, allow_pickle=True)
+    pop_region = population.sel(Region=region, Time=start_year_analysis)
+    pop_earth = population.sel(Region=countries_iso, Time=start_year_analysis).sum(dim=["Region"])
     pop_fraction = pop_region / pop_earth
 
     # Multiplying the global budget with the population fraction to create
@@ -212,15 +218,23 @@ def pc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
     return xr_new
 
+
 # =========================================================== #
 # =========================================================== #
 
-def pcc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', 
-        gf_da: xr.DataArray | None = None, pc_da: xr.DataArray | None= None) -> xr.DataArray:
+
+def pcc(
+    config: Config,
+    region,
+    gas: Gas = "GHG",
+    lulucf: LULUCF = "incl",
+    gf_da: xr.DataArray | None = None,
+    pc_da: xr.DataArray | None = None,
+) -> xr.DataArray:
     """
     Per Capita Convergence: Grandfathering converging into per capita
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     if gf_da is None:
         gf_da = gf(config, region, gas, lulucf)
     if pc_da is None:
@@ -249,15 +263,13 @@ def pcc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl',
 
     dim_convyears = config.dimension_ranges.convergence_years
 
-    times=np.arange(1850, 2101)
+    times = np.arange(1850, 2101)
     for year in dim_convyears:
         ar = np.array([transform_time(times, year)]).T
         coords = {"Time": times, "Convergence_year": [year]}
         dims = ["Time", "Convergence_year"]
         gfdeel.append(xr.DataArray(data=ar, dims=dims, coords=coords).to_dataset(name="PCC"))
-        pcdeel.append(
-            xr.DataArray(data=1 - ar, dims=dims, coords=coords).to_dataset(name="PCC")
-        )
+        pcdeel.append(xr.DataArray(data=1 - ar, dims=dims, coords=coords).to_dataset(name="PCC"))
 
     # Merging the list of DataArays into one Dataset
     gfdeel_single = xr.merge(gfdeel)
@@ -268,14 +280,16 @@ def pcc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl',
     xr_new = (gfdeel_single * gf_da + pcdeel_single * pc_da)["PCC"]
     return xr_new
 
+
 # =========================================================== #
 # =========================================================== #
 
-def pcb(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
+
+def pcb(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
     """
     Per capita on a budget basis
     """
-    start_year= config.params.start_year_analysis
+    start_year = config.params.start_year_analysis
     focus_region = region
 
     # co2 part
@@ -322,16 +336,13 @@ def pcb(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr
     )
 
     budget_left = (
-        emis_fut.where(emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time")
-        * pop_fraction
+        emis_fut.where(emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time") * pop_fraction
     ).sel(Region=focus_region)
     # TODO compute budget on the fly or read from file. Instead of reading xr_dataread.nc
     xr_total = load_dataread(config)
     co2_budget_left = (xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
 
-    budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(
-        dim="Time"
-    )
+    budget_without_assumptions_prepeak = path_scaled_0.where(path_scaled_0 > 0, 0).sum(dim="Time")
 
     budget_surplus = co2_budget_left - budget_without_assumptions_prepeak
     pcb = pcb_new_factor(path_scaled_0, budget_surplus).to_dataset(name="PCB")
@@ -358,9 +369,7 @@ def pcb(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr
 
     linear_co2 = (
         -coef
-        * xr.DataArray(
-            np.arange(0, 2101 - start_year), dims=["Time"], coords={"Time": time_range}
-        )
+        * xr.DataArray(np.arange(0, 2101 - start_year), dims=["Time"], coords={"Time": time_range})
         + co2_hist
     )
 
@@ -375,15 +384,13 @@ def pcb(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr
             gas="GHG",
             lulucf=lulucf,
         )
-        nonco2_current = emission_data_ghg[hist_var_ghg].sel(
-            Time=start_year
-        ) - emission_data_co2[hist_var_co2].sel(Time=start_year)
+        nonco2_current = emission_data_ghg[hist_var_ghg].sel(Time=start_year) - emission_data_co2[
+            hist_var_co2
+        ].sel(Time=start_year)
 
         nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
         nonco2_globe = load_global_co2_trajectories(
-            config=config,
-            emission_data=emission_data_ghg,
-            scenarios=scenarios_ghg
+            config=config, emission_data=emission_data_ghg, scenarios=scenarios_ghg
         ).NonCO2_globe
         nonco2_part_gf = nonco2_fraction * nonco2_globe
 
@@ -412,21 +419,19 @@ def pcb(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr
         ghg_pcb = pcb
         ghg_pcb_lin = linear_co2_pos
     else:
-        raise ValueError(
-            "Invalid gas type. Please use 'GHG' or 'CO2'."
-        )
+        raise ValueError("Invalid gas type. Please use 'GHG' or 'CO2'.")
 
     return ghg_pcb.PCB, ghg_pcb_lin.PCB_lin
 
 
 # =========================================================== #
 # =========================================================== #
-def ecpc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
+def ecpc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
     """
     Equal Cumulative per Capita: Uses historical emissions, discount factors and
     population shares to allocate the global budget
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     focus_region = region
     dim_discountrates = config.dimension_ranges.discount_rates
     dim_histstartyear = config.dimension_ranges.hist_emissions_startyears
@@ -441,16 +446,16 @@ def ecpc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> x
     emission_data, scenarios = load_emissions(config)
     global_emissions_future = load_future_emissions(
         config=config,
-        emission_data=emission_data, 
+        emission_data=emission_data,
         scenarios=scenarios,
-        lulucf='incl',
-        gas='GHG',
+        lulucf="incl",
+        gas="GHG",
     ).sel(Time=analysis_timeframe)
     GHG_hist = emission_data.GHG_hist
 
-    GF_frac = GHG_hist.sel(
-        Time=start_year_analysis, Region=focus_region
-    ) / GHG_hist.sel(Time=start_year_analysis, Region="EARTH")
+    GF_frac = GHG_hist.sel(Time=start_year_analysis, Region=focus_region) / GHG_hist.sel(
+        Time=start_year_analysis, Region="EARTH"
+    )
     share_popt = current_population_data / current_population_data.sel(Region="EARTH")
     share_popt_past = population_data / population_data.sel(Region="EARTH")
 
@@ -458,12 +463,10 @@ def ecpc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> x
 
     # Precompute reusable variables
     hist_emissions_timeframes = [
-        np.arange(startyear, 1 + start_year_analysis)
-        for startyear in dim_histstartyear
+        np.arange(startyear, 1 + start_year_analysis) for startyear in dim_histstartyear
     ]
     past_timelines = [
-        np.arange(startyear, start_year_analysis + 1)
-        for startyear in dim_histstartyear
+        np.arange(startyear, start_year_analysis + 1) for startyear in dim_histstartyear
     ]
     discount_factors = np.array(dim_discountrates)
 
@@ -536,7 +539,7 @@ def ecpc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> x
 
             # TODO is coords='minimal' correct here? Without gave error:
             # ValueError: 'Region' not present in all datasets and coords='different'. Either add 'Region' to datasets where it is missing or specify coords='minimal'.
-            xr_ecpc_alloc = xr.concat(es, dim="Time", coords='minimal')
+            xr_ecpc_alloc = xr.concat(es, dim="Time", coords="minimal")
             xr_ecpc_all_list.append(
                 xr_ecpc_alloc.expand_dims(
                     {"Historical_startyear": [startyear], "Convergence_year": [conv_year]}
@@ -564,12 +567,13 @@ def ecpc(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> x
 # =========================================================== #
 # =========================================================== #
 
-def ap(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.DataArray:
+
+def ap(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
     """
     Ability to Pay: Uses GDP per capita to allocate the global budget
     Equation from van den Berg et al. (2020)
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
     focus_region = region
 
@@ -582,15 +586,13 @@ def ap(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
     r1_nom = GDP_sum_w / pop_sum_w
 
     emission_data, scenarios = load_emissions(config)
-    emis_base_var = config2base_var(gas,lulucf)
+    emis_base_var = config2base_var(gas, lulucf)
     emis_base = emission_data[emis_base_var]
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
 
     base_worldsum = emis_base.sel(Time=analysis_timeframe).sel(Region="EARTH")
     rb_part1 = (
-        xrt.GDP.sel(Region=focus_region)
-        / xrt.Population.sel(Region=focus_region)
-        / r1_nom
+        xrt.GDP.sel(Region=focus_region) / xrt.Population.sel(Region=focus_region) / r1_nom
     ) ** (1 / 3.0)
     rb_part2 = (
         emis_base.sel(Time=analysis_timeframe).sel(Region=focus_region)
@@ -601,7 +603,9 @@ def ap(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
 
     # Step 2: Correction factor
     # TODO replace open with load_rbw() function, will need to find where files are written
-    rbw_path = config.paths.output / f"startyear_{start_year_analysis}" / f"xr_rbw_{gas}_{lulucf}.nc"
+    rbw_path = (
+        config.paths.output / f"startyear_{start_year_analysis}" / f"xr_rbw_{gas}_{lulucf}.nc"
+    )
     rbw = xr.open_dataset(rbw_path).load()
     corr_factor = (1e-9 + rbw.__xarray_dataarray_variable__) / (
         base_worldsum - emis_fut.sel(Time=analysis_timeframe)
@@ -613,16 +617,24 @@ def ap(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl') -> xr.
     ap = ap.sel(Time=analysis_timeframe)
     return ap
 
+
 # =========================================================== #
 # =========================================================== #
 
-def gdr(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', ap_da: xr.DataArray | None = None) -> xr.DataArray:
+
+def gdr(
+    config: Config,
+    region,
+    gas: Gas = "GHG",
+    lulucf: LULUCF = "incl",
+    ap_da: xr.DataArray | None = None,
+) -> xr.DataArray:
     """
     Greenhouse Development Rights: Uses the Responsibility-Capability Index
     (RCI) weighed at 50/50 to allocate the global budget
     Calculations from van den Berg et al. (2020)
     """
-    start_year_analysis= config.params.start_year_analysis
+    start_year_analysis = config.params.start_year_analysis
     analysis_timeframe = np.arange(start_year_analysis, 2101)
     focus_region = region
     convergence_year_gdr = config.params.convergence_year_gdr
@@ -636,8 +648,7 @@ def gdr(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', ap_da
         data_vars={
             "Value": (
                 ["Time"],
-                (analysis_timeframe - 2030)
-                / (convergence_year_gdr - 2030),
+                (analysis_timeframe - 2030) / (convergence_year_gdr - 2030),
             )
         },
         coords={"Time": analysis_timeframe},
@@ -649,9 +660,7 @@ def gdr(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', ap_da
         rci_reg = xr_rci.rci.sel(Region=focus_region)
     else:
         fn = config.paths.input / "UNFCCC_Parties_Groups_noeu.xlsx"
-        df = pd.read_excel(
-            fn, sheet_name="Country groups"
-        )
+        df = pd.read_excel(fn, sheet_name="Country groups")
         countries_iso = np.array(df["Country ISO Code"])
         group_eu = countries_iso[np.array(df["EU"]) == 1]
         rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim="Region")
@@ -686,12 +695,13 @@ def gdr(config: Config, region, gas: Gas = 'GHG', lulucf: LULUCF = 'incl', ap_da
     return gdr_total.GDR
 
 
-def save(config: Config, 
-         region: str,
-         dss: dict[str, xr.DataArray],
-         gas: Gas = 'GHG',
-        lulucf: LULUCF = 'incl',
-         ):
+def save(
+    config: Config,
+    region: str,
+    dss: dict[str, xr.DataArray],
+    gas: Gas = "GHG",
+    lulucf: LULUCF = "incl",
+):
     """
     Combine data arrays returned by each allocation method into a NetCDF file
     """
@@ -706,19 +716,19 @@ def save(config: Config,
     end_year_analysis = 2101
 
     combined = (
-        xr.Dataset(data_vars=dss, compat='override')
-            .sel(Time=np.arange(start_year_analysis, end_year_analysis))
-            .astype("float32")
+        xr.Dataset(data_vars=dss, compat="override")
+        .sel(Time=np.arange(start_year_analysis, end_year_analysis))
+        .astype("float32")
     )
     combined.to_netcdf(save_path, format="NETCDF4")
-        
+
 
 if __name__ == "__main__":
     # region = input("Choose a focus country or region: ")
-    region = 'BRA'
+    region = "BRA"
     config = Config.from_file("notebooks/config.yml")
-    gas: Gas = 'GHG'
-    lulucf: LULUCF = 'incl'
+    gas: Gas = "GHG"
+    lulucf: LULUCF = "incl"
     gf_da = gf(config, region, gas, lulucf)
     pc_da = pc(config, region, gas, lulucf)
     pcc_da = pcc(config, region, gas, lulucf)
@@ -739,6 +749,5 @@ if __name__ == "__main__":
             ecpc=ecpc_da,
             ap=ap_da,
             gdr=gdr_da,
-        )
+        ),
     )
-
