@@ -1,5 +1,8 @@
 import xarray as xr
+import logging
 
+# Set up logging
+logger = logging.getLogger(__name__)
 
 def compare_netcdf_files(file1, file2):
     """
@@ -16,10 +19,10 @@ def compare_netcdf_files(file1, file2):
     # Compare the datasets
     try:
         xr.testing.assert_equal(ds1, ds2)
-        print("The NetCDF files are identical.")
+        logger.info("The NetCDF files are identical.")
     except AssertionError as e:
-        print("The NetCDF files are different.")
-        print(e)
+        logger.info("The NetCDF files are different.")
+        logger.info(e)
 
     # Close the datasets
     ds1.close()
@@ -27,6 +30,11 @@ def compare_netcdf_files(file1, file2):
 
 
 if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
+
     # file_benchmark = r"K:\data\DataUpdate_08_2024\xr_alloc_USA.nc"
     benchmark_file = r"K:\Data\Data_effortsharing\DataUpdate_ongoing\\startyear_2021\Allocations_GHG_incl_benchmark\xr_alloc_USA_benchmark.nc"
     # file2 = r"K:\data\Data_old\xr_alloc_USA.nc"
