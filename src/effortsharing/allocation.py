@@ -7,6 +7,7 @@
 # Put in packages that we need
 # =========================================================== #
 
+from collections.abc import Iterable
 from typing import Literal
 
 import numpy as np
@@ -32,6 +33,14 @@ LULUCF = Literal["incl", "excl"]
 # TODO move config2*_var elsewhere.
 
 
+class InvalidAssumptionSetError(Exception):
+    def __init__(self, gas: Gas, lulucf: LULUCF):
+        super(
+            f"Invalid assumption set with gas={gas} and lulucf={lulucf}."
+            "Please use 'CO2' or 'GHG' for gas and 'incl' or 'excl' for LULUCF."
+        )
+
+
 def config2base_var(
     gas: Gas, lulucf: LULUCF
 ) -> Literal["CO2_base_incl", "CO2_base_excl", "GHG_base_incl", "GHG_base_excl"]:
@@ -43,10 +52,7 @@ def config2base_var(
         return "CO2_base_excl"
     elif lulucf == "excl" and gas == "GHG":
         return "GHG_base_excl"
-    raise ValueError(
-        "Invalid combination of LULUCF and gas. "
-        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-    )
+    raise InvalidAssumptionSetError(gas, lulucf)
 
 
 def config2hist_var(
@@ -60,10 +66,7 @@ def config2hist_var(
         return "CO2_hist"
     elif lulucf == "excl" and gas == "CO2":
         return "CO2_hist_excl"
-    raise ValueError(
-        "Invalid combination of LULUCF and gas. "
-        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-    )
+    raise InvalidAssumptionSetError(gas, lulucf)
 
 
 def config2globe_var(
@@ -77,10 +80,7 @@ def config2globe_var(
         return "CO2_globe"
     elif lulucf == "excl" and gas == "CO2":
         return "CO2_globe_excl"
-    raise ValueError(
-        "Invalid combination of LULUCF and gas. "
-        "Please use 'incl' or 'excl' for LULUCF and 'CO2' or 'GHG' for gas."
-    )
+    raise InvalidAssumptionSetError(gas, lulucf)
 
 
 # TODO Move load functions elsewhere
@@ -98,6 +98,7 @@ def load_future_emissions(config: Config, emission_data, scenarios, gas: Gas, lu
     return all_projected_gases[globe_var]
 
 
+
 def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
     (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
@@ -106,6 +107,8 @@ def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     _, xr_co2_budgets = determine_global_budgets(
         config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
     )
+    # determine_global_co2_trajectories is expensive when config has lots of dimensions
+    # TODO cache or make more efficient
     (all_projected_gases,) = determine_global_co2_trajectories(
         config=config,
         emissions=emission_data,
@@ -140,9 +143,9 @@ def load_population(config: Config) -> xr.DataArray:
 # =========================================================== #
 
 
-def allocation(
+def determine_allocations(
     config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl"
-) -> dict[str, xr.DataArray]:
+) -> list[xr.DataArray]:
     """
     Run all allocation methods and return dict with key for each method and value as xr.DataArray
     """
@@ -155,16 +158,16 @@ def allocation(
     ap_da = ap(config, region, gas, lulucf)
     gdr_da = gdr(config=config, region=region, gas=gas, lulucf=lulucf, ap_da=ap_da)
 
-    return dict(
-        gf=gf_da,
-        pc=pc_da,
-        pcc=pcc_da,
-        pcb=pcb_da,
-        pcb_lin=pcb_lin_da,
-        ecpc=ecpc_da,
-        ap=ap_da,
-        gdr=gdr_da,
-    )
+    return [
+        gf_da,
+        pc_da,
+        pcc_da,
+        pcb_da,
+        pcb_lin_da,
+        ecpc_da,
+        ap_da,
+        gdr_da,
+    ]
 
 
 def gf(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.DataArray:
@@ -187,8 +190,7 @@ def gf(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
 
     # New CO2 time series from the start_year to 2101 by multiplying global budget with fraction
     xr_new_co2 = co2_fraction * emis_fut.sel(Time=analysis_timeframe)
-
-    return xr_new_co2
+    return xr_new_co2.rename("GF")
 
 
 # =========================================================== #
@@ -216,7 +218,7 @@ def pc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
 
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
-    return xr_new
+    return xr_new.rename("PC")
 
 
 # =========================================================== #
@@ -615,7 +617,7 @@ def ap(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     ap = emis_base.sel(Region=focus_region) - rb / corr_factor
 
     ap = ap.sel(Time=analysis_timeframe)
-    return ap
+    return ap.rename("AP")
 
 
 # =========================================================== #
@@ -695,10 +697,10 @@ def gdr(
     return gdr_total.GDR
 
 
-def save(
+def save_allocations(
     config: Config,
     region: str,
-    dss: dict[str, xr.DataArray],
+    dss: Iterable[xr.DataArray],
     gas: Gas = "GHG",
     lulucf: LULUCF = "incl",
 ):
@@ -709,14 +711,16 @@ def save(
     # TODO refactor or remove?
     # if self.dataread_file != "xr_dataread.nc":
     #     savename = "xr_alloc_" + self.focus_region + "_adapt.nc"
-    save_path = config.paths.output / f"Allocations_{gas}_{lulucf}" / fn
+    dir = config.paths.output / f"Allocations_{gas}_{lulucf}"
+    dir.mkdir(parents=True, exist_ok=True)
+    save_path = dir / fn
 
     start_year_analysis = config.params.start_year_analysis
     # TODO move to config.config.params
     end_year_analysis = 2101
 
     combined = (
-        xr.Dataset(data_vars=dss, compat="override")
+        xr.merge(dss, compat="override")
         .sel(Time=np.arange(start_year_analysis, end_year_analysis))
         .astype("float32")
     )
@@ -736,7 +740,7 @@ if __name__ == "__main__":
     ecpc_da = ecpc(config, region, gas, lulucf)
     ap_da = ap(config, region, gas, lulucf)
     gdr_da = gdr(config, region, gas, lulucf)
-    save(
+    save_allocations(
         config=config,
         region=region,
         gas=gas,
