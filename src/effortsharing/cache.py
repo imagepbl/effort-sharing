@@ -1,8 +1,8 @@
 import functools
+import logging
 from pathlib import Path
 
-
-import logging
+logger = logging.getLogger(__name__)
 
 
 # Format-specific loader functions
@@ -67,7 +67,6 @@ SAVERS = {
     ".json": save_json,
 }
 
-
 def intermediate_file(filename, loader=None, saver=None):
     """Decorator for caching function results to/from intermediate files.
 
@@ -90,8 +89,6 @@ def intermediate_file(filename, loader=None, saver=None):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(config, *args, **kwargs):
-            # Get logger from the decorated function's module
-            logger = logging.getLogger(func.__module__)
 
             path = Path(config.paths.intermediate) / filename
             ext = path.suffix

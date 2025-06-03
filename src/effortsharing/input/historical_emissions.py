@@ -4,11 +4,13 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 
 logger = logging.getLogger(__name__)
 
 
+@intermediate_file("primap.nc")
 def read_primap(config: Config):
     """Read PRIMAP data."""
     logger.info("Reading PRIMAP data")
@@ -67,13 +69,19 @@ def extract_primap_agri_co2(primap: xr.Dataset):
     return primap_agri_co2
 
 
-def read_jones(config: Config, xr_primap_agri, xr_primap_agri_co2):
-    """Read NWC historical emission data."""
-    logger.info("Reading NWC historical emission data")
+@intermediate_file("historical_emissions.nc")
+def read_jones(config: Config, regions):
+    """Read Jones historical emission data."""
+    logger.info("Reading historical emissions (jones)")
 
     # Define input
     data_root = config.paths.input
     emissions_file = "EMISSIONS_ANNUAL_1830-2022.csv"
+
+    # Read primap data
+    xr_primap = read_primap(config)
+    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
+    xr_primap_agri_co2 = extract_primap_agri_co2(xr_primap) / 1e6
 
     # Read data
     df = pd.read_csv(data_root / emissions_file)
@@ -122,9 +130,30 @@ def read_jones(config: Config, xr_primap_agri, xr_primap_agri_co2):
     )
 
     # Convert units to ...
-    return xr_hist * 1e3
+    xr_hist = xr_hist * 1e3
+
+    # Select only regions of interest
+    regions_iso = list(regions.values())
+    xr_hist = xr_hist.reindex({"Region": regions_iso})
+
+    # Add EU (this is required for the NDC data reading)
+    group_eu = get_eu_countries(config)
+    xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
+
+    return xr_hist
 
 
+def get_eu_countries(config):
+    data_root = config.paths.input
+    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    df = pd.read_excel(data_root / country_groups_file, sheet_name="Country groups")
+    countries_iso = np.array(df["Country ISO Code"])
+    group_eu = countries_iso[np.array(df["EU"]) == 1]
+    return group_eu
+
+
+@intermediate_file("edgar.nc")
 def read_edgar(config: Config):
     """Read EDGAR data."""
 
@@ -159,42 +188,3 @@ def read_edgar(config: Config):
     xr_edgar = df_edgar.to_xarray()
 
     return xr_edgar
-
-
-def read_jones_alternative(config: Config, regions):
-    # No harmonization with the KEV anymore, but it's also much closer now
-    logger.info("Reading historical emissions (jones)")
-
-    # Define input
-    # TODO: separate functions for reading each of these files?
-    data_root = config.paths.input
-    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
-
-    # Read primap data
-    xr_primap = read_primap(config)
-    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
-    xr_primap_agri_co2 = extract_primap_agri_co2(xr_primap) / 1e6
-
-    # Read NWC data
-    xr_hist = read_jones(config, xr_primap_agri, xr_primap_agri_co2)
-
-    # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
-    xr_edgar = read_edgar(config)
-
-    regions_iso = list(regions.values())
-    xr_hist = xr_hist.reindex({"Region": regions_iso})
-
-    # Add EU (this is required for the NDC data reading)
-    df = pd.read_excel(data_root / country_groups_file, sheet_name="Country groups")
-    countries_iso = np.array(df["Country ISO Code"])
-    group_eu = countries_iso[np.array(df["EU"]) == 1]
-    xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
-
-    # TODO: could call individual functions from outer scope
-    return (
-        xr_hist,
-        # xr_ghg_afolu,  # TODO: not used, remove?
-        # xr_ghg_agri,  # TODO: not used, remove?
-        # xr_edgar,  # TODO: not used, remove?
-        xr_primap,
-    )
