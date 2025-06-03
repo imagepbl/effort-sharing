@@ -1244,13 +1244,15 @@ def main(config_file):
 
     # Read input data
     socioeconomic_data = es.input.socioeconomics.load_socioeconomics(config)
-    emission_data, scenarios = es.input.emissions.load_emissions(config)
+    modelscenarios = es.input.emissions.read_modelscenarios(config)
+    emission_data = es.input.emissions.load_emissions(config)
+    primap_data = es.input.emissions.read_primap(config)
     ndc_data = es.input.ndcs.load_ndcs(config, emission_data)
 
     # Calculate global budgets and pathways
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
     (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
-        config, emission_data, scenarios, xr_temperatures
+        config, emission_data, modelscenarios, xr_temperatures
     )
     _, xr_co2_budgets = determine_global_budgets(
         config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
@@ -1258,7 +1260,7 @@ def main(config_file):
     (all_projected_gases,) = determine_global_co2_trajectories(
         config,
         emissions=emission_data,
-        scenarios=scenarios,
+        scenarios=modelscenarios,
         xr_temperatures=xr_temperatures,
         xr_co2_budgets=xr_co2_budgets,
         xr_traj_nonco2=xr_traj_nonco2,
@@ -1291,10 +1293,7 @@ def main(config_file):
 
     # Country-specific data readers
     datareader_netherlands(config, new_total)
-
-    # TODO: make sure xr_primap is available
-    # Maybe store as separate file? Maybe
-    # datareader_norway(config, new_total, xr_primap=...)
+    datareader_norway(config, new_total, primap_data)
 
 
 if __name__ == "__main__":
