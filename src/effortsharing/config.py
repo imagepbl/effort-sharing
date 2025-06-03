@@ -84,11 +84,15 @@ class Config:
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
     from rich import print
 
-    config_file = sys.argv[1]
-    config = Config.from_file(config_file)
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process all input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    config = Config.from_file(args.config)
 
     print(config)
