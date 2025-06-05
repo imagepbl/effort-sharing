@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import effortsharing.regions as _regions
 from effortsharing.config import Config
 
 
@@ -23,10 +22,12 @@ class General:
     countries: dict[str, str]
     regions: dict[str, str]
 
+
 @dataclass
 class UNPopulation:
     population: xr.Dataset
     population_long: xr.Dataset
+
 
 @dataclass
 class JonesData:
@@ -35,6 +36,7 @@ class JonesData:
     xr_ghg_agri: xr.DataArray
     xr_edgar: xr.Dataset
     xr_primap: xr.Dataset
+
 
 @dataclass
 class AR6Data:
@@ -100,7 +102,7 @@ def read_general(config: Config) -> General:
     )
 
     # Extend countries with non-country regions
-    regions = {**countries, **_regions.ADDITIONAL_EU_AND_EARTH}
+    regions = {**countries, "European Union": "EU", "Earth": "EARTH"}
 
     return General(countries, regions)
 
@@ -236,6 +238,7 @@ def read_ssps(config, regions, countries):
             )
 
     return xr_ssp
+
 
 def read_un_population(config, countries) -> UNPopulation:
     print("- Reading UN population data and gapminder, processed by OWID (for past population)")
@@ -2000,6 +2003,7 @@ def read_ndc(config: Config, countries, xr_hist):
 
     return xr_ndc, xr_ndc_excl
 
+
 def merge_xr(
     xr_ssp,
     xr_hist,
@@ -2152,6 +2156,7 @@ def add_country_groups(config: Config, regions, xr_total):
 
     return new_total, new_regions
 
+
 def save(config: Config, xr_total, regions, countries):
     print("- Save important files")
 
@@ -2171,7 +2176,6 @@ def save(config: Config, xr_total, regions, countries):
         Temperature=np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     )
     xr_version = xr_normal
-
 
     xr_version.to_netcdf(
         savepath / "xr_dataread.nc",
