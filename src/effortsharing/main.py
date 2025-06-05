@@ -256,6 +256,10 @@ def main(config: Config):
     # Save the data
     save_temp = np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     xr_version = new_total.sel(Temperature=save_temp)
+    import IPython
+
+    IPython.embed()
+    quit()
     save_regions(config, new_regions, countries)
     save_total(config, xr_version)
     save_rbw(config, xr_version, countries)

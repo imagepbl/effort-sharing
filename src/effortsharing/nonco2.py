@@ -10,7 +10,137 @@ logger = logging.getLogger(__name__)
 
 
 def nonco2variation(config: Config):
-    # NOTE: I moved this file from lambollrepo to our surfdrive folder
+    df = read_nonco2_lamboll(config)
+
+    # Xarray for time-varying data
+    xr_lamboll = extract_time_varying_data(df)
+
+    # Xarray for peak warming years
+    xr_peakyears = extract_peakyears(df)
+
+    # Xarray for full peak warming
+    xr_temperatures = extract_temperatures(df)
+
+    xr_peaknonco2warming = extract_peak_warming_quantiles(xr_lamboll, xr_peakyears)
+
+    # Save for later use
+    xr_nonco2warming_wrt_start = (
+        xr_peaknonco2warming
+        - xr_lamboll.rename({"NonCO2WarmingQuantile": "Risk"})
+        .sel(Time=config.params.start_year_analysis)
+        .NonCO2warming
+    )
+
+    return (
+        xr_temperatures,
+        xr_nonco2warming_wrt_start,
+    )
+
+
+def extract_peak_warming_quantiles(xr_lamboll, xr_peakyears):
+    # Now we assume that nonco2 warming quantiles are the same as the peak warming quantiles
+    # That is: climate sensitivity for the full picture (TCRE) is directly related to climate sensitivity to only non-CO2
+    # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
+    # relation nonco2 peak warming to TCRE is not trivial, because the peakyears are also dependent on TCRE!
+    # However, as it turns out, higher TCRE implies in practically all cases a higher nonCO2 warming at the peak year
+
+    # Peak warming -> at the peak year.
+    xr_peaknonco2warming_all = xr_lamboll.sel(Time=xr_peakyears.PeakYear).rename(
+        {"NonCO2warming": "PeakWarming"}
+    )
+
+    all = xr_peaknonco2warming_all.drop_vars("Time")
+    peak50 = all.sel(NonCO2WarmingQuantile=0.5, TCRE=[0.5]).drop_vars("NonCO2WarmingQuantile")
+    peak33 = all.sel(NonCO2WarmingQuantile=0.33, TCRE=[0.33]).drop_vars("NonCO2WarmingQuantile")
+    peak67 = all.sel(NonCO2WarmingQuantile=0.67, TCRE=[0.67]).drop_vars("NonCO2WarmingQuantile")
+    diff = all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67) - all.sel(
+        NonCO2WarmingQuantile=0.33, TCRE=0.33
+    )
+    peak17 = (
+        (all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33) - diff)
+        .drop_vars("NonCO2WarmingQuantile")
+        .drop_vars("TCRE")
+        .expand_dims({"TCRE": [0.17]})
+    )
+
+    peak83 = (
+        (all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67) + diff)
+        .drop_vars("NonCO2WarmingQuantile")
+        .drop_vars("TCRE")
+        .expand_dims({"TCRE": [0.83]})
+    )
+    xr_peaknonco2warming = xr.merge([peak50, peak33, peak67, peak17, peak83])
+
+    # Invert axis for Risk coordinate
+    xr_peaknonco2warming = xr_peaknonco2warming.assign_coords(
+        TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]
+    ).rename({"TCRE": "Risk"})
+
+    return xr_peaknonco2warming
+
+
+def extract_temperatures(df):
+    # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
+    df_peaktemps = df[["ModelScenario", "T(0.5)", "T(0.33)", "T(0.67)"]].drop_duplicates()
+    df_peaktemps = df_peaktemps.rename(columns={"T(0.5)": 0.5, "T(0.33)": 0.33, "T(0.67)": 0.67})
+    df_peaktemps = df_peaktemps.melt(
+        id_vars=["ModelScenario"], var_name="TCRE", value_name="Temperature"
+    )
+    df_dummy = df_peaktemps.set_index(["ModelScenario", "TCRE"])
+    xr_temperatures = xr.Dataset.from_dataframe(df_dummy)
+    xr_temperatures17 = (
+        (
+            xr_temperatures.sel(TCRE=0.33)
+            - 1 * (xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))
+        )
+        .drop_vars("TCRE")
+        .expand_dims({"TCRE": [0.17]})
+    )
+    xr_temperatures83 = (
+        (
+            xr_temperatures.sel(TCRE=0.67)
+            + 1 * (xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))
+        )
+        .drop_vars("TCRE")
+        .expand_dims({"TCRE": [0.83]})
+    )
+    xr_temperatures = xr.merge([xr_temperatures, xr_temperatures17, xr_temperatures83])
+
+    # Invert axis for Risk coordinate
+    xr_temperatures = xr_temperatures.assign_coords(TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]).rename(
+        {"TCRE": "Risk"}
+    )
+    return xr_temperatures
+
+
+def extract_peakyears(df):
+    df_peakyears = df[["ModelScenario", "NonCO2WarmingQuantile", "Y(0.50)", "Y(0.33)", "Y(0.67)"]]
+    df_peakyears = df_peakyears.rename(columns={"Y(0.50)": 0.5, "Y(0.33)": 0.33, "Y(0.67)": 0.67})
+    df_peakyears = df_peakyears.melt(
+        id_vars=["ModelScenario", "NonCO2WarmingQuantile"],
+        var_name="TCRE",
+        value_name="PeakYear",
+    )
+    df_dummy = df_peakyears.set_index(["ModelScenario", "NonCO2WarmingQuantile", "TCRE"])
+    xr_peakyears = xr.Dataset.from_dataframe(df_dummy)
+    return xr_peakyears
+
+
+def extract_time_varying_data(df):
+    df_dummy = df[
+        ["ModelScenario", "NonCO2WarmingQuantile"] + list(np.arange(1995, 2101).astype(str))
+    ].melt(
+        id_vars=["ModelScenario", "NonCO2WarmingQuantile"],
+        var_name="Time",
+        value_name="NonCO2warming",
+    )
+    df_dummy["Time"] = df_dummy["Time"].astype(int)
+    df_dummy = df_dummy.set_index(["ModelScenario", "NonCO2WarmingQuantile", "Time"])
+    xr_lamboll = xr.Dataset.from_dataframe(df_dummy)
+    return xr_lamboll
+
+
+def read_nonco2_lamboll(config):
     data_root = config.paths.input
     filename = "job-20211019-ar6-nonco2_Raw-GSAT-Non-CO2.csv"
 
@@ -67,131 +197,7 @@ def nonco2variation(config: Config):
     # Only consider excluding permafrost
     df = df[df.Permafrost == False]
     df = df.drop(columns=["Permafrost"])
-
-    # Xarray for time-varying data
-    df_dummy = df[
-        ["ModelScenario", "NonCO2WarmingQuantile"] + list(np.arange(1995, 2101).astype(str))
-    ].melt(
-        id_vars=["ModelScenario", "NonCO2WarmingQuantile"],
-        var_name="Time",
-        value_name="NonCO2warming",
-    )
-    df_dummy["Time"] = df_dummy["Time"].astype(int)
-    df_dummy = df_dummy.set_index(["ModelScenario", "NonCO2WarmingQuantile", "Time"])
-    xr_lamboll = xr.Dataset.from_dataframe(df_dummy)
-
-    # Xarray for peak warming years
-    df_peakyears = df[["ModelScenario", "NonCO2WarmingQuantile", "Y(0.50)", "Y(0.33)", "Y(0.67)"]]
-    df_peakyears = df_peakyears.rename(columns={"Y(0.50)": 0.5, "Y(0.33)": 0.33, "Y(0.67)": 0.67})
-    df_peakyears = df_peakyears.melt(
-        id_vars=["ModelScenario", "NonCO2WarmingQuantile"],
-        var_name="TCRE",
-        value_name="PeakYear",
-    )
-    df_dummy = df_peakyears.set_index(["ModelScenario", "NonCO2WarmingQuantile", "TCRE"])
-    xr_peakyears = xr.Dataset.from_dataframe(df_dummy)
-
-    # Xarray for full peak warming
-    # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
-    df_peaktemps = df[["ModelScenario", "T(0.5)", "T(0.33)", "T(0.67)"]].drop_duplicates()
-    df_peaktemps = df_peaktemps.rename(columns={"T(0.5)": 0.5, "T(0.33)": 0.33, "T(0.67)": 0.67})
-    df_peaktemps = df_peaktemps.melt(
-        id_vars=["ModelScenario"], var_name="TCRE", value_name="Temperature"
-    )
-    df_dummy = df_peaktemps.set_index(["ModelScenario", "TCRE"])
-    xr_temperatures = xr.Dataset.from_dataframe(df_dummy)
-    xr_temperatures17 = (
-        (
-            xr_temperatures.sel(TCRE=0.33)
-            - 1 * (xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))
-        )
-        .drop_vars("TCRE")
-        .expand_dims({"TCRE": [0.17]})
-    )
-    xr_temperatures83 = (
-        (
-            xr_temperatures.sel(TCRE=0.67)
-            + 1 * (xr_temperatures.sel(TCRE=0.67) - xr_temperatures.sel(TCRE=0.33))
-        )
-        .drop_vars("TCRE")
-        .expand_dims({"TCRE": [0.83]})
-    )
-    xr_temperatures = xr.merge([xr_temperatures, xr_temperatures17, xr_temperatures83])
-
-    # Peak warming -> at the peak year.
-    xr_peaknonco2warming_all = xr_lamboll.sel(Time=xr_peakyears.PeakYear).rename(
-        {"NonCO2warming": "PeakWarming"}
-    )
-
-    # Now we assume that nonco2 warming quantiles are the same as the peak warming quantiles
-    # That is: climate sensitivity for the full picture (TCRE) is directly related to climate sensitivity to only non-CO2
-    # Also extrapolate for 17 and 83 percentiles (based on normal distribution assumption)
-    # relation nonco2 peak warming to TCRE is not trivial, because the peakyears are also dependent on TCRE!
-    # However, as it turns out, higher TCRE implies in practically all cases a higher nonCO2 warming at the peak year
-    xr_peaknonco2warming_all = xr_peaknonco2warming_all.drop_vars("Time")
-    peak50 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.5, TCRE=[0.5]).drop_vars(
-        "NonCO2WarmingQuantile"
-    )
-    peak33 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=[0.33]).drop_vars(
-        "NonCO2WarmingQuantile"
-    )
-    peak67 = xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=[0.67]).drop_vars(
-        "NonCO2WarmingQuantile"
-    )
-    peak17 = (
-        (
-            xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33)
-            - 1
-            * (
-                xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)
-                - xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33)
-            )
-        )
-        .drop_vars("NonCO2WarmingQuantile")
-        .drop_vars("TCRE")
-        .expand_dims({"TCRE": [0.17]})
-    )
-    peak83 = (
-        (
-            xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)
-            + 1
-            * (
-                xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.67, TCRE=0.67)
-                - xr_peaknonco2warming_all.sel(NonCO2WarmingQuantile=0.33, TCRE=0.33)
-            )
-        )
-        .drop_vars("NonCO2WarmingQuantile")
-        .drop_vars("TCRE")
-        .expand_dims({"TCRE": [0.83]})
-    )
-    xr_peaknonco2warming = xr.merge([peak50, peak33, peak67, peak17, peak83])
-
-    # Invert axis for Risk coordinate
-    xr_peaknonco2warming = xr_peaknonco2warming.assign_coords(
-        TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]
-    ).rename({"TCRE": "Risk"})
-    xr_temperatures = xr_temperatures.assign_coords(TCRE=[0.83, 0.67, 0.5, 0.33, 0.17]).rename(
-        {"TCRE": "Risk"}
-    )
-
-    # Save for later use
-    xr_temperatures = xr_temperatures
-    xr_nonco2warmings = xr_peaknonco2warming
-    xr_nonco2warming_wrt_start = (
-        xr_peaknonco2warming
-        - xr_lamboll.rename({"NonCO2WarmingQuantile": "Risk"})
-        .sel(Time=config.params.start_year_analysis)
-        .NonCO2warming
-    )
-
-    # TODO: if nonco2warmings is not needed, we could merge the two others:
-    # return = xr.merge([xr_temperatures, xr_nonco2warming_wrt_start])
-
-    return (
-        xr_temperatures,
-        # xr_nonco2warmings,  # TODO: not used, remove?
-        xr_nonco2warming_wrt_start,
-    )
+    return df
 
 
 def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, temperatures):
