@@ -2,9 +2,9 @@ load_intermediate_files: false
 save_intermediate_files: false
 
 paths:
-  input: ../data/input
-  intermediate: ../data/intermediate
-  output: ../data/output
+  input: /home/stefanv/git/pbl-cabe/effort-sharing/data/input
+  intermediate: /home/stefanv/git/pbl-cabe/effort-sharing/data/intermediate
+  output: /home/stefanv/git/pbl-cabe/effort-sharing/data/output
 
 params:
   convergence_year_gdr: 2100
