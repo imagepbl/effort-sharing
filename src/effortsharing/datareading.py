@@ -105,12 +105,17 @@ def read_general(config: Config) -> General:
     return General(countries, regions)
 
 
-def read_ssps(config, regions):
+def read_ssps(config, regions, countries):
     print("- Reading GDP and population data from SSPs")
 
     # Define input
     data_root = config.paths.input
     filename = "SSPs_v2023.xlsx"
+
+    countries_name = np.array(list(countries.keys()))
+    countries_iso = np.array(list(countries.values()))
+    regions_name = np.array(list(regions.keys()))
+    regions_iso = np.array(list(regions.values()))
 
     for i in range(6):
         df_ssp = pd.read_excel(
@@ -129,33 +134,93 @@ def read_ssps(config, regions):
             ]
         region_full = np.array(df_ssp.Region)
         region_iso = []
-        for r in region_full:
-            iso = regions.get(r, None)
-            if iso is None:
-                # TODO: read from self.regions_iso instead ?!
-                iso = _regions.ADDITIONAL_REGIONS_SSPS.get(r, None)
-            if iso is None:
+
+        for r_i, r in enumerate(region_full):
+            wh = np.where(regions_name == r)[0]
+            if len(wh) > 0:
+                iso = countries_iso[wh[0]]
+            elif r == "Aruba":
+                iso = "ABW"
+            elif r == "Bahamas":
+                iso = "BHS"
+            elif r == "Democratic Republic of the Congo":
+                iso = "COD"
+            elif r == "Cabo Verde":
+                iso = "CPV"
+            elif r == "C?te d'Ivoire":
+                iso = "CIV"
+            elif r == "Western Sahara":
+                iso = "ESH"
+            elif r == "Gambia":
+                iso = "GMB"
+            elif r == "Czechia":
+                iso = "CZE"
+            elif r == "French Guiana":
+                iso = "GUF"
+            elif r == "Guam":
+                iso = "GUM"
+            elif r == "Hong Kong":
+                iso = "HKG"
+            elif r == "Iran":
+                iso = "IRN"
+            elif r == "Macao":
+                iso = "MAC"
+            elif r == "Moldova":
+                iso = "MDA"
+            elif r == "Mayotte":
+                iso = "MYT"
+            elif r == "New Caledonia":
+                iso = "NCL"
+            elif r == "Puerto Rico":
+                iso = "PRI"
+            elif r == "French Polynesia":
+                iso = "PYF"
+            elif r == "Turkey":
+                iso = "TUR"
+            elif r == "Taiwan":
+                iso = "TWN"
+            elif r == "Tanzania":
+                iso = "TZA"
+            elif r == "United States":
+                iso = "USA"
+            elif r == "United States Virgin Islands":
+                iso = "VIR"
+            elif r == "Viet Nam":
+                iso = "VNM"
+            elif r == "Cura?ao":
+                iso = "CUW"
+            elif r == "Guadeloupe":
+                iso = "GLP"
+            elif r == "Martinique":
+                iso = "MTQ"
+            elif r == "Palestine":
+                iso = "PSE"
+            elif r == "R?union":
+                iso = "REU"
+            elif r == "Syria":
+                iso = "SYR"
+            elif r == "Venezuela":
+                iso = "VEN"
+            elif r == "World":
+                iso = "EARTH"
+            else:
                 print(r)
                 iso = "oeps"
             region_iso.append(iso)
         df_ssp["Region"] = region_iso
-        variable = np.array(df_ssp["Variable"])
-        variable[variable == "GDP|PPP"] = "GDP"
-        df_ssp["Variable"] = variable
+        Variable = np.array(df_ssp["Variable"])
+        Variable[Variable == "GDP|PPP"] = "GDP"
+        df_ssp["Variable"] = Variable
         df_ssp = df_ssp.drop(["Model", "Unit"], axis=1)
         dummy = df_ssp.melt(
-            id_vars=["Scenario", "Region", "Variable"],
-            var_name="Time",
-            value_name="Value",
+            id_vars=["Scenario", "Region", "Variable"], var_name="Time", value_name="Value"
         )
         dummy["Time"] = np.array(dummy["Time"].astype(int))
         if i >= 1:
             dummy["Scenario"] = ["SSP" + str(i)] * len(dummy)
             xr_hist_gdp_i = xr.Dataset.from_dataframe(
                 dummy.pivot(
-                    index=["Scenario", "Region", "Time"],
-                    columns="Variable",
-                    values="Value",
+                    index=["Scenario", "Region", "Time"], columns="Variable", values="Value"
                 )
             ).sel(Time=[1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015])
             xr_ssp = xr.merge([xr_ssp, xr_hist_gdp_i])
@@ -163,17 +228,14 @@ def read_ssps(config, regions):
             xr_ssp = (
                 xr.Dataset.from_dataframe(
                     dummy.pivot(
-                        index=["Scenario", "Region", "Time"],
-                        columns="Variable",
-                        values="Value",
+                        index=["Scenario", "Region", "Time"], columns="Variable", values="Value"
                     )
                 )
                 .reindex({"Time": np.arange(2020, 2101, 5)})
                 .reindex({"Time": np.arange(1980, 2101, 5)})
             )
 
-        return xr_ssp
-
+    return xr_ssp
 
 def read_un_population(config, countries) -> UNPopulation:
     print("- Reading UN population data and gapminder, processed by OWID (for past population)")
@@ -2427,7 +2489,7 @@ def main(config_file):
     config = Config.from_file(config_file)
 
     general = read_general(config)  # TODO combine with un_population?
-    xr_ssp = read_ssps(config, regions=general.regions)
+    xr_ssp = read_ssps(config, regions=general.regions, countries=general.countries)
     un_pop = read_un_population(config, countries=general.countries)
     xr_hdi, xr_hdish = read_hdi(config, general.countries, un_pop)
     jonesdata = read_historicalemis_jones(config, regions=general.regions)
