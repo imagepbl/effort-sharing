@@ -2056,6 +2056,7 @@ def add_country_groups(config: Config, regions, xr_total):
     list_of_regions = list(np.array(regions_iso).copy())
     reg_iso = regions_iso.copy()
     reg_name = regions_name.copy()
+    new_total = xr_total.copy()
     for group_of_choice in [
         "G20",
         "EU",
@@ -2071,25 +2072,29 @@ def add_country_groups(config: Config, regions, xr_total):
             list_of_regions = list_of_regions + [group_of_choice]
         group_indices = countries_iso[np.array(df[group_of_choice]) == 1]
         country_to_eu = {}
-        for cty in np.array(xr_total.Region):
+        for cty in np.array(new_total.Region):
             if cty in group_indices:
                 country_to_eu[cty] = [group_of_choice]
             else:
                 country_to_eu[cty] = [""]
         group_coord = xr.DataArray(
-            [group for country in np.array(xr_total["Region"]) for group in country_to_eu[country]],
+            [
+                group
+                for country in np.array(new_total["Region"])
+                for group in country_to_eu[country]
+            ],
             dims=["Region"],
             coords={
                 "Region": [
                     country
-                    for country in np.array(xr_total["Region"])
+                    for country in np.array(new_total["Region"])
                     for group in country_to_eu[country]
                 ]
             },
         )
         if group_of_choice == "EU":
             xr_eu = (
-                xr_total[
+                new_total[
                     [
                         "Population",
                         "GDP",
@@ -2108,7 +2113,7 @@ def add_country_groups(config: Config, regions, xr_total):
             )  # skipna=False)
         else:
             xr_eu = (
-                xr_total[
+                new_total[
                     [
                         "Population",
                         "GDP",
@@ -2131,7 +2136,7 @@ def add_country_groups(config: Config, regions, xr_total):
                 .sum(skipna=False)
             )
         xr_eu2 = xr_eu.rename({"group": "Region"})
-        dummy = xr_total.reindex(Region=list_of_regions)
+        dummy = new_total.reindex(Region=list_of_regions)
 
         new_total = xr.merge([dummy, xr_eu2])
         new_total = new_total.reindex(Region=list_of_regions)
@@ -2139,6 +2144,7 @@ def add_country_groups(config: Config, regions, xr_total):
             reg_iso.append(group_of_choice)
             reg_name.append(group_of_choice)
 
+    new_total = new_total
     new_total["GHG_base_incl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
         np.nan
     )  # SSP4, 5 are empty for Europe!
