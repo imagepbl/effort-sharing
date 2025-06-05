@@ -202,7 +202,7 @@ def read_un_population(config, countries) -> UNPopulation:
     return UNPopulation(xr_unp, xr_unp_long)
 
 
-def read_hdi(config, countries, unpopulation):
+def read_hdi(config, countries, unpopulation: UNPopulation):
     print("- Read Human Development Index data")
 
     # Define input
@@ -221,134 +221,175 @@ def read_hdi(config, countries, unpopulation):
     hdi_values_raw = hdi_values_raw.astype(float)
     hdi_av = np.nanmean(hdi_values_raw)
 
-    # fmt: off
-    nan_countries = [
-        "ALA", "ASM", "AIA", "ABW", "BMU", "ANT", "SCG", "BES", "BVT", "IOT", "VGB",
-        "CYM", "CXR", "CCK", "COK", "CUW", "FLK", "FRO", "GUF", "PYF", "ATF", "GMB",
-        "GIB", "GRL", "GLP", "GUM", "GGY", "HMD", "VAT", "IMN", "JEY", "MAC", "MTQ",
-        "MYT", "MSR", "NCL", "NIU", "NFK", "MNP", "PCN", "PRI", "REU", "BLM", "SHN",
-        "SPM", "SXM", "SGS", "MAF", "SJM", "TKL", "TCA", "UMI", "VIR", "WLF", "ESH",
-    ]
-    # fmt: on
-
-    # Construct new hdi object
     countries_name = list(countries.keys())
     countries_iso = list(countries.values())
 
+    # Construct new hdi object
     hdi_values = np.zeros(len(countries_iso)) + np.nan
     hdi_sh_values = np.zeros(len(countries_iso)) + np.nan
-
-    for r_i, iso in enumerate(countries_iso):
-        name = countries_name[r_i]
-        value = np.where(hdi_countries_raw == name)[0]
-
-        if len(value) > 0:
-            wh_i = value[0]
+    for r_i, r in enumerate(countries_iso):
+        reg = countries_name[r_i]
+        wh = np.where(hdi_countries_raw == reg)[0]
+        if len(wh) > 0:
+            wh_i = wh[0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso in nan_countries:
+        elif r in [
+            "ALA",
+            "ASM",
+            "AIA",
+            "ABW",
+            "BMU",
+            "ANT",
+            "SCG",
+            "BES",
+            "BVT",
+            "IOT",
+            "VGB",
+            "CYM",
+            "CXR",
+            "CCK",
+            "COK",
+            "CUW",
+            "FLK",
+            "FRO",
+            "GUF",
+            "PYF",
+            "ATF",
+            "GMB",
+            "GIB",
+            "GRL",
+            "GLP",
+            "GUM",
+            "GGY",
+            "HMD",
+            "VAT",
+            "IMN",
+            "JEY",
+            "MAC",
+            "MTQ",
+            "MYT",
+            "MSR",
+            "NCL",
+            "NIU",
+            "NFK",
+            "MNP",
+            "PCN",
+            "PRI",
+            "REU",
+            "BLM",
+            "SHN",
+            "SPM",
+            "SXM",
+            "SGS",
+            "MAF",
+            "SJM",
+            "TKL",
+            "TCA",
+            "UMI",
+            "VIR",
+            "WLF",
+            "ESH",
+        ]:
             hdi_values[r_i] = np.nan
-        elif iso == "USA":
-            value = np.where(hdi_countries_raw == "United States")[0][0]
+        elif r == "USA":
+            wh = np.where(hdi_countries_raw == "United States")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "BHS":
-            value = np.where(hdi_countries_raw == "Bahamas")[0][0]
+        elif r == "BHS":
+            wh = np.where(hdi_countries_raw == "Bahamas")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "GMB":
-            value = np.where(hdi_countries_raw == "Gambia")[0][0]
+        elif r == "GMB":
+            wh = np.where(hdi_countries_raw == "Gambia")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "CPV":
-            value = np.where(hdi_countries_raw == "Cabo Verde")[0][0]
+        elif r == "CPV":
+            wh = np.where(hdi_countries_raw == "Cabo Verde")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "BOL":
-            value = np.where(hdi_countries_raw == "Bolivia (Plurinational State of)")[0][0]
+        elif r == "BOL":
+            wh = np.where(hdi_countries_raw == "Bolivia (Plurinational State of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "COD":
-            value = np.where(hdi_countries_raw == "Congo (Democratic Republic of the)")[0][0]
+        elif r == "COD":
+            wh = np.where(hdi_countries_raw == "Congo (Democratic Republic of the)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "COG":
-            value = np.where(hdi_countries_raw == "Congo")[0][0]
+        elif r == "COG":
+            wh = np.where(hdi_countries_raw == "Congo")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "CZE":
-            value = np.where(hdi_countries_raw == "Czechia")[0][0]
+        elif r == "CZE":
+            wh = np.where(hdi_countries_raw == "Czechia")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "EGY":
-            value = np.where(hdi_countries_raw == "Egypt")[0][0]
+        elif r == "EGY":
+            wh = np.where(hdi_countries_raw == "Egypt")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "HKG":
-            value = np.where(hdi_countries_raw == "Hong Kong, China (SAR)")[0][0]
+        elif r == "HKG":
+            wh = np.where(hdi_countries_raw == "Hong Kong, China (SAR)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "IRN":
-            value = np.where(hdi_countries_raw == "Iran (Islamic Republic of)")[0][0]
+        elif r == "IRN":
+            wh = np.where(hdi_countries_raw == "Iran (Islamic Republic of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "PRK":
-            value = np.where(hdi_countries_raw == "Korea (Democratic People's Rep. of)")[0][0]
+        elif r == "PRK":
+            wh = np.where(hdi_countries_raw == "Korea (Democratic People's Rep. of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "KOR":
-            value = np.where(hdi_countries_raw == "Korea (Republic of)")[0][0]
+        elif r == "KOR":
+            wh = np.where(hdi_countries_raw == "Korea (Republic of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "KGZ":
-            value = np.where(hdi_countries_raw == "Kyrgyzstan")[0][0]
+        elif r == "KGZ":
+            wh = np.where(hdi_countries_raw == "Kyrgyzstan")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "LAO":
-            value = np.where(hdi_countries_raw == "Lao People's Democratic Republic")[0][0]
+        elif r == "LAO":
+            wh = np.where(hdi_countries_raw == "Lao People's Democratic Republic")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "FSM":
-            value = np.where(hdi_countries_raw == "Micronesia (Federated States of)")[0][0]
+        elif r == "FSM":
+            wh = np.where(hdi_countries_raw == "Micronesia (Federated States of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "MDA":
-            value = np.where(hdi_countries_raw == "Moldova (Republic of)")[0][0]
+        elif r == "MDA":
+            wh = np.where(hdi_countries_raw == "Moldova (Republic of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "STP":
-            value = np.where(hdi_countries_raw == "Sao Tome and Principe")[0][0]
+        elif r == "STP":
+            wh = np.where(hdi_countries_raw == "Sao Tome and Principe")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "SVK":
-            value = np.where(hdi_countries_raw == "Slovakia")[0][0]
+        elif r == "SVK":
+            wh = np.where(hdi_countries_raw == "Slovakia")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "KNA":
-            value = np.where(hdi_countries_raw == "Saint Kitts and Nevis")[0][0]
+        elif r == "KNA":
+            wh = np.where(hdi_countries_raw == "Saint Kitts and Nevis")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "LCA":
-            value = np.where(hdi_countries_raw == "Saint Lucia")[0][0]
+        elif r == "LCA":
+            wh = np.where(hdi_countries_raw == "Saint Lucia")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "VCT":
-            value = np.where(hdi_countries_raw == "Saint Vincent and the Grenadines")[0][0]
+        elif r == "VCT":
+            wh = np.where(hdi_countries_raw == "Saint Vincent and the Grenadines")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "SWZ":
-            value = np.where(hdi_countries_raw == "Eswatini (Kingdom of)")[0][0]
+        elif r == "SWZ":
+            wh = np.where(hdi_countries_raw == "Eswatini (Kingdom of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "TWN":
-            value = np.where(hdi_countries_raw == "China")[0][0]
+        elif r == "TWN":
+            wh = np.where(hdi_countries_raw == "China")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "TZA":
-            value = np.where(hdi_countries_raw == "Tanzania (United Republic of)")[0][0]
+        elif r == "TZA":
+            wh = np.where(hdi_countries_raw == "Tanzania (United Republic of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "TUR":
-            value = np.where(hdi_countries_raw == "Türkiye")[0][0]
+        elif r == "TUR":
+            wh = np.where(hdi_countries_raw == "Türkiye")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "VEN":
-            value = np.where(hdi_countries_raw == "Venezuela (Bolivarian Republic of)")[0][0]
+        elif r == "VEN":
+            wh = np.where(hdi_countries_raw == "Venezuela (Bolivarian Republic of)")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "VNM":
-            value = np.where(hdi_countries_raw == "Viet Nam")[0][0]
+        elif r == "VNM":
+            wh = np.where(hdi_countries_raw == "Viet Nam")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "PSE":
-            value = np.where(hdi_countries_raw == "Palestine, State of")[0][0]
+        elif r == "PSE":
+            wh = np.where(hdi_countries_raw == "Palestine, State of")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
-        elif iso == "YEM":
-            value = np.where(hdi_countries_raw == "Yemen")[0][0]
+        elif r == "YEM":
+            wh = np.where(hdi_countries_raw == "Yemen")[0][0]
             hdi_values[r_i] = hdi_values_raw[wh_i]
         else:
             hdi_values[r_i] = np.nan
-
         try:
-            pop = float(unpopulation.long.sel(Region=iso, Time=2019).Population)
+            pop = float(unpopulation.population_long.sel(Region=r, Time=2019).Population)
         except:
             pop = np.nan
         hdi_sh_values[r_i] = hdi_values[r_i] * pop
-
     hdi_sh_values = hdi_sh_values / np.nansum(hdi_sh_values)
     df_hdi = {}
-
     df_hdi["Region"] = countries_iso
     df_hdi["Name"] = countries_name
     df_hdi["HDI"] = hdi_values
