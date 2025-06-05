@@ -6,9 +6,9 @@ import pandas as pd
 import xarray as xr
 
 from effortsharing.cache import intermediate_file
-import effortsharing.regions as _regions
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions
+from effortsharing.input.socioeconomics import read_general
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +279,7 @@ def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
     """
     logger.info("Processing NDC input data")
 
-    countries, regions = _regions.read_general(config)
+    countries, regions = read_general(config)
 
     xr_ndc = read_ndc(config, countries, xr_hist)
     xr_ndc_excl = read_ndc_excl(config, countries, xr_hist)

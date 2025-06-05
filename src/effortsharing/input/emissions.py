@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import effortsharing.regions as _regions
 from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
+from effortsharing.input.socioeconomics import read_general
 
 logger = logging.getLogger(__name__)
 
@@ -625,7 +625,7 @@ def load_emissions(config: Config):
     # Otherwise, process raw input files
     logger.info("Processing emission input data")
 
-    countries, regions = _regions.read_general(config)
+    countries, regions = read_general(config)
 
     # xr_primap = read_primap(config)
     # xr_edgar = read_edgar(config)
