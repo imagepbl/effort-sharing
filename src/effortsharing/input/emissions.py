@@ -1,158 +1,176 @@
-import json
 import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
-import effortsharing.regions as _regions
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
+from effortsharing.input.socioeconomics import read_general
 
 logger = logging.getLogger(__name__)
 
 
-def read_historicalemis_jones(config: Config, regions):
-    # No harmonization with the KEV anymore, but it's also much closer now
+# TODO: consider splitting this module in multiple submodules, e.g.
+# - historical
+# - ar6
+# - baseline
+
+
+@intermediate_file("primap.nc")
+def read_primap(config: Config):
+    """Read PRIMAP data."""
+    logger.info("Reading PRIMAP data")
+
+    # Define input
+    data_root = config.paths.input
+    guetschow_et_al = "Guetschow_et_al_2024-PRIMAP-hist_v2.5.1_final_no_rounding_27-Feb-2024.nc"
+
+    # TODO: prefer method chaining or more explicit steps?
+
+    # Read data
+    ds = xr.open_dataset(data_root / guetschow_et_al)
+
+    # Name coordinates
+    ds = ds.rename(
+        {
+            "area (ISO3)": "Region",
+            "scenario (PRIMAP-hist)": "Scenario",
+            "category (IPCC2006_PRIMAP)": "Category",
+        }
+    )
+
+    # Select relevant data
+    ds = ds.sel(provenance="derived", source="PRIMAP-hist_v2.5.1_final_nr")
+
+    # Simplify time coordinate to use years instead of full datetimes
+    ds = ds.assign_coords(time=ds.time.dt.year)
+
+    # TODO: rename time to Time here? Then we can omit it in the other primap functions
+    return ds
+
+
+def extract_primap_agri(primap: xr.Dataset):
+    """Extract agricultural emissions from PRIMAP data."""
+    primap_agri = (
+        primap["KYOTOGHG (AR6GWP100)"]
+        .sel(Scenario="HISTTP", Category=["M.AG"])
+        .sum(dim="Category")
+        .drop_vars(["source", "provenance", "Scenario"])
+        .rename({"time": "Time"})
+    )
+
+    return primap_agri
+
+
+def extract_primap_agri_co2(primap: xr.Dataset):
+    """Extract CO2 emissions from PRIMAP data."""
+    primap_agri_co2 = (
+        primap["CO2"]
+        .sel(Scenario="HISTTP", Category=["M.AG"])
+        .sum(dim="Category")
+        .drop_vars(["source", "provenance", "Scenario"])
+        .rename({"time": "Time"})
+    )
+
+    return primap_agri_co2
+
+
+@intermediate_file("historical_emissions.nc")
+def read_jones(config: Config, regions):
+    """Read Jones historical emission data."""
     logger.info("Reading historical emissions (jones)")
 
     # Define input
-    # TODO: separate functions for reading each of these files?
     data_root = config.paths.input
-    guetschow_et_al = "Guetschow_et_al_2024-PRIMAP-hist_v2.5.1_final_no_rounding_27-Feb-2024.nc"
     emissions_file = "EMISSIONS_ANNUAL_1830-2022.csv"
-    edgar_file = "EDGARv8.0_FT2022_GHG_booklet_2023.xlsx"
-    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    # Read primap data
+    xr_primap = read_primap(config)
+    xr_primap_agri = extract_primap_agri(xr_primap) / 1e6
+    xr_primap_agri_co2 = extract_primap_agri_co2(xr_primap) / 1e6
 
     # Read data
-    xr_primap2 = xr.open_dataset(data_root / guetschow_et_al)
-    df_nwc = pd.read_csv(data_root / emissions_file)
-    xr_nwc = xr.Dataset.from_dataframe(
-        df_nwc.drop(columns=["CNTR_NAME", "Unit"]).set_index(["ISO3", "Gas", "Component", "Year"])
+    df = pd.read_csv(data_root / emissions_file)
+    ds = (
+        df.drop(columns=["CNTR_NAME", "Unit"])
+        .set_index(["ISO3", "Gas", "Component", "Year"])
+        .to_xarray()
     )
+    da = ds["Data"].rename({"ISO3": "Region", "Year": "Time"})
 
     # Rename GLOBAL to EARTH
-    regs = np.array(xr_nwc.ISO3)
+    regs = np.array(da.Region)
     regs[regs == "GLOBAL"] = "EARTH"
-    xr_nwc["ISO3"] = regs
+    da["Region"] = regs
 
-    # Calculate total(?)
-    xr_nwc_tot = (
-        xr_nwc.sel(Gas="CH[4]") * config.params.gwp_ch4 / 1e3
-        + xr_nwc.sel(Gas="N[2]*O") * config.params.gwp_n2o / 1e3
-        + xr_nwc.sel(Gas="CO[2]") * 1
-    ).drop_vars(["Gas"])
+    # Calculate individual and total contributions
+    xr_nwc_co2 = da.sel(Gas="CO[2]", drop=True)
+    xr_nwc_ch4 = da.sel(Gas="CH[4]", drop=True) * config.params.gwp_ch4 / 1e3
+    xr_nwc_n2o = da.sel(Gas="N[2]*O", drop=True) * config.params.gwp_n2o / 1e3
+    xr_nwc_tot = xr_nwc_co2 + xr_nwc_ch4 + xr_nwc_n2o
 
-    # Calculate individual contributions
-    # TODO: adding these will yield same total as above and seems cleaner
-    xr_nwc_co2 = xr_nwc.sel(Gas="CO[2]").drop_vars(["Gas"])
-    xr_nwc_ch4 = xr_nwc.sel(Gas="CH[4]").drop_vars(["Gas"]) * config.params.gwp_ch4 / 1e3
-    xr_nwc_n2o = xr_nwc.sel(Gas="N[2]*O").drop_vars(["Gas"]) * config.params.gwp_n2o / 1e3
-
-    # Select relevant data from primap (?)
-    xr_primap_agri = (
-        xr_primap2["KYOTOGHG (AR6GWP100)"]
-        .rename(
-            {
-                "area (ISO3)": "Region",
-                "scenario (PRIMAP-hist)": "scen",
-                "category (IPCC2006_PRIMAP)": "cat",
-            }
-        )
-        .sel(
-            scen="HISTTP",
-            provenance="derived",
-            cat=["M.AG"],
-            source="PRIMAP-hist_v2.5.1_final_nr",
-        )
-        .sum(dim="cat")
-        .drop_vars(["source", "provenance", "scen"])
-    )
-    xr_primap_agri["time"] = np.arange(1750, 2023)
-    xr_primap_agri = xr_primap_agri.rename({"time": "Time"})
-
-    # Same for CO2 from primap (?)
-    xr_primap_agri_co2 = (
-        xr_primap2["CO2"]
-        .rename(
-            {
-                "area (ISO3)": "Region",
-                "scenario (PRIMAP-hist)": "scen",
-                "category (IPCC2006_PRIMAP)": "cat",
-            }
-        )
-        .sel(
-            scen="HISTTP",
-            provenance="derived",
-            cat=["M.AG"],
-            source="PRIMAP-hist_v2.5.1_final_nr",
-        )
-        .sum(dim="cat")
-        .drop_vars(["source", "provenance", "scen"])
-    )
-    xr_primap_agri_co2["time"] = np.arange(1750, 2023)
-    xr_primap_agri_co2 = xr_primap_agri_co2.rename({"time": "Time"})
-
-    # Select historical data from NWC
-    xr_ghghist = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time", "Data": "GHG_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_co2hist = (
-        xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time", "Data": "CO2_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_ch4hist = (
-        xr_nwc_ch4.rename({"ISO3": "Region", "Year": "Time", "Data": "CH4_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-    xr_n2ohist = (
-        xr_nwc_n2o.rename({"ISO3": "Region", "Year": "Time", "Data": "N2O_hist"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-    )
-
-    # Calculate emissions excluding LULUCF
-    xr_ghgexcl = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-        - xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
-        + xr_primap_agri / 1e6
-    ).rename({"Data": "GHG_hist_excl"})
-    xr_co2excl = (
-        xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="Total")
-        .drop_vars("Component")
-        - xr_nwc_co2.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
-        + xr_primap_agri_co2 / 1e6
-    ).rename({"Data": "CO2_hist_excl"})
-
-    # Combine historical data into single xarray dataset
-    regions_iso = list(regions.values())
-    xr_hist = (
-        xr.merge([xr_ghghist, xr_ghgexcl, xr_co2hist, xr_co2excl, xr_ch4hist, xr_n2ohist]) * 1e3
-    ).reindex({"Region": regions_iso})
+    # Select historical data
+    xr_ghghist = xr_nwc_tot.sel(Component="Total", drop=True)
+    xr_co2hist = xr_nwc_co2.sel(Component="Total", drop=True)
+    xr_ch4hist = xr_nwc_ch4.sel(Component="Total", drop=True)
+    xr_n2ohist = xr_nwc_n2o.sel(Component="Total", drop=True)
 
     # Store LULUCF (?)
-    xr_ghg_afolu = (
-        xr_nwc_tot.rename({"ISO3": "Region", "Year": "Time"})
-        .sel(Component="LULUCF")
-        .drop_vars("Component")
+    xr_ghg_afolu = xr_nwc_tot.sel(Component="LULUCF", drop=True)
+    xr_co2_afolu = xr_nwc_co2.sel(Component="LULUCF", drop=True)
+
+    # Calculate emissions excluding LULUCF
+    xr_ghgexcl = xr_nwc_tot.sel(Component="Total", drop=True) - xr_ghg_afolu + xr_primap_agri
+    xr_co2excl = xr_nwc_co2.sel(Component="Total", drop=True) - xr_co2_afolu + xr_primap_agri_co2
+
+    # Combine historical data into single xarray dataset
+    xr_hist = xr.Dataset(
+        {
+            "GHG_hist": xr_ghghist,
+            "GHG_hist_excl": xr_ghgexcl,
+            "CO2_hist": xr_co2hist,
+            "CO2_hist_excl": xr_co2excl,
+            "CH4_hist": xr_ch4hist,
+            "N2O_hist": xr_n2ohist,
+        }
     )
 
-    # Change units of agri
-    # TODO: move this line closer to other agri steps?
-    xr_ghg_agri = xr_primap_agri / 1e6
+    # Convert units to ...
+    xr_hist = xr_hist * 1e3
 
-    # Also read EDGAR for purposes of using CR data (note that this is GHG excl LULUCF)
-    # TODO: move to separate function?
+    # Select only regions of interest
+    regions_iso = list(regions.values())
+    xr_hist = xr_hist.reindex({"Region": regions_iso})
+
+    # Add EU (this is required for the NDC data reading)
+    group_eu = get_eu_countries(config)
+    xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
+
+    return xr_hist
+
+
+def get_eu_countries(config):
+    data_root = config.paths.input
+    country_groups_file = "UNFCCC_Parties_Groups_noeu.xlsx"
+
+    df = pd.read_excel(data_root / country_groups_file, sheet_name="Country groups")
+    countries_iso = np.array(df["Country ISO Code"])
+    group_eu = countries_iso[np.array(df["EU"]) == 1]
+    return group_eu
+
+
+@intermediate_file("edgar.nc")
+def read_edgar(config: Config):
+    """Read EDGAR data."""
+
+    logger.info("Reading EDGAR data")
+
+    # Define input
+    data_root = config.paths.input
+    edgar_file = "EDGARv8.0_FT2022_GHG_booklet_2023.xlsx"
+
+    # Read data
     df_edgar = (
         pd.read_excel(data_root / edgar_file, sheet_name="GHG_totals_by_country")
         .drop(["Country"], axis=1)
@@ -176,39 +194,58 @@ def read_historicalemis_jones(config: Config, regions):
     # Convert to xarray
     xr_edgar = df_edgar.to_xarray()
 
-    xr_primap = xr_primap2.rename(
-        {
-            "area (ISO3)": "Region",
-            "scenario (PRIMAP-hist)": "Scenario",
-            "category (IPCC2006_PRIMAP)": "Category",
-        }
-    ).sel(provenance="derived", source="PRIMAP-hist_v2.5.1_final_nr")
-    xr_primap = xr_primap.assign_coords(time=xr_primap.time.dt.year)
+    return xr_edgar
 
-    # Add EU (this is required for the NDC data reading)
-    df = pd.read_excel(data_root / country_groups_file, sheet_name="Country groups")
-    countries_iso = np.array(df["Country ISO Code"])
-    group_eu = countries_iso[np.array(df["EU"]) == 1]
-    xr_hist.GHG_hist.loc[dict(Region="EU")] = xr_hist.GHG_hist.sel(Region=group_eu).sum("Region")
 
-    return (
-        xr_hist,
-        # xr_ghg_afolu,  # TODO: not used, remove?
-        # xr_ghg_agri,  # TODO: not used, remove?
-        # xr_edgar,  # TODO: not used, remove?
-        xr_primap,
+def read_ar6_meta(config: Config):
+    logger.info("Reading AR6 metadata")
+
+    # Define input
+    data_root = config.paths.input
+    metadata_file = "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx"
+
+    # Read input data
+    df_ar6_meta = pd.read_excel(data_root / metadata_file, sheet_name="meta_Ch3vetted_withclimate")
+
+    # Combine Models and Scenarios into a single dimension
+    mods = np.array(df_ar6_meta.Model)
+    scens = np.array(df_ar6_meta.Scenario)
+    modscens_meta = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
+    df_ar6_meta["ModelScenario"] = modscens_meta
+    df_ar6_meta = df_ar6_meta[["ModelScenario", "Category", "Policy_category"]]
+
+    return df_ar6_meta
+
+@intermediate_file("ar6_modelscenarios.json")
+def read_modelscenarios(config: Config):
+    df_ar6_meta = read_ar6_meta(config)
+    ms_immediate = np.array(
+        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P2", "P2a", "P2b", "P2c"])].ModelScenario
+    )
+    ms_delayed = np.array(
+        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P3a", "P3b", "P3c"])].ModelScenario
     )
 
+    models_scenarios = {
+        "Immediate": ms_immediate.tolist(),
+        "Delayed": ms_delayed.tolist(),
+    }
+    return models_scenarios
 
+
+@intermediate_file("AR6.nc")
 def read_ar6(config: Config, xr_hist):
     logger.info("Read AR6 data")
 
     # Define input
     data_root = config.paths.input
     filename = "AR6_Scenarios_Database_World_v1.1.csv"
-    metadata_file = "AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx"
     elevate_snapshot = "elevate-internal_snapshot_1739887620.csv"
 
+    # Read AR6 metadata
+    df_ar6_meta = read_ar6_meta(config)
+
+    # Read AR6 data
     df_ar6raw = pd.read_csv(data_root / filename)
     df_ar6 = df_ar6raw[
         df_ar6raw.Variable.isin(
@@ -247,12 +284,7 @@ def read_ar6(config: Config, xr_hist):
     df_ar6 = df_ar6[~df_ar6.index.isin(idx)]
     df_ar6 = df_ar6.reset_index(drop=True)
 
-    df_ar6_meta = pd.read_excel(data_root / metadata_file, sheet_name="meta_Ch3vetted_withclimate")
-    mods = np.array(df_ar6_meta.Model)
-    scens = np.array(df_ar6_meta.Scenario)
-    modscens_meta = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
-    df_ar6_meta["ModelScenario"] = modscens_meta
-    df_ar6_meta = df_ar6_meta[["ModelScenario", "Category", "Policy_category"]]
+    # Combine Model and Scenario into a merged dimension
     mods = np.array(df_ar6.Model)
     scens = np.array(df_ar6.Scenario)
     modscens = np.array([mods[i] + "|" + scens[i] for i in range(len(scens))])
@@ -285,12 +317,6 @@ def read_ar6(config: Config, xr_hist):
     )
     vetting_total = np.intersect1d(vetting_nans, vetting_recentyear)
     xr_ar6 = xr_ar6_prevet.sel(ModelScenario=vetting_total)
-    ms_immediate = np.array(
-        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P2", "P2a", "P2b", "P2c"])].ModelScenario
-    )
-    ms_delayed = np.array(
-        df_ar6_meta[df_ar6_meta.Policy_category.isin(["P3a", "P3b", "P3c"])].ModelScenario
-    )
 
     # TODO: shouldn't ch4 also be divided by 1000? That's what was done above in read_jones...
     xr_ar6_landuse = (
@@ -473,14 +499,10 @@ def read_ar6(config: Config, xr_hist):
         ]
     )
 
-    scenarios = {
-        "Immediate": ms_immediate.tolist(),
-        "Delayed": ms_delayed.tolist(),
-    }
-
-    return ar6_data, scenarios
+    return ar6_data
 
 
+@intermediate_file("baseline_emissions.nc")
 def read_baseline(
     config: Config,
     countries,  # TODO: pass in region instead??
@@ -590,48 +612,26 @@ def read_baseline(
     return xr_base
 
 
-def load_emissions(config: Config, from_intermediate=True, save=True):
+@intermediate_file("emissions.nc")
+def load_emissions(config: Config):
     """Collect emission input data from various sources to intermediate file.
 
     Args:
         config: effortsharing.config.Config object
-        from_intermediate: Whether to read from intermediate files if available (default: True)
-        save: Whether to save intermediate data to disk (default: True)
 
     Returns:
         xarray.Dataset: Emission data
     """
-
-    save_path = config.paths.intermediate / "emissions.nc"
-    save_path_scenarios = config.paths.intermediate / "emissions.json"
-
-    # Check if we can load from intermediate file
-    if from_intermediate and save_path.exists():
-        logger.info(f"Loading emission data from {save_path}")
-
-        emission_data = xr.load_dataset(save_path)
-
-        logger.info(f"Loading emission scenarios from {save_path_scenarios}")
-        with open(save_path_scenarios) as f:
-            scenarios = json.load(f)
-
-        return emission_data, scenarios
-
     # Otherwise, process raw input files
     logger.info("Processing emission input data")
 
-    countries, regions = _regions.read_general(config)
+    countries, regions = read_general(config)
 
-    xr_hist, xr_primap = read_historicalemis_jones(config, regions)
+    # xr_primap = read_primap(config)
+    # xr_edgar = read_edgar(config)
+    xr_hist = read_jones(config, regions)
     xr_base = read_baseline(config, countries, xr_hist)
-    xr_ar6, scenarios = read_ar6(config, xr_hist)
-
-    # Developing alternative implementation of read_historicalemis_jones
-    from effortsharing.input.historical_emissions import read_jones_alternative
-
-    xr_hist2, xr_primap2 = read_jones_alternative(config, regions)
-    xr.testing.assert_allclose(xr_hist, xr_hist2)
-    xr.testing.assert_allclose(xr_primap, xr_primap2)
+    xr_ar6 = read_ar6(config, xr_hist)
 
     # Merge datasets
     emission_data = xr.merge(
@@ -643,22 +643,7 @@ def load_emissions(config: Config, from_intermediate=True, save=True):
     )
     # TODO: Reindex time and regions??
 
-    # Save to disk
-    if save:
-        logger.info(f"Saving emission data to {save_path}")
-
-        config.paths.intermediate.mkdir(parents=True, exist_ok=True)
-        emission_data.to_netcdf(save_path)
-        # TODO: add compression
-
-        # Also save scenarios to JSON
-        # TODO: maybe we can derive them on the fly rather than saving them?
-        logger.info(f"Saving scenarios to {save_path_scenarios}")
-        with open(save_path_scenarios, "w") as f:
-            json.dump(scenarios, f)
-
-    return emission_data, scenarios
-
+    return emission_data
 
 if __name__ == "__main__":
     import argparse
@@ -677,4 +662,4 @@ if __name__ == "__main__":
     config = Config.from_file(args.config)
 
     # Process emission data and save to intermediate file
-    load_emissions(config, from_intermediate=False, save=True)
+    load_emissions(config)

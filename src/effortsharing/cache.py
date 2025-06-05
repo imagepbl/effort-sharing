@@ -1,8 +1,8 @@
 import functools
+import logging
 from pathlib import Path
 
-
-import logging
+logger = logging.getLogger(__name__)
 
 
 # Format-specific loader functions
@@ -67,7 +67,6 @@ SAVERS = {
     ".json": save_json,
 }
 
-
 def intermediate_file(filename, loader=None, saver=None):
     """Decorator for caching function results to/from intermediate files.
 
@@ -76,9 +75,12 @@ def intermediate_file(filename, loader=None, saver=None):
         loader: Optional custom loader function, otherwise determined by file extension
         saver: Optional custom saver function, otherwise determined by file extension
 
-    The decorated function will receive two additional parameters:
-    - load_intermediate: Whether to load from cache if available (default: True)
-    - save_intermediate: Whether to save results to cache (default: True)
+    The decorated function should accept a config object as argument that should
+    contain the following parameters:
+
+    - path.intermediate: path to intermediate data directory.
+    - load_intermediate_files: Whether to load from cache if available (default: True)
+    - save_intermediate_files: Whether to save results to cache (default: True)
 
     These parameters are automatically available in the wrapper scope and should
     be passed down to any nested decorated functions to maintain consistent behavior.
@@ -86,9 +88,7 @@ def intermediate_file(filename, loader=None, saver=None):
 
     def decorator(func):
         @functools.wraps(func)
-        def wrapper(config, *args, load_intermediate=True, save_intermediate=True, **kwargs):
-            # Get logger from the decorated function's module
-            logger = logging.getLogger(func.__module__)
+        def wrapper(config, *args, **kwargs):
 
             path = Path(config.paths.intermediate) / filename
             ext = path.suffix
@@ -101,7 +101,7 @@ def intermediate_file(filename, loader=None, saver=None):
                 raise ValueError(f"No loader/saver for extension {ext}")
 
             # Try to load if requested
-            if load_intermediate and path.exists():
+            if config.load_intermediate_files and path.exists():
                 logger.info(f"Loading intermediate data from {path}")
                 return load_fn(path)
 
@@ -110,7 +110,7 @@ def intermediate_file(filename, loader=None, saver=None):
             result = func(config, *args, **kwargs)
 
             # Save if requested
-            if save_intermediate:
+            if config.save_intermediate_files:
                 logger.info(f"Saving intermediate data to {path}")
                 path.parent.mkdir(parents=True, exist_ok=True)
                 save_fn(result, path)

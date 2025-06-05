@@ -1,3 +1,6 @@
+load_intermediate_files: false
+save_intermediate_files: false
+
 paths:
   input: ../data/input
   intermediate: ../data/intermediate

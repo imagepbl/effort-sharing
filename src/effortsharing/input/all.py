@@ -7,7 +7,7 @@ from effortsharing.input import emissions, ndcs, socioeconomics
 logger = logging.getLogger(__name__)
 
 
-def load_all(config: Config, from_intermediate=True, save=True):
+def load_all(config: Config):
     """Load all input data.
 
     Args:
@@ -17,9 +17,9 @@ def load_all(config: Config, from_intermediate=True, save=True):
     """
     logger.info("Loading input data")
 
-    socioeconomic_data = socioeconomics.load_socioeconomics(config, from_intermediate, save)
-    emission_data, scenarios = emissions.load_emissions(config, from_intermediate, save)
-    ndc_data = ndcs.load_ndcs(config, emission_data, from_intermediate, save)
+    socioeconomic_data = socioeconomics.load_socioeconomics(config)
+    emission_data, scenarios = emissions.load_emissions(config)
+    ndc_data = ndcs.load_ndcs(config, emission_data)
 
     return emission_data, socioeconomic_data, scenarios, ndc_data
 
@@ -38,4 +38,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = Config.from_file(args.config)
-    load_all(config, from_intermediate=False)
+    load_all(config)
