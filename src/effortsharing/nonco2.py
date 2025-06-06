@@ -5,6 +5,7 @@ import pandas as pd
 import xarray as xr
 
 from effortsharing.config import Config
+from effortsharing.input.emissions import load_emissions, read_modelscenarios
 
 logger = logging.getLogger(__name__)
 
@@ -200,8 +201,19 @@ def read_nonco2_lamboll(config):
     return df
 
 
-def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, temperatures):
+def determine_global_nonco2_trajectories(
+    config: Config, emissions=None, scenarios=None, temperatures=None
+):
     logger.info("Computing global nonco2 trajectories")
+
+    if emissions is None:
+        emissions = load_emissions(config)
+
+    if scenarios is None:
+        scenarios = read_modelscenarios(config)
+
+    if temperatures is None:
+        temperatures, _ = nonco2variation(config)
 
     # Shorthand for often-used expressions
     start_year = config.params.start_year_analysis
@@ -353,8 +365,4 @@ def determine_global_nonco2_trajectories(config: Config, emissions, scenarios, t
     else:
         xr_traj_nonco2_adapt = None
 
-    return (
-        xr_traj_nonco2,
-        # xr_traj_nonco2_2,  # TODO: not used, remove?
-        # xr_traj_nonco2_adapt,  # TODO: not used, remove?
-    )
+    return xr_traj_nonco2

@@ -265,7 +265,7 @@ def read_ndc_excl(config: Config, countries, xr_hist):
 ########################
 
 @intermediate_file("ndcs.nc")
-def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
+def load_ndcs(config: Config, xr_hist=None):
     """Collect NDC input data from various sources to intermediate file.
 
     Args:
@@ -278,6 +278,9 @@ def load_ndcs(config: Config, xr_hist, from_intermediate=True, save=True):
         xarray.Dataset: NDC data
     """
     logger.info("Processing NDC input data")
+
+    if xr_hist is None:
+        xr_hist = load_emissions(config)
 
     countries, regions = read_general(config)
 

@@ -4,13 +4,25 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
+from effortsharing.input.emissions import load_emissions
+from effortsharing.nonco2 import nonco2variation
 
 logger = logging.getLogger(__name__)
 
 
-def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2warming_wrt_start):  # noqa: F821
+@intermediate_file("global_co2_budgets.nc")
+def determine_global_budgets(
+    config: Config, emissions=None, temperatures=None, xr_nonco2warming_wrt_start=None
+):
     logger.info("Get global CO2 budgets")
+
+    if emissions is None:
+        emissions = load_emissions(config)
+
+    if temperatures is None or xr_nonco2warming_wrt_start is None:
+        temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
 
     # Define input
     data_root = config.paths.input
@@ -102,7 +114,4 @@ def determine_global_budgets(config: Config, emissions, temperatures, xr_nonco2w
     )
     xr_co2_budgets = xr.Dataset({"Budget": data2})
 
-    return (
-        xr_bud_co2,  # TODO: not used, remove? Fine
-        xr_co2_budgets,
-    )
+    return xr_co2_budgets

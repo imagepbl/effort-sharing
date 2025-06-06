@@ -217,24 +217,13 @@ def main(config: Config):
     modelscenarios = es.input.emissions.read_modelscenarios(config)
     emission_data = es.input.emissions.load_emissions(config)
     primap_data = es.input.emissions.read_primap(config)
-    ndc_data = es.input.ndcs.load_ndcs(config, emission_data)
+    ndc_data = es.input.ndcs.load_ndcs(config)
 
     # Calculate global budgets and pathways
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
-    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
-        config, emission_data, modelscenarios, xr_temperatures
-    )
-    _, xr_co2_budgets = determine_global_budgets(
-        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
-    )
-    (all_projected_gases,) = determine_global_co2_trajectories(
-        config,
-        emissions=emission_data,
-        scenarios=modelscenarios,
-        xr_temperatures=xr_temperatures,
-        xr_co2_budgets=xr_co2_budgets,
-        xr_traj_nonco2=xr_traj_nonco2,
-    )
+    xr_traj_nonco2 = determine_global_nonco2_trajectories(config)
+    xr_co2_budgets = determine_global_budgets(config)
+    all_projected_gases = determine_global_co2_trajectories(config)
 
     # Merge all data into a single xrarray object
     xr_total = (
@@ -256,10 +245,6 @@ def main(config: Config):
     # Save the data
     save_temp = np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     xr_version = new_total.sel(Temperature=save_temp)
-    import IPython
-
-    IPython.embed()
-    quit()
     save_regions(config, new_regions, countries)
     save_total(config, xr_version)
     save_rbw(config, xr_version, countries)
