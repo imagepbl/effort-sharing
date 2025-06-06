@@ -45,126 +45,24 @@ def determine_global_co2_trajectories(
     # Initialize data arrays for co2
     startpoint = emissions.sel(Time=start_year, Region="EARTH").CO2_hist
 
-    hy = config.params.harmonization_year
-    if start_year >= 2020:
-        compensation_form = np.array(
-            list(np.linspace(0, 1, len(np.arange(start_year, hy)))) + [1] * len(np.arange(hy, 2101))
-        )
-        xr_comp = xr.DataArray(
-            compensation_form,
-            dims=["Time"],
-            coords={"Time": np.arange(start_year, 2101)},
-        )
-    if start_year < 2020:
-        compensation_form = (np.arange(0, 2101 - start_year)) ** 0.5
-        xr_comp = xr.DataArray(
-            compensation_form / np.sum(compensation_form),
-            dims=["Time"],
-            coords={"Time": np.arange(start_year, 2101)},
-        )
-
-    xr_traj_co2 = xr.Dataset(
-        coords={
-            "NegEmis": dim_negemis,
-            "NonCO2red": dim_nonco2,
-            "Temperature": dim_temp,
-            "Risk": dim_prob,
-            "Timing": dim_timing,
-            "Time": np.arange(start_year, 2101),
-        }
-    )
-
-    xr_traj_co2_neg = xr.Dataset(
-        coords={
-            "NegEmis": dim_negemis,
-            "Temperature": dim_temp,
-            "Time": np.arange(start_year, 2101),
-        }
-    )
-
-    pathways_data = {
-        "CO2_globe": xr.DataArray(
-            data=np.nan,
-            coords=xr_traj_co2.coords,
-            dims=("NegEmis", "NonCO2red", "Temperature", "Risk", "Timing", "Time"),
-            attrs={"description": "Pathway data"},
-        ),
-        "CO2_neg_globe": xr.DataArray(
-            data=np.nan,
-            coords=xr_traj_co2_neg.coords,
-            dims=("NegEmis", "Temperature", "Time"),
-            attrs={"description": "Pathway data"},
-        ),
-    }
+    xr_traj_co2, pathways_data = allocate_output_arrays(config, start_year)
+    compensation_form, xr_comp = get_compensation_form(config, start_year)
 
     # CO2 emissions from AR6
-    xr_scen2_use = emissions.xr_ar6.sel(Variable="Emissions|CO2")
-    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101, 10))
-    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101))
-    xr_scen2_use = xr_scen2_use.interpolate_na(dim="Time", method="linear")
-    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(start_year, 2101))
-
-    co2_start = xr_scen2_use.sel(Time=start_year) / 1e3
-    offsets = startpoint / 1e3 - co2_start
-    emis_all = xr_scen2_use.sel(Time=np.arange(start_year, 2101)) / 1e3 + offsets * (1 - xr_comp)
-    emis2100 = emis_all.sel(Time=2100)
+    emis_all = get_ar6_emissions(emissions, start_year, startpoint, xr_comp)
 
     # Bend IAM curves to start in the correct starting year (only shape is relevant)
-    difyears = 2020 + 1 - start_year
-    if difyears > 0:
-        emis_all_adapt = emis_all.assign_coords({"Time": emis_all.Time - (difyears - 1)}).reindex(
-            {"Time": np.arange(start_year, 2101)}
-        )
-        for t in np.arange(0, difyears):
-            dv = emis_all.sel(Time=2101 - difyears + t).Value - emis_all.Value.sel(
-                Time=2101 - difyears + t - 1
-            )
-            dv = dv.where(dv < 0, 0)
-            emis_all_adapt.Value.loc[{"Time": 2101 - difyears + t}] = dv + emis_all_adapt.Value.sel(
-                Time=2101 - difyears + t - 1
-            )
-
-        fr = (
-            (emis_all.Value.sum(dim="Time") - emis_all_adapt.Value.sum(dim="Time"))
-            * (xr_comp)
-            / np.sum(xr_comp)
-        )
-        emis_all = emis_all_adapt + fr
+    emis_all = bend_curves(start_year, xr_comp, emis_all)
 
     # Negative emissions from AR6 (CCS + DAC)
-    xr_neg = emissions.xr_ar6.sel(
-        Variable=["Carbon Sequestration|CCS", "Carbon Sequestration|Direct Air Capture"]
-    ).sum(dim="Variable", skipna=False)
-    xr_neg = xr_neg.reindex(Time=np.arange(2000, 2101, 10))
-    xr_neg = xr_neg.reindex(Time=np.arange(2000, 2101))
-    xr_neg = xr_neg.interpolate_na(dim="Time", method="linear")
-    xr_neg = xr_neg.reindex(Time=np.arange(start_year, 2101))
-
-    # Correction on temperature calibration when using IAM shapes starting at earlier years
-    difyear = 2021 - start_year
-    dt = difyear / 6 * 0.1
-
-    def ms_temp_shape(
-        temp, risk
-    ):  # Different temperature domain because this is purely for the shape, not for the nonCO2 variation or so
-        return xr_temperatures.ModelScenario[
-            np.where(
-                (xr_temperatures.Temperature.sel(Risk=risk) < dt + temp + 0.0)
-                & (xr_temperatures.Temperature.sel(Risk=risk) > dt + temp - 0.3)
-            )[0]
-        ].values
+    xr_neg = get_negative_emissions(emissions, start_year)
 
     for temp_i, temp in enumerate(dim_temp):
-        ms1 = ms_temp_shape(temp, 0.5)
+        ms1 = ms_temp_shape(temp, 0.5, xr_temperatures, start_year)
         # Shape impacted by timing of action
         for timing_i, timing in enumerate(dim_timing):
-            if timing == "Immediate" or temp in [1.5, 1.56, 1.6] and timing == "Delayed":
-                mslist = scenarios["Immediate"]
-            else:
-                mslist = scenarios["Delayed"]
-            ms2 = np.intersect1d(ms1, mslist)
-
-            surplus_factor = calculate_surplus_factor(emissions, emis_all, emis2100, ms2)
+            ms2 = subset_scenarios(scenarios, temp, ms1, timing)
+            surplus_factor = calculate_surplus_factor(emissions, emis_all, ms2)
 
             for neg_i, neg in enumerate(dim_negemis):
                 xset = emis_all.sel(ModelScenario=ms2) - surplus_factor * (neg - 0.5)
@@ -249,8 +147,125 @@ def determine_global_co2_trajectories(
 
     return all_projected_gases
 
+def allocate_output_arrays(config, start_year):
+    xr_traj_co2 = xr.Dataset(
+        coords={
+            "NegEmis": config.dim_negemis,
+            "NonCO2red": config.dim_nonco2,
+            "Temperature": config.dim_temp,
+            "Risk": config.dim_prob,
+            "Timing": config.dim_timing,
+            "Time": np.arange(start_year, 2101),
+        }
+    )
 
-def calculate_surplus_factor(emissions, emis_all, emis2100, ms2):
+    xr_traj_co2_neg = xr.Dataset(
+        coords={
+            "NegEmis": config.dim_negemis,
+            "Temperature": config.dim_temp,
+            "Time": np.arange(start_year, 2101),
+        }
+    )
+
+    pathways_data = {
+        "CO2_globe": xr.DataArray(
+            data=np.nan,
+            coords=xr_traj_co2.coords,
+            dims=("NegEmis", "NonCO2red", "Temperature", "Risk", "Timing", "Time"),
+            attrs={"description": "Pathway data"},
+        ),
+        "CO2_neg_globe": xr.DataArray(
+            data=np.nan,
+            coords=xr_traj_co2_neg.coords,
+            dims=("NegEmis", "Temperature", "Time"),
+            attrs={"description": "Pathway data"},
+        ),
+    }
+
+    return xr_traj_co2, pathways_data
+
+
+def subset_scenarios(scenarios, temp, ms1, timing):
+    if timing == "Immediate" or temp in [1.5, 1.56, 1.6] and timing == "Delayed":
+        mslist = scenarios["Immediate"]
+    else:
+        mslist = scenarios["Delayed"]
+    ms2 = np.intersect1d(ms1, mslist)
+    return ms2
+
+
+def get_compensation_form(config, start_year):
+    hy = config.params.harmonization_year
+    if start_year >= 2020:
+        compensation_form = np.array(
+            list(np.linspace(0, 1, len(np.arange(start_year, hy)))) + [1] * len(np.arange(hy, 2101))
+        )
+        xr_comp = xr.DataArray(
+            compensation_form,
+            dims=["Time"],
+            coords={"Time": np.arange(start_year, 2101)},
+        )
+    if start_year < 2020:
+        compensation_form = (np.arange(0, 2101 - start_year)) ** 0.5
+        xr_comp = xr.DataArray(
+            compensation_form / np.sum(compensation_form),
+            dims=["Time"],
+            coords={"Time": np.arange(start_year, 2101)},
+        )
+
+    return compensation_form, xr_comp
+
+
+def get_negative_emissions(emissions, start_year):
+    xr_neg = emissions.xr_ar6.sel(
+        Variable=["Carbon Sequestration|CCS", "Carbon Sequestration|Direct Air Capture"]
+    ).sum(dim="Variable", skipna=False)
+    xr_neg = xr_neg.reindex(Time=np.arange(2000, 2101, 10))
+    xr_neg = xr_neg.reindex(Time=np.arange(2000, 2101))
+    xr_neg = xr_neg.interpolate_na(dim="Time", method="linear")
+    xr_neg = xr_neg.reindex(Time=np.arange(start_year, 2101))
+    return xr_neg
+
+
+def get_ar6_emissions(emissions, start_year, startpoint, xr_comp):
+    xr_scen2_use = emissions.xr_ar6.sel(Variable="Emissions|CO2")
+    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101, 10))
+    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(2000, 2101))
+    xr_scen2_use = xr_scen2_use.interpolate_na(dim="Time", method="linear")
+    xr_scen2_use = xr_scen2_use.reindex(Time=np.arange(start_year, 2101))
+
+    co2_start = xr_scen2_use.sel(Time=start_year) / 1e3
+    offsets = startpoint / 1e3 - co2_start
+    emis_all = xr_scen2_use.sel(Time=np.arange(start_year, 2101)) / 1e3 + offsets * (1 - xr_comp)
+    return emis_all
+
+
+def bend_curves(start_year, xr_comp, emis_all):
+    difyears = 2020 + 1 - start_year
+    if difyears > 0:
+        emis_all_adapt = emis_all.assign_coords({"Time": emis_all.Time - (difyears - 1)}).reindex(
+            {"Time": np.arange(start_year, 2101)}
+        )
+        for t in np.arange(0, difyears):
+            dv = emis_all.sel(Time=2101 - difyears + t).Value - emis_all.Value.sel(
+                Time=2101 - difyears + t - 1
+            )
+            dv = dv.where(dv < 0, 0)
+            emis_all_adapt.Value.loc[{"Time": 2101 - difyears + t}] = dv + emis_all_adapt.Value.sel(
+                Time=2101 - difyears + t - 1
+            )
+
+        fr = (
+            (emis_all.Value.sum(dim="Time") - emis_all_adapt.Value.sum(dim="Time"))
+            * (xr_comp)
+            / np.sum(xr_comp)
+        )
+        emis_all = emis_all_adapt + fr
+    return emis_all
+
+
+def calculate_surplus_factor(emissions, emis_all, ms2):
+    emis2100 = emis_all.sel(Time=2100)
     emis2100_i = emis2100.sel(ModelScenario=ms2)
 
     # The 90-percentile of 2100 emissions
@@ -272,3 +287,17 @@ def calculate_surplus_factor(emissions, emis_all, emis2100, ms2):
     surplus_factor2 = np.convolve(surplus_factor, np.ones(3) / 3, mode="valid")
     surplus_factor[1:-1] = surplus_factor2
     return surplus_factor
+
+
+def ms_temp_shape(temp, risk, xr_temperatures, start_year):
+    # Correction on temperature calibration when using IAM shapes starting at earlier years
+    difyear = 2021 - start_year
+    dt = difyear / 6 * 0.1
+
+    # Different temperature domain because this is purely for the shape, not for the nonCO2 variation or so
+    return xr_temperatures.ModelScenario[
+        np.where(
+            (xr_temperatures.Temperature.sel(Risk=risk) < dt + temp + 0.0)
+            & (xr_temperatures.Temperature.sel(Risk=risk) > dt + temp - 0.3)
+        )[0]
+    ].values
