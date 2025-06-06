@@ -44,7 +44,6 @@ def determine_global_co2_trajectories(
 
     # Initialize data arrays for co2
     startpoint = emissions.sel(Time=start_year, Region="EARTH").CO2_hist
-    # compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(start_year, 2101)))))#**1.1#+[1]*len(np.arange(2050, 2101)))
 
     hy = config.params.harmonization_year
     if start_year >= 2020:
@@ -58,18 +57,12 @@ def determine_global_co2_trajectories(
         )
     if start_year < 2020:
         compensation_form = (np.arange(0, 2101 - start_year)) ** 0.5
-        # hy = 2100
-        # compensation_form = np.array(list(np.linspace(0, 1, len(np.arange(start_year, hy))))+[1]*len(np.arange(hy, 2101)))
         xr_comp = xr.DataArray(
             compensation_form / np.sum(compensation_form),
             dims=["Time"],
             coords={"Time": np.arange(start_year, 2101)},
         )
 
-    def budget_harm(nz):
-        return xr_comp / np.sum(xr_comp.sel(Time=np.arange(start_year, nz)))
-
-    # compensation_form2 = np.array(list(np.linspace(0, 1, len(np.arange(start_year, 2101)))))**0.5#+[1]*len(np.arange(2050, 2101)))
     xr_traj_co2 = xr.Dataset(
         coords={
             "NegEmis": dim_negemis,
@@ -147,12 +140,6 @@ def determine_global_co2_trajectories(
     xr_neg = xr_neg.interpolate_na(dim="Time", method="linear")
     xr_neg = xr_neg.reindex(Time=np.arange(start_year, 2101))
 
-    def remove_upward(ar):
-        # Small function to ensure no late-century increase in emissions due to sparse scenario spaces
-        ar2 = np.copy(ar)
-        ar2[29:] = np.minimum.accumulate(ar[29:])
-        return ar2
-
     # Correction on temperature calibration when using IAM shapes starting at earlier years
     difyear = 2021 - start_year
     dt = difyear / 6 * 0.1
@@ -189,7 +176,7 @@ def determine_global_co2_trajectories(
                             xr_co2_budgets.Budget.sel(Temperature=temp, Risk=risk, NonCO2red=nonco2)
                             - xset.where(xset > 0).sum(dim="Time")
                         ) / np.sum(compensation_form)
-                        all_pathways = (1e3 * (xset + factor * xr_comp)) / 1e3
+                        all_pathways = xset + factor * xr_comp
                         if len(all_pathways) > 0:
                             pathway = all_pathways.mean(dim="ModelScenario")
                             pathway_sep = np.convolve(pathway, np.ones(3) / 3, mode="valid")
@@ -198,55 +185,30 @@ def determine_global_co2_trajectories(
                             pathway_final = np.array((pathway.T + offset) * 1e3)
 
                             # Remove upward emissions (harmonize later)
-                            pathway_final = remove_upward(np.array(pathway_final))
+                            pathway_final[29:] = np.minimum.accumulate(pathway_final[29:])
 
                             # Harmonize by budget (iteration 3)
-                            try:
-                                nz = start_year + np.where(pathway_final <= 0)[0][0]
-                            except:
-                                nz = 2100
-                            factor = (
-                                xr_co2_budgets.Budget.sel(
-                                    Temperature=temp, Risk=risk, NonCO2red=nonco2
-                                )
-                                * 1e3
-                                - pathway_final[pathway_final > 0].sum()
-                            )
-                            pathway_final2 = (pathway_final + factor * budget_harm(nz)).values
+                            for _ in range(3):
+                                if any(pathway_final <= 0):
+                                    nz = start_year + np.where(pathway_final <= 0)[0][0]
+                                else:
+                                    nz = 2100
 
-                            try:
-                                nz = start_year + np.where(pathway_final2 <= 0)[0][0]
-                            except:
-                                nz = 2100
-                            factor = (
-                                xr_co2_budgets.Budget.sel(
-                                    Temperature=temp, Risk=risk, NonCO2red=nonco2
+                                factor = (
+                                    xr_co2_budgets.Budget.sel(
+                                        Temperature=temp, Risk=risk, NonCO2red=nonco2
+                                    )
+                                    * 1e3
+                                    - pathway_final[pathway_final > 0].sum()
                                 )
-                                * 1e3
-                                - pathway_final2[pathway_final2 > 0].sum()
-                            )
-                            pathway_final2 = (
-                                1e3 * (pathway_final2 + factor * budget_harm(nz))
-                            ) / 1e3
-
-                            try:
-                                nz = start_year + np.where(pathway_final2 <= 0)[0][0]
-                            except:
-                                nz = 2100
-                            factor = (
-                                xr_co2_budgets.Budget.sel(
-                                    Temperature=temp, Risk=risk, NonCO2red=nonco2
+                                budget_harm = xr_comp / np.sum(
+                                    xr_comp.sel(Time=np.arange(start_year, nz))
                                 )
-                                * 1e3
-                                - pathway_final2[pathway_final2 > 0].sum()
-                            )
-                            pathway_final2 = (
-                                1e3 * (pathway_final2 + factor * budget_harm(nz))
-                            ) / 1e3
+                                pathway_final = (pathway_final + factor * budget_harm).values
 
                             pathways_data["CO2_globe"][
                                 neg_i, nonco2_i, temp_i, risk_i, timing_i, :
-                            ] = pathway_final2
+                            ] = pathway_final
 
     xr_traj_co2 = xr_traj_co2.update(pathways_data)
     xr_traj_ghg = (xr_traj_co2.CO2_globe + xr_traj_nonco2.NonCO2_globe).to_dataset(name="GHG_globe")
@@ -310,5 +272,3 @@ def calculate_surplus_factor(emissions, emis_all, emis2100, ms2):
     surplus_factor2 = np.convolve(surplus_factor, np.ones(3) / 3, mode="valid")
     surplus_factor[1:-1] = surplus_factor2
     return surplus_factor
-
-    # Merge all data into a single xrarray object
