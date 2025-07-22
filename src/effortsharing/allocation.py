@@ -7,7 +7,6 @@
 # Put in packages that we need
 # =========================================================== #
 
-from pathlib import Path
 import logging
 
 import numpy as np
