@@ -251,8 +251,9 @@ def main(config: Config):
     save_rci(config, xr_version)
 
     # Country-specific data readers
-    datareader_netherlands(config, new_total)
-    datareader_norway(config, new_total, primap_data)
+    if config.settings.country_specific:
+        datareader_netherlands(config, new_total)
+        datareader_norway(config, new_total, primap_data)
 
 
 if __name__ == "__main__":
