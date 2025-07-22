@@ -1,5 +1,5 @@
-load_intermediate_files: true
-save_intermediate_files: true
+load_intermediate_files: false
+save_intermediate_files: false
 
 paths:
   input: ../data/input
