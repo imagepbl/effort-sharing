@@ -22,9 +22,6 @@ class Parameters:
     polynomial_fit_2030relation: int
     version_ndcs: str
 
-@dataclass
-class Settings:
-    country_specific: bool
 
 @dataclass
 class DimensionRanges:
@@ -60,7 +57,6 @@ class Config:
     paths: DataPaths
     params: Parameters
     dimension_ranges: DimensionRanges
-    settings: Settings
 
     @classmethod
     def from_file(cls, config_file: Path | str) -> "Config":
@@ -84,7 +80,6 @@ class Config:
             paths=DataPaths(**paths),
             params=Parameters(**config.get("params")),
             dimension_ranges=DimensionRanges(**config.get("dimension_ranges")),
-            settings=Settings(**config.get("settings")),
         )
 
 
