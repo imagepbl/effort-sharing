@@ -192,7 +192,7 @@ def read_nonco2_lamboll(config):
         for i in ["10.0", "16.7", "33.0", "5.0", "50.0", "67.0", "83.3", "90.0", "95.0"]
     }
     df["NonCO2WarmingQuantile"] = (
-        df["NonCO2WarmingQuantile"].replace(quantiles_map).astype(float).round(2)
+        df["NonCO2WarmingQuantile"].map(quantiles_map).astype(float).round(2)
     )
 
     # Only consider excluding permafrost

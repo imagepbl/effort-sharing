@@ -4,9 +4,9 @@ import numpy as np
 import xarray as xr
 
 from effortsharing.config import Config
-from effortsharing.global_budgets import determine_global_budgets
+from effortsharing.pathways.global_budgets import determine_global_budgets
 from effortsharing.input.emissions import load_emissions, read_modelscenarios
-from effortsharing.nonco2 import determine_global_nonco2_trajectories, nonco2variation
+from effortsharing.pathways.nonco2 import determine_global_nonco2_trajectories, nonco2variation
 
 logger = logging.getLogger(__name__)
 
