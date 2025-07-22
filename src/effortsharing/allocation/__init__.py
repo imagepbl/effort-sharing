@@ -68,15 +68,11 @@ def save_allocations(
     Combine data arrays returned by each allocation method into a NetCDF file
     """
     fn = f"xr_alloc_{region}.nc"
-    # TODO refactor or remove?
-    # if self.dataread_file != "xr_dataread.nc":
-    #     savename = "xr_alloc_" + self.focus_region + "_adapt.nc"
     dir = config.paths.output / f"Allocations_{gas}_{lulucf}"
     dir.mkdir(parents=True, exist_ok=True)
     save_path = dir / fn
 
     start_year_analysis = config.params.start_year_analysis
-    # TODO move to config.config.params?
     end_year_analysis = 2101
 
     combined = (
