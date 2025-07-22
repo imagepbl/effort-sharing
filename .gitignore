@@ -8,6 +8,9 @@ Data/*
 Figures/*
 __pycache__/
 
+# Plotting scripts ignores
+notebooks/Plotting/Paper_blackbox/Old/*
+
 # C extensions
 *.so
 

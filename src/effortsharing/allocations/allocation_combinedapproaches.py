@@ -235,7 +235,7 @@ class allocation_comb:
             ~app1_hdi.Region.isin(["COK", "VAT", "NIU", "SOM", "GMB", "LIE", "PSE", "MCO", "NRU"]),
             np.nan,
         )
-        app1_hdi_neg = app1_hdi * yearly_neg
+        app1_hdi_neg = app1_hdi / np.sum(app1_hdi.sel(Region=self.countries_iso)) * yearly_neg
         app1_hdi_pos_total = self.xr_ecpc.ECPC.sum(dim="Time") + app1_hdi_neg.sum(dim="Time")
         app1_hdi_pos = app1_hdi_pos_total / app1_hdi_pos_total.sel(Region="EARTH") * yearly_pos
         self.COMB1h = app1_hdi_pos - app1_hdi_neg
@@ -363,7 +363,8 @@ class allocation_comb:
         gf_f = self.gf / yearly_netto
         pc_f = self.pc / yearly_netto
 
-        self.convergence_moment = 2040
+        if self.start_year_analysis == 2021: self.convergence_moment = 2040
+        elif self.start_year_analysis == 2015: self.convergence_moment = 2035
         yearfracs_2 = xr.Dataset(
             data_vars={
                 "Value": (
@@ -381,7 +382,7 @@ class allocation_comb:
                 f2c.Time > self.convergence_moment,
                 (gf_f * (1 - yearfracs_2) + f2_f * yearfracs_2) * yearly_netto,
             )
-        ).expand_dims(Convergence_year=[2040])
+        ).expand_dims(Convergence_year=[self.convergence_moment])
 
         """ Add country groups """
         path_ctygroups = "X:/user/dekkerm/Data/" + "UNFCCC_Parties_Groups_noeu.xlsx"

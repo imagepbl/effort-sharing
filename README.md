@@ -21,29 +21,25 @@ specification is contained in environment.yml. For full reproducibility across
 platforms, we also maintain a conda-lock file. When adding new dependencies,
 make sure to add them to `environment.yml` and re-generate the lockfile. 
 
-For best performance in PBL werkomgeving, we recommend working from the K:/ drive:
+For best performance in PBL werkomgeving, we recommend working from the K:/ drive.
 
 ```shell
-cd K:\
-
 # Clone the repo 
-git clone https://github.com/imagepbl/EffortSharing
+git clone https://github.com/imagepbl/effort-sharing
+cd effort-sharing
 
 # Create the environment
-conda env create --file environment.yml --prefix K:/environments/effortsharing_env 
-conda env create --file environment.yml  # Outside PBL werkomgeving
+conda env create --file environment.yml
 
 # Activate the environment
-conda activate K:\environments\effortsharing_env
-conda activate effortsharing_env  # Outside PBL werkomgeving
+conda activate effortsharing_env
 
 # To update the existing environment with any changes in environment.yml
 conda env update -f environment.yml
 
 # Use conda-lock to export to/install from a reproducible package list
 conda-lock lock
-conda-lock install --prefix K:/environments/effortsharing_env 
-conda-lock install name effortsharing_env  # Outside PBL werkomgeving
+conda-lock install name effortsharing_env
 pip install -e .  # conda-lock doesn't install local libraries
 ```
 
