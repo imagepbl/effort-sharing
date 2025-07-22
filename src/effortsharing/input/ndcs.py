@@ -145,7 +145,7 @@ def read_ndc(config: Config, countries, xr_hist):
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
-            val_2015 = float(df_ndc_raw_sub["(Mt CO2 equivalent)"][2015])
+            val_2015 = df_ndc_raw_sub["(Mt CO2 equivalent)"][2015].iloc[0]
             for lulucf in ["incl"]:  # Maybe add excl later?
                 for emis_i, emis in enumerate(["NDC"]):  # , 'CP']):
                     key = ["2030 NDCs", "Domestic actions 2030"][emis_i]
@@ -153,7 +153,7 @@ def read_ndc(config: Config, countries, xr_hist):
                         condkey = ["Unconditional NDCs", "Conditional NDCs"][cond_i]
                         for ambition_i, ambition in enumerate(["min", "max"]):
                             add = ["", ".1"][ambition_i]
-                            val = float(df_ndc_raw_sub[key][condkey + add])
+                            val = float(df_ndc_raw_sub[key][condkey + add].iloc[0])
                             red = 1 - val / val_2015
                             abs_jones = histemis_r * (1 - red)
                             df_regs.append(r)
@@ -227,7 +227,7 @@ def read_ndc_excl(config: Config, countries, xr_hist):
         histemis_r = float(histemis.sel(Region=r))
         df_ndc_raw_sub = df_ndc_raw[df_ndc_raw["ISO"] == r]
         if len(df_ndc_raw_sub) > 0:
-            val_2015 = float(df_ndc_raw_sub["(Mt CO2 equivalent)"][2015])
+            val_2015 = df_ndc_raw_sub["(Mt CO2 equivalent)"][2015].iloc[0]
             for lulucf in ["incl"]:  # Maybe add excl later?
                 for emis_i, emis in enumerate(["NDC"]):  # , 'CP']):
                     key = ["2030 NDCs", "Domestic actions 2030"][emis_i]
@@ -235,7 +235,7 @@ def read_ndc_excl(config: Config, countries, xr_hist):
                         condkey = ["Unconditional NDCs", "Conditional NDCs"][cond_i]
                         for ambition_i, ambition in enumerate(["min", "max"]):
                             add = ["", ".1"][ambition_i]
-                            val = float(df_ndc_raw_sub[key][condkey + add])
+                            val = df_ndc_raw_sub[key][condkey + add].iloc[0]
                             red = 1 - val / val_2015
                             abs_jones = histemis_r * (1 - red)
                             df_regs.append(r)
