@@ -7,7 +7,7 @@ import xarray as xr
 from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions
-from effortsharing.nonco2 import nonco2variation
+from effortsharing.pathways.nonco2 import nonco2variation
 
 logger = logging.getLogger(__name__)
 

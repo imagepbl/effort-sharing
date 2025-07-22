@@ -76,7 +76,7 @@ def extract_primap_agri_co2(primap: xr.Dataset):
     return primap_agri_co2
 
 
-@intermediate_file("historical_emissions.nc")
+@intermediate_file("emissions_history.nc")
 def read_jones(config: Config, regions):
     """Read Jones historical emission data."""
     logger.info("Reading historical emissions (jones)")
@@ -502,7 +502,7 @@ def read_ar6(config: Config, xr_hist):
     return ar6_data
 
 
-@intermediate_file("baseline_emissions.nc")
+@intermediate_file("emissions_baseline.nc")
 def read_baseline(
     config: Config,
     countries,  # TODO: pass in region instead??
@@ -612,7 +612,7 @@ def read_baseline(
     return xr_base
 
 
-@intermediate_file("emissions.nc")
+@intermediate_file("emissions_all.nc")
 def load_emissions(config: Config):
     """Collect emission input data from various sources to intermediate file.
 

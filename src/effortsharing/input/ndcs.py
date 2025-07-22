@@ -13,7 +13,7 @@ from effortsharing.input.socioeconomics import read_general
 logger = logging.getLogger(__name__)
 
 
-@intermediate_file("ncd_CR.nc")
+@intermediate_file("ndc_CR.nc")
 def read_ndc_climateresource(config: Config, countries):
     logger.info("Reading NDC data from Climate resource")
 
@@ -99,7 +99,7 @@ def read_ndc_climateresource(config: Config, countries):
     return xr_ndc_CR
 
 
-@intermediate_file("ncd.nc")
+@intermediate_file("ndc.nc")
 def read_ndc(config: Config, countries, xr_hist):
     logger.info("Reading NDC data")
 
@@ -181,7 +181,7 @@ def read_ndc(config: Config, countries, xr_hist):
 
 # TODO: can we make this a variant of read_ndc? Seems to be the exact same code
 # except reading a different sheet.
-@intermediate_file("ncd_excl.nc")
+@intermediate_file("ndc_excl.nc")
 def read_ndc_excl(config: Config, countries, xr_hist):
     logger.info("Reading NDC data excl")
 
@@ -289,10 +289,10 @@ def load_ndcs(config: Config, xr_hist=None):
     xr_ndc_CR = read_ndc_climateresource(config, countries)
 
     # Merge datasets
-    ncd_data = xr.merge([xr_ndc, xr_ndc_excl, xr_ndc_CR])
+    ndc_data = xr.merge([xr_ndc, xr_ndc_excl, xr_ndc_CR])
     # TODO: Reindex time and regions??
 
-    return ncd_data
+    return ndc_data
 
 
 if __name__ == "__main__":
