@@ -7,7 +7,6 @@ from effortsharing.pathways.co2_trajectories import determine_global_co2_traject
 from effortsharing.pathways.global_budgets import determine_global_budgets
 from effortsharing.pathways.nonco2 import determine_global_nonco2_trajectories, nonco2variation
 
-# TODO combine gas and lulucf into AssumptionSet dataclass?
 Gas = Literal["CO2", "GHG"]
 LULUCF = Literal["incl", "excl"]
 

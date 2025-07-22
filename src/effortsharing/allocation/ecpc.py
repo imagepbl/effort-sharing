@@ -129,9 +129,6 @@ def ecpc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> x
                     emissions_ecpc = pop_frac * globe_new
                     es.append(emissions_ecpc.expand_dims({"Time": [time_step]}))
 
-            # TODO is coords='minimal' correct here? Without gave error:
-            # ValueError: 'Region' not present in all datasets and coords='different'.
-            #   Either add 'Region' to datasets where it is missing or specify coords='minimal'.
             xr_ecpc_alloc = xr.concat(es, dim="Time", coords="minimal")
             xr_ecpc_all_list.append(
                 xr_ecpc_alloc.expand_dims(
