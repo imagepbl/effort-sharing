@@ -70,7 +70,7 @@ def pcb(
     budget_left = (
         emis_fut.where(emis_fut > 0, 0).sel(Time=time_range).sum(dim="Time") * pop_fraction
     ).sel(Region=focus_region)
-    # TODO compute budget on the fly or read from file. Instead of reading xr_dataread.nc
+    # TODO compute budget on the fly or read from file. Instead of reading xr_dataread.nc, see #145
     xr_total = load_dataread(config)
     co2_budget_left = (xr_total.Budget * pop_fraction).sel(Region=focus_region) * 1e3
 

@@ -27,8 +27,13 @@ def ap(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     focus_region = region
 
     # Step 1: Reductions before correction factor
-    # TODO replace with load_socioeconomics() function
-    xrt = load_dataread(config).sel(Time=analysis_timeframe)
+    # xr_social = load_socioeconomics(config).sel(Time=analysis_timeframe, Region="EARTH")
+    # GDP_sum_w = xr_social.GDP
+    # pop_sum_w = xr_social.Population
+    # TODO replace with load_socioeconomics() function, see #145
+    # need to check if commented code above is equivalent to below
+    # aka is xrt.GDP same as xr_social.GDP?
+    xrt = load_dataread(config)
     GDP_sum_w = xrt.GDP.sel(Region="EARTH")
     pop_sum_w = xrt.Population.sel(Region="EARTH")
     # Global average GDP per capita
