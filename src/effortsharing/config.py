@@ -7,6 +7,7 @@ import yaml
 @dataclass
 class DataPaths:
     input: Path
+    intermediate: Path
     output: Path
 
 
@@ -51,6 +52,8 @@ class Config:
 
     """
 
+    load_intermediate_files: bool
+    save_intermediate_files: bool
     paths: DataPaths
     params: Parameters
     dimension_ranges: DimensionRanges
@@ -72,6 +75,8 @@ class Config:
 
         # Forge settings into a new Config object
         return Config(
+            load_intermediate_files=config.get("load_intermediate_files", True),
+            save_intermediate_files=config.get("save_intermediate_files", True),
             paths=DataPaths(**paths),
             params=Parameters(**config.get("params")),
             dimension_ranges=DimensionRanges(**config.get("dimension_ranges")),
@@ -79,11 +84,15 @@ class Config:
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
     from rich import print
 
-    config_file = sys.argv[1]
-    config = Config.from_file(config_file)
+    # Get the config file from command line arguments
+    parser = argparse.ArgumentParser(description="Process all input data")
+    parser.add_argument("config", help="Path to config file")
+    args = parser.parse_args()
+
+    config = Config.from_file(args.config)
 
     print(config)
