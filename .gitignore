@@ -4,7 +4,8 @@
 
 # Own files
 Dash_CarbonBudget/*
-Data/*
+data/intermediate/*
+data/output/*
 Figures/*
 __pycache__/
 
