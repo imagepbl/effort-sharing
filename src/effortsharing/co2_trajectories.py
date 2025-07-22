@@ -4,19 +4,34 @@ import numpy as np
 import xarray as xr
 
 from effortsharing.config import Config
+from effortsharing.global_budgets import determine_global_budgets
+from effortsharing.input.emissions import load_emissions, read_modelscenarios
+from effortsharing.nonco2 import determine_global_nonco2_trajectories, nonco2variation
 
 logger = logging.getLogger(__name__)
 
 
 def determine_global_co2_trajectories(
     config: Config,
-    emissions,
-    scenarios,
-    xr_temperatures,
-    xr_co2_budgets,
-    xr_traj_nonco2,
+    emissions=None,
+    scenarios=None,
+    xr_temperatures=None,
+    xr_co2_budgets=None,
+    xr_traj_nonco2=None,
 ):
     logger.info("Computing global co2 trajectories")
+
+    # Load required input data if not provided
+    if emissions is None:
+        emissions = load_emissions(config)
+    if scenarios is None:
+        scenarios = read_modelscenarios(config)
+    if xr_temperatures is None:
+        xr_temperatures, _ = nonco2variation(config)
+    if xr_co2_budgets is None:
+        xr_co2_budgets = determine_global_budgets(config)
+    if xr_traj_nonco2 is None:
+        xr_traj_nonco2 = determine_global_nonco2_trajectories(config)
 
     # Shorthand for often-used expressions
     start_year = config.params.start_year_analysis
@@ -270,15 +285,7 @@ def determine_global_co2_trajectories(
         ]
     )
 
-    return (
-        # xr_traj_co2,  # TODO: not used. Remove?
-        # xr_traj_ghg,  # TODO: not used. Remove?
-        # landuse_ghg_corr,  # TODO: not used. Remove?
-        # landuse_co2_corr,  # TODO: not used. Remove?
-        # xr_traj_ghg_excl,  # TODO: not used. Remove?
-        # xr_traj_co2_excl,  # TODO: not used. Remove?
-        all_projected_gases,
-    )
+    return all_projected_gases
 
 
 def calculate_surplus_factor(emissions, emis_all, emis2100, ms2):
