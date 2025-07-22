@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 
 logger = logging.getLogger(__name__)
@@ -104,12 +105,9 @@ def save_rbw(config: Config, xr_version, countries):
             rbw.to_netcdf(savepath / f"xr_rbw_{gas}_lulucf.nc")
 
 
-# TODO: this doesn't need xr_version, only regions. Separate it more clearly.
-def save_rci(config: Config, xr_version):
-    """Save RCI data to netcdf file."""
-
-    savepath = config.paths.output / "xr_rci.nc"
-    logger.info(f"Saving RCI data to {savepath}")
+@intermediate_file("xr_rci.nc")
+def load_rci(config: Config) -> xr.Dataset:
+    """Load responsibility capability index (RCI) data from netcdf file."""
 
     # GDR RCI indices
     r = 0
@@ -142,6 +140,4 @@ def save_rci(config: Config, xr_version):
     dfdummy = fulldf.set_index(
         ["Region", "Time", "Historical_startyear", "Capability_threshold", "RCI_weight"]
     )
-    xr_rci = xr.Dataset.from_dataframe(dfdummy)
-    xr_rci = xr_rci.reindex({"Region": xr_version.Region})
-    xr_rci.to_netcdf(savepath)
+    return xr.Dataset.from_dataframe(dfdummy)

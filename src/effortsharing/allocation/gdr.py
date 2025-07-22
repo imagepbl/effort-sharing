@@ -8,6 +8,7 @@ from effortsharing.allocation.ap import ap
 from effortsharing.allocation.utils import LULUCF, Gas, config2base_var, load_future_emissions
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions, read_modelscenarios
+from effortsharing.save import load_rci
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,7 @@ def gdr(
     if ap_da is None:
         ap_da = ap(config, region, gas, lulucf)
 
-    # TODO if file does not exist, create it with world.save_rci() + @intermediate_file decorator
-    xr_rci_path = config.paths.output / "xr_rci.nc"
-    xr_rci = xr.open_dataset(xr_rci_path).load()
+    xr_rci = load_rci(config)
     yearfracs = xr.Dataset(
         data_vars={
             "Value": (
