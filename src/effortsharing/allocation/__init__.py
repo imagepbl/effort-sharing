@@ -34,7 +34,7 @@ def determine_allocations(
     config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl"
 ) -> list[xr.DataArray]:
     """
-    Run all allocation methods and return dict with key for each method and value as xr.DataArray
+    Run all allocation methods and return list of xr.DataArray per method.
     """
     # TODO report progress with logger.info or tqdm
     gf_da = gf(config, region, gas, lulucf)

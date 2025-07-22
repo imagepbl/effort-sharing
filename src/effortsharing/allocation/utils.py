@@ -67,15 +67,15 @@ def config2globe_var(
 
 def load_global_co2_trajectories(config: Config, emission_data, scenarios):
     xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
-    (xr_traj_nonco2,) = determine_global_nonco2_trajectories(
+    xr_traj_nonco2 = determine_global_nonco2_trajectories(
         config, emission_data, scenarios, xr_temperatures
     )
-    _, xr_co2_budgets = determine_global_budgets(
+    xr_co2_budgets = determine_global_budgets(
         config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
     )
     # determine_global_co2_trajectories is expensive when config has lots of dimensions
     # TODO cache or make more efficient
-    (all_projected_gases,) = determine_global_co2_trajectories(
+    all_projected_gases = determine_global_co2_trajectories(
         config=config,
         emissions=emission_data,
         scenarios=scenarios,
