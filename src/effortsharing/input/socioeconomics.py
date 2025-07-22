@@ -183,6 +183,7 @@ def read_ssps(config, regions, countries):
                 .reindex({"Time": np.arange(1980, 2101, 5)})
             )
 
+    xr_ssp['Region'] = xr_ssp.Region.astype(str)
     return xr_ssp
 
 
