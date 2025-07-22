@@ -58,7 +58,6 @@ def pcb(
     emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
     globalpath = emis_fut
 
-    # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
     hist_var_co2 = config2hist_var(gas="CO2", lulucf=lulucf)
     emis_start_i = emission_data[hist_var_co2].sel(Time=start_year)
     emis_start_w = emission_data[hist_var_co2].sel(Time=start_year, Region="EARTH")
@@ -111,7 +110,6 @@ def pcb(
     # Now, if we want GHG, the non-CO2 part is added:
     if gas == "GHG":
         # Non-co2 part
-        # TODO is it correct that global_path can use GHG but emis_start_* always uses CO2?
         hist_var_ghg = config2hist_var(gas="GHG", lulucf=lulucf)
         nonco2_current = emission_data[hist_var_ghg].sel(Time=start_year) - emission_data[
             hist_var_co2
@@ -143,7 +141,7 @@ def pcb(
         nonco2_focus_region = nonco2_part.sel(Region=focus_region)
         ghg_pcb = pcb + nonco2_focus_region
         ghg_pcb_lin = linear_co2_pos + nonco2_focus_region
-    elif gas == "_CO2":
+    elif gas == "CO2":
         # together:
         ghg_pcb = pcb
         ghg_pcb_lin = linear_co2_pos
