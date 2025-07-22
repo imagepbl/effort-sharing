@@ -153,7 +153,7 @@ def read_ndc(config: Config, countries, xr_hist):
                         condkey = ["Unconditional NDCs", "Conditional NDCs"][cond_i]
                         for ambition_i, ambition in enumerate(["min", "max"]):
                             add = ["", ".1"][ambition_i]
-                            val = float(df_ndc_raw_sub[key][condkey + add].iloc[0])
+                            val = df_ndc_raw_sub[key][condkey + add].iloc[0]
                             red = 1 - val / val_2015
                             abs_jones = histemis_r * (1 - red)
                             df_regs.append(r)
