@@ -8,6 +8,7 @@
 # =========================================================== #
 
 import warnings
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,10 @@ from tqdm import tqdm
 
 warnings.simplefilter(action="ignore")
 
+# Configure the logger
+logger = logging.getLogger(__name__)
+
+
 # =========================================================== #
 # CLASS OBJECT
 # =========================================================== #
@@ -31,9 +36,7 @@ class vardecomposing:
     # =========================================================== #
 
     def __init__(self, startyear=2021, gas="GHG", lulucf="incl"):
-        print("# ==================================== #")
-        print("# Initializing vardecomposing class    #")
-        print("# ==================================== #")
+        logger.info("Initializing vardecomposing class")
 
         self.current_dir = Path.cwd()
 
@@ -69,7 +72,7 @@ class vardecomposing:
     # =========================================================== #
 
     def prepare_global_sobol(self, year):
-        # print("- Prepare Sobol decomposition and draw samples for the full globe in fixed year")
+        logger.info("Preparing global Sobol decomposition")
         self.xr_year = xr.open_dataset(
             self.settings["paths"]["data"]["datadrive"]
             + "startyear_"
@@ -107,7 +110,7 @@ class vardecomposing:
     # =========================================================== #
 
     def apply_decomposition(self, xdataset_, maindim_, dims_, inputs_, problem_, samples_):
-        # print("- Read functions and apply actual decomposition")
+        logger.info("Read functions and apply actual decomposition")
         def refine_sample(pars):
             new_pars = pars.astype(str)
             actual_values = []
@@ -157,7 +160,7 @@ class vardecomposing:
     # =========================================================== #
 
     def save(self, dims_, times_):
-        print("- Save global results")
+        logger.info("Saving global results")
         d = {}
         d["Time"] = times_
         d["Factor"] = dims_
@@ -193,3 +196,9 @@ class vardecomposing:
             format="NETCDF4",
             engine="netcdf4",
         )
+
+if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])

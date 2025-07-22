@@ -7,11 +7,16 @@
 # Put in packages that we need
 # =========================================================== #
 
+import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
+
+# Configure the logger
+logger = logging.getLogger(__name__)
+
 
 # =========================================================== #
 # CLASS OBJECT
@@ -555,6 +560,11 @@ class allocation:
 
 
 if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=True)])
+
     region = input("Choose a focus country or region: ")
     allocator = allocation(region)
     allocator.gf()
