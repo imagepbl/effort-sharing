@@ -197,7 +197,7 @@ class allocation_comb:
 
     def approach1gdp(self):
         """
-        Methods for Robiou et al. (2023), under review.
+        Methods for Robiou du Pont et al. 2025, under review.
         """
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
         yearly_neg = self.CO2_neg.sel(
@@ -222,7 +222,7 @@ class allocation_comb:
 
     def approach1hdi(self):
         """
-        Methods for Robiou et al. (2023), under review.
+        Methods for Robiou du Pont et al. 2025, under review.
         """
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
         yearly_neg = self.CO2_neg.sel(
@@ -245,7 +245,7 @@ class allocation_comb:
 
     def approach2(self):
         """
-        Methods for Robiou et al. (2023), under review.
+        Methods for Robiou du Pont et al. 2025, under review.
         """
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
         yearly_neg = self.CO2_neg.sel(
@@ -340,7 +340,7 @@ class allocation_comb:
 
     def approach2_transition(self):
         """
-        Methods for Robiou et al. (2023), under review.
+        Methods for Robiou du Pont et al. 2025, under review.
         """
         yearly_netto = self.emis_fut.sel(Time=self.all_future_years)
         yearly_neg = self.CO2_neg.sel(

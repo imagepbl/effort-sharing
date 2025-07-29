@@ -709,7 +709,7 @@ class datareading:
             CO2_LULUCF=self.xr_ar6.sel(Variable="Emissions|CO2|AFOLU|Land").Value
         )
 
-        # Take averages of GHG excluding land use for the C-categories (useful for the Robiou paper)
+        # Take averages of GHG excluding land use for the C-categories (useful for the Robiou du Pont et al. 2025 paper)
         xr_both = xr.merge([self.xr_ar6, self.xr_ar6_landuse])
         xr_ar6_nozeros = xr_both.where(xr_both > -1e9, np.nan).where(xr_both != 0, np.nan)
         xr_averages = []
