@@ -19,7 +19,7 @@ dependencies = [
     "numpy",
     "openpyxl",
     "pandas",
-    "python-kaleido",
+    "kaleido",
     "pyyaml",
     "rich",
     "SALib",
