@@ -3,25 +3,23 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - conda-lock
-  - h5netcdf  # optional dependency of xarray
+  - conda-lock  
   - jupyterlab
   - matplotlib
-  - netcdf4  # optional dependency of xarray
-  - numpy
-  - openpyxl  # optional dependency of pandas
-  - pandas
   - pip
   - plotly
-  - python-kaleido
   - python=3.11
-  - pyyaml
-  - rich
-  - ruff
   - scipy
   - tqdm
   - webcolors
-  - xarray
   - pip:
-      - SALib  # not available via conda
-      - -e .  # local library code contained in src/efforthsharing
+      - -e .[dev]  # local library code contained in src/efforthsharing with its dependencies in pyproject.toml
+
+
+# TODO:
+# check if more people need to be added
+# consider date versioning
+# CITATION.CFF
+# Document min version, version, pip vs conda workflow
+# Test this shizzle
+
