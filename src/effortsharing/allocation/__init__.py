@@ -30,17 +30,28 @@ logger = logging.getLogger(__name__)
 # allocation methods
 # =========================================================== #
 
+
 def allocations_for_year(config: Config, regions, gas: Gas, lulucf: LULUCF, year: int):
     """Extract allocations for a specific year from the regional allocations."""
     # TODO now expects xr_alloc_{REGION}.nc files to exist
-    # would be nice if they where generated here if not present 
-    # or give nice error message
-    for cty_i, cty in tqdm(enumerate(regions)):
+    # and gives error if not
+    # would be nice if they where generated here
+    for cty_i, cty in tqdm(enumerate(regions), desc=f"Allocation for {year}", unit="region"):
+        fn = (
+            config.paths.output
+            / f"startyear_{config.params.start_year_analysis}"
+            / f"{gas}_{lulucf}"
+            / "Allocations"
+            / f"xr_alloc_{cty}.nc"
+        )
+        if not fn.exists():
+            raise FileNotFoundError(
+                f"Allocation file {fn} does not exist."
+                "Run effortsharing.allocation.allocations_for_region() function first."
+            )
         ds = (
             # TODO can we do region loop once instead of here and above?
-            xr.open_dataset(config.paths.output / f"Allocations_{gas}_{lulucf}" / f"xr_alloc_{cty}.nc")
-            .sel(Time=year)
-            .expand_dims(Region=[cty])
+            xr.open_dataset(fn).sel(Time=year).expand_dims(Region=[cty])
         )
         if cty_i == 0:
             xrt = ds.copy()
@@ -49,11 +60,12 @@ def allocations_for_year(config: Config, regions, gas: Gas, lulucf: LULUCF, year
         ds.close()
     # TODO save as {CABE_DATA_DIR} / {CABE_START_YEAR} / {CABE_ASSUMPTIONSET} / "Aggregated_files" / "xr_alloc_{YEAR}.nc"
     # change here not in cabe
-    root = config.paths.output / "Aggregated_files"
-    root.mkdir(parents=True, exist_ok=True)
-    xrt.astype("float32").to_netcdf(
-       root / f"xr_alloc_{year}_{gas}_{lulucf}.nc", format="NETCDF4"
+    root = (
+        config.paths.output / f"startyear_{config.params.start_year_analysis}" / "Aggregated_files"
     )
+    root.mkdir(parents=True, exist_ok=True)
+    xrt.astype("float32").to_netcdf(root / f"xr_alloc_{year}_{gas}_{lulucf}.nc", format="NETCDF4")
+
 
 def allocations_for_region(
     config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl"
@@ -93,9 +105,14 @@ def save_allocations(
     Combine data arrays returned by each allocation method into a NetCDF file
     """
     fn = f"xr_alloc_{region}.nc"
-    dir = config.paths.output / f"Allocations_{gas}_{lulucf}"
-    dir.mkdir(parents=True, exist_ok=True)
-    save_path = dir / fn
+    root = (
+        config.paths.output
+        / f"startyear_{config.params.start_year_analysis}"
+        / f"{gas}_{lulucf}"
+        / "Allocations"
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    save_path = root / fn
 
     start_year_analysis = config.params.start_year_analysis
     end_year_analysis = 2101
