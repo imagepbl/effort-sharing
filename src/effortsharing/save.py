@@ -66,7 +66,9 @@ def save_total(config: Config, xr_version):
     """Save xr_total to netcdf file."""
 
     startyear = config.params.start_year_analysis
-    savepath = config.paths.output / f"startyear_{startyear}" / "xr_dataread.nc"
+    root = config.paths.output / f"startyear_{startyear}"
+    root.mkdir(parents=True, exist_ok=True)
+    savepath = root / "xr_dataread.nc"
 
     logger.info(f"Saving xr_total to {savepath}")
 
