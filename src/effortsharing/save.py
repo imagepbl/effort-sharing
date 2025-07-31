@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,9 @@ def save_rbw(config: Config, xr_version, countries):
     countries_iso = np.array(list(countries.values()))
 
     # AP rbw factors
+    # TODO write as single file with 
+    # CO2-incl, CO2-excl, GHG-incl, GHG-excl columns
+    # so we can use @intermediate_file decorator
     for gas in ["CO2", "GHG"]:
         for lulucf_i, lulucf in enumerate(["incl", "excl"]):
             luext = ["", "_excl"][lulucf_i]
@@ -101,15 +105,14 @@ def save_rbw(config: Config, xr_version, countries):
             )
             rbw = (rb_part1 * rb_part2).sel(Region=countries_iso).sum(dim="Region")
             rbw = rbw.where(rbw != 0)
+            # TODO the incl file is overwritten by the excl file,
+            # should use lulucf in filename
             rbw.to_netcdf(savepath / f"xr_rbw_{gas}_lulucf.nc")
 
 
-# TODO: this doesn't need xr_version, only regions. Separate it more clearly.
-def save_rci(config: Config, xr_version):
-    """Save RCI data to netcdf file."""
-
-    savepath = config.paths.output / "xr_rci.nc"
-    logger.info(f"Saving RCI data to {savepath}")
+@intermediate_file("xr_rci.nc")
+def load_rci(config: Config) -> xr.Dataset:
+    """Load responsibility capability index (RCI) data from netcdf file."""
 
     # GDR RCI indices
     r = 0
@@ -142,6 +145,4 @@ def save_rci(config: Config, xr_version):
     dfdummy = fulldf.set_index(
         ["Region", "Time", "Historical_startyear", "Capability_threshold", "RCI_weight"]
     )
-    xr_rci = xr.Dataset.from_dataframe(dfdummy)
-    xr_rci = xr_rci.reindex({"Region": xr_version.Region})
-    xr_rci.to_netcdf(savepath)
+    return xr.Dataset.from_dataframe(dfdummy)

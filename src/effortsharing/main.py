@@ -16,13 +16,13 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from effortsharing.pathways.co2_trajectories import determine_global_co2_trajectories
 from effortsharing.config import Config
 from effortsharing.country_specific.netherlands import datareader_netherlands
 from effortsharing.country_specific.norway import datareader_norway
+from effortsharing.pathways.co2_trajectories import determine_global_co2_trajectories
 from effortsharing.pathways.global_budgets import determine_global_budgets
 from effortsharing.pathways.nonco2 import determine_global_nonco2_trajectories, nonco2variation
-from effortsharing.save import save_rbw, save_rci, save_regions, save_total
+from effortsharing.save import load_rci, save_rbw, save_regions, save_total
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +248,7 @@ def main(config: Config):
     save_regions(config, new_regions, countries)
     save_total(config, xr_version)
     save_rbw(config, xr_version, countries)
-    save_rci(config, xr_version)
+    load_rci(config)
 
     # Country-specific data readers
     datareader_netherlands(config, new_total)
