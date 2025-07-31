@@ -61,10 +61,13 @@ def allocations_for_year(config: Config, regions, gas: Gas, lulucf: LULUCF, year
     # TODO save as {CABE_DATA_DIR} / {CABE_START_YEAR} / {CABE_ASSUMPTIONSET} / "Aggregated_files" / "xr_alloc_{YEAR}.nc"
     # change here not in cabe
     root = (
-        config.paths.output / f"startyear_{config.params.start_year_analysis}" / "Aggregated_files"
+        config.paths.output
+        / f"startyear_{config.params.start_year_analysis}"
+        / f"{gas}_{lulucf}"
+        / "Aggregated_files"
     )
     root.mkdir(parents=True, exist_ok=True)
-    xrt.astype("float32").to_netcdf(root / f"xr_alloc_{year}_{gas}_{lulucf}.nc", format="NETCDF4")
+    xrt.astype("float32").to_netcdf(root / f"xr_alloc_{year}.nc", format="NETCDF4")
 
 
 def allocations_for_region(
