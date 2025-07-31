@@ -1,11 +1,46 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "effort-sharing"
+version = "2.0"
+description = "Analyse countries' emission allocations based on various effort-sharing principles."
+readme = "README.md"
+license = "MIT"
+keywords = ["fair shares", "carbon budget", "emission allocations", "effort sharing"]
+maintainers = [
+    {name = "Mark Dekker", email = "Mark.Dekker@pbl.nl"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "h5netcdf",
+    "netcdf4",
+    "numpy",
+    "openpyxl",
+    "pandas",
+    "kaleido",
+    "pyyaml",
+    "rich",
+    "SALib",
+    "xarray",
+]
+
+[project.optional-dependencies]
+dev = ["ruff"]
+
+[project.urls] 
+Source = "https://github.com/imagepbl/effort-sharing"
+Repository = "https://github.com/imagepbl/effort-sharing"
+Issues = "https://github.com/imagepbl/effort-sharing/issues"
+Explorer = "https://www.carbonbudgetexplorer.eu"
 
 [tool.ruff]
 line-length = 100
 
 [tool.ruff.lint]
 select = [
+    "D",  # pydocstyle
     "E",  # pycodestyle
     "F",  # Pyflakes
     "UP",  # pyupgrade
@@ -16,3 +51,6 @@ select = [
     "N",  # naming conventions
 ]
 ignore = []
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
