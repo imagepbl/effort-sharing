@@ -32,7 +32,7 @@ config = es.Config.from_file(config_file)
 
 # Create "xr_dataread.nc"
 # TODO write to config.start_year_analysis/xr_dataread.nc
-# global_pathways(config)
+global_pathways(config)
 
 # Create  "xr_policyscen.nc"
 policy_scenarios(config)
