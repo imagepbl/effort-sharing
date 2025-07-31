@@ -10,7 +10,6 @@ dependencies:
   - plotly
   - python=3.11
   - scipy
-  - tqdm
   - webcolors
   - pip:
       - -e .[dev]  # local library code contained in src/efforthsharing with its dependencies in pyproject.toml

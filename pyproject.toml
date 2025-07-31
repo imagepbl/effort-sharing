@@ -23,6 +23,7 @@ dependencies = [
     "pyyaml",
     "rich",
     "SALib",
+    "tqdm",
     "xarray",
 ]
 
