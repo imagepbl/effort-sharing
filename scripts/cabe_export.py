@@ -7,7 +7,6 @@ https://github.com/pbl-nl/website-carbon-budget-explorer/blob/main/README.md#dat
 This script generates those files.
 """
 
-import logging
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +25,7 @@ use_rich_logger(level="INFO")
 # Configuration
 config_file = Path("config.yml")
 config = es.Config.from_file(config_file)
+
 # TODO move below to config file? or move some from config to here?
 gas: Gas = "GHG"
 lulucf: LULUCF = "incl"
