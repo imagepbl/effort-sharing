@@ -28,9 +28,7 @@ def pc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
 
     # Multiplying the global budget with the population fraction to create
     # new allocation time series from start_year to 2101
-    emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
-    emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
+    emis_fut = load_future_emissions(config, gas, lulucf)
 
     xr_new = (pop_fraction * emis_fut).sel(Time=analysis_timeframe)
     logger.info(f"Computed Per Capita allocation for {region}")

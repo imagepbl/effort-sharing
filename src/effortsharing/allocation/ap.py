@@ -40,10 +40,9 @@ def ap(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     r1_nom = GDP_sum_w / pop_sum_w
 
     emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
     emis_base_var = config2base_var(gas, lulucf)
     emis_base = emission_data[emis_base_var]
-    emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
+    emis_fut = load_future_emissions(config, gas, lulucf)
 
     base_worldsum = emis_base.sel(Time=analysis_timeframe).sel(Region="EARTH")
     rb_part1 = (

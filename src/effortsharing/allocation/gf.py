@@ -20,9 +20,8 @@ def gf(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> xr.
     analysis_timeframe = np.arange(start_year_analysis, 2101)
 
     emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
     hist_var = config2hist_var(gas, lulucf)
-    emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
+    emis_fut = load_future_emissions(config, gas, lulucf)
 
     # Calculating the current CO2 fraction for region and world based on start_year_analysis
     current_co2_region = emission_data[hist_var].sel(Region=region, Time=start_year_analysis)

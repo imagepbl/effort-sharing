@@ -57,10 +57,9 @@ def gdr(
 
     # Compute GDR until 2030
     emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
     emis_base_var = config2base_var(gas, lulucf)
     emis_base = emission_data[emis_base_var]
-    emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
+    emis_fut = load_future_emissions(config, gas, lulucf)
     baseline = emis_base
     global_traject = emis_fut
 

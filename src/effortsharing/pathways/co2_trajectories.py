@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 from effortsharing.pathways.global_budgets import determine_global_budgets
 from effortsharing.input.emissions import load_emissions, read_modelscenarios
@@ -11,6 +12,7 @@ from effortsharing.pathways.nonco2 import determine_global_nonco2_trajectories, 
 logger = logging.getLogger(__name__)
 
 
+@intermediate_file("global_co2_trajectories.nc")
 def determine_global_co2_trajectories(
     config: Config,
     emissions=None,
