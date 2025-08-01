@@ -148,7 +148,7 @@ VS Code users: install the ruff plugin for in-editor feedback.
 API docs are generated from docstrings using [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/):
 
 ```shell
-pydoc-markdown -I src --render-toc > apidocs.md
+uvx pydoc-markdown -I src --render-toc > apidocs.md
 ```
 
 ### Testing
