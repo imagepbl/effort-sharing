@@ -12,6 +12,7 @@ from collections.abc import Iterable
 
 import numpy as np
 import xarray as xr
+from tqdm import tqdm
 
 from effortsharing.allocation.ap import ap
 from effortsharing.allocation.ecpc import ecpc
@@ -30,7 +31,45 @@ logger = logging.getLogger(__name__)
 # =========================================================== #
 
 
-def determine_allocations(
+def allocations_for_year(config: Config, regions, gas: Gas, lulucf: LULUCF, year: int):
+    """Extract allocations for a specific year from the regional allocations."""
+    # TODO now expects xr_alloc_{REGION}.nc files to exist
+    # and gives error if not
+    # would be nice if they where generated here
+    for cty_i, cty in tqdm(enumerate(regions), desc=f"Allocation for {year}", unit="region"):
+        fn = (
+            config.paths.output
+            / f"startyear_{config.params.start_year_analysis}"
+            / f"{gas}_{lulucf}"
+            / "Allocations"
+            / f"xr_alloc_{cty}.nc"
+        )
+        if not fn.exists():
+            raise FileNotFoundError(
+                f"Allocation file {fn} does not exist. First calculate allocations for each region."
+            )
+        ds = (
+            # TODO can we do region loop once instead of here and above?
+            xr.open_dataset(fn).sel(Time=year).expand_dims(Region=[cty])
+        )
+        if cty_i == 0:
+            xrt = ds.copy()
+        else:
+            xrt = xr.merge([xrt, ds])
+        ds.close()
+    # TODO save as {CABE_DATA_DIR} / {CABE_START_YEAR} / {CABE_ASSUMPTIONSET} / "Aggregated_files" / "xr_alloc_{YEAR}.nc"
+    # change here not in cabe
+    root = (
+        config.paths.output
+        / f"startyear_{config.params.start_year_analysis}"
+        / f"{gas}_{lulucf}"
+        / "Aggregated_files"
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    xrt.astype("float32").to_netcdf(root / f"xr_alloc_{year}.nc", format="NETCDF4")
+
+
+def allocations_for_region(
     config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl"
 ) -> list[xr.DataArray]:
     """
@@ -68,9 +107,14 @@ def save_allocations(
     Combine data arrays returned by each allocation method into a NetCDF file
     """
     fn = f"xr_alloc_{region}.nc"
-    dir = config.paths.output / f"Allocations_{gas}_{lulucf}"
-    dir.mkdir(parents=True, exist_ok=True)
-    save_path = dir / fn
+    root = (
+        config.paths.output
+        / f"startyear_{config.params.start_year_analysis}"
+        / f"{gas}_{lulucf}"
+        / "Allocations"
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    save_path = root / fn
 
     start_year_analysis = config.params.start_year_analysis
     end_year_analysis = 2101
@@ -82,59 +126,3 @@ def save_allocations(
     )
     logger.info(f"Saving allocations to {save_path}")
     combined.to_netcdf(save_path, format="NETCDF4")
-
-
-if __name__ == "__main__":
-    import argparse
-
-    from rich.logging import RichHandler
-
-    # Set up logging
-    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
-
-    # Get the config file from command line arguments
-    parser = argparse.ArgumentParser(description="Process emission input data")
-    parser.add_argument("--config", help="Path to config file", default="notebooks/config.yml")
-    parser.add_argument("--region", help="Region to allocate emissions for", default="BRA")
-    parser.add_argument(
-        "--gas",
-        choices=["CO2", "GHG"],
-        default="GHG",
-        help="Gas type to allocate emissions for (default: GHG)",
-    )
-    parser.add_argument(
-        "--lulucf",
-        choices=["incl", "excl"],
-        default="incl",
-        help="LULUCF treatment (default: incl)",
-    )
-
-    args = parser.parse_args()
-
-    # Read config
-    config = Config.from_file(args.config)
-    region = args.region
-    gas: Gas = args.gas
-    lulucf: LULUCF = args.lulucf
-    gf_da = gf(config, region, gas, lulucf)
-    pc_da = pc(config, region, gas, lulucf)
-    pcc_da = pcc(config, region, gas, lulucf)
-    pcb_da, pcb_lin_da = pcb(config, region, gas, lulucf)
-    ecpc_da = ecpc(config, region, gas, lulucf)
-    ap_da = ap(config, region, gas, lulucf)
-    gdr_da = gdr(config, region, gas, lulucf)
-    save_allocations(
-        config=config,
-        region=region,
-        gas=gas,
-        lulucf=lulucf,
-        dss=[
-            gf_da,
-            pc_da,
-            pcc_da,
-            pcb_da,
-            ecpc_da,
-            ap_da,
-            gdr_da,
-        ],
-    )

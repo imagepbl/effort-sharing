@@ -1,13 +1,7 @@
-"""main.py
-
-This file executes the full workflow to obtain global GHG/CO2 budgets and
-trajectories, similar to the first cell in notebooks/Main.ipynb
+"""Module with the full workflow to obtain global GHG/CO2 budgets and trajectories.
 
 It collects data from all input files, combines them into one big dataset, which is saved as xr_dataread.nc.
 Also, some country-specific datareaders are executed.
-
-Run with:
-    python src/effortsharing/main.py notebooks/config.yml
 """
 
 import logging
@@ -207,7 +201,7 @@ def add_country_groups(config: Config, regions, xr_total):
     return new_total, new_regions
 
 
-def main(config: Config):
+def global_pathways(config: Config):
     import effortsharing as es
 
     countries, regions = es.input.socioeconomics.read_general(config)
@@ -247,26 +241,10 @@ def main(config: Config):
     xr_version = new_total.sel(Temperature=save_temp)
     save_regions(config, new_regions, countries)
     save_total(config, xr_version)
+    # TODO move below to own high level function, above is for making xr_dataread.nc
     save_rbw(config, xr_version, countries)
     load_rci(config)
 
     # Country-specific data readers
     datareader_netherlands(config, new_total)
     datareader_norway(config, new_total, primap_data)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    from rich.logging import RichHandler
-
-    # Set up logging
-    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])
-
-    # Get the config file from command line arguments
-    parser = argparse.ArgumentParser(description="Process all input data")
-    parser.add_argument("config", help="Path to config file")
-    args = parser.parse_args()
-
-    config = Config.from_file(args.config)
-    main(config)

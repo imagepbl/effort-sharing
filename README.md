@@ -58,8 +58,11 @@ effortsharing global-pathways
 effortsharing policy-scenarios
 effortsharing allocate NLD
 effortsharing aggregate 2040
-# Overwrite defaults:
-effortsharing --config config.yml --log-level WARNING allocate NLD --gas CO2 --lulucf excl
+# You can also overwrite defaults 
+effortsharing allocate NLD --config config.yml --log-level WARNING --gas CO2 --lulucf excl
+
+# Or ask for help to see all options:
+effortsharing aggregate --help
 ```
 
 The CLI lets you quickly run complete workflows or focus on specific countries/years.

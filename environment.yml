@@ -8,9 +8,8 @@ dependencies:
   - matplotlib
   - pip
   - plotly
-  - python=3.11
+  - python=3.12
   - scipy
-  - tqdm
   - webcolors
   - pip:
-      - -e .[dev]  # local library code contained in src/efforthsharing with its dependencies in pyproject.toml
+      - -e .[dev]  # local library code contained in src/effortsharing with its dependencies in pyproject.toml

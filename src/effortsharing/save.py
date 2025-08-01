@@ -66,7 +66,9 @@ def save_total(config: Config, xr_version):
     """Save xr_total to netcdf file."""
 
     startyear = config.params.start_year_analysis
-    savepath = config.paths.output / f"startyear_{startyear}" / "xr_dataread.nc"
+    root = config.paths.output / f"startyear_{startyear}"
+    root.mkdir(parents=True, exist_ok=True)
+    savepath = root / "xr_dataread.nc"
 
     logger.info(f"Saving xr_total to {savepath}")
 
@@ -105,9 +107,7 @@ def save_rbw(config: Config, xr_version, countries):
             )
             rbw = (rb_part1 * rb_part2).sel(Region=countries_iso).sum(dim="Region")
             rbw = rbw.where(rbw != 0)
-            # TODO the incl file is overwritten by the excl file,
-            # should use lulucf in filename
-            rbw.to_netcdf(savepath / f"xr_rbw_{gas}_lulucf.nc")
+            rbw.to_netcdf(savepath / f"xr_rbw_{gas}_{lulucf}.nc")
 
 
 @intermediate_file("xr_rci.nc")
