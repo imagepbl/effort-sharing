@@ -48,7 +48,7 @@ effortsharing policy-scenarios
 effortsharing allocate NLD
 effortsharing aggregate 2040
 # You can also overwrite defaults 
-effortsharing --config config.yml --log-level WARNING allocate NLD --gas CO2 --lulucf excl
+effortsharing allocate NLD --config config.yml --log-level WARNING --gas CO2 --lulucf excl
 ```
 
 This simple command line interface allows you to quickly run part of the full workflow, e.g. to find the allocations for a given country of interest. Especially the first step (global_pathways) is useful, as this takes quite long, and all other functionality depend on it.

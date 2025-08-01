@@ -46,7 +46,7 @@ def allocations_for_year(config: Config, regions, gas: Gas, lulucf: LULUCF, year
         )
         if not fn.exists():
             raise FileNotFoundError(
-                f"Allocation file {fn} does not exist."
+                f"Allocation file {fn} does not exist. "
                 "Run effortsharing.allocation.allocations_for_region() function first."
             )
         ds = (
