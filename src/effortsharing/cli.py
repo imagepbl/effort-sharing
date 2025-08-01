@@ -127,7 +127,7 @@ def allocate(
     config: Path = Path("config.yml"),
     log_level: LogLevel = "INFO",
 ):
-    """Allocate emissions to regions.
+    """Allocate emissions for a region.
 
     Args:
         region: Region to allocate emissions for.
