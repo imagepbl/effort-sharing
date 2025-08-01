@@ -156,7 +156,11 @@ uvx pydoc-markdown -I src --render-toc > apidocs.md
 A test script is included to quickly check if / how the results have been affected since a previous run. Use it as such:
 
 ```shell
-python scripts/compare_dirs.py data/reference data/current
+pytest -v --confcutdir=$PWD/scripts/compare_dirs \
+    scripts/compare_dirs/test.py \
+    --reference-dir data/reference \
+    --current-dir data/current \
+    --atol 1e-9 --rtol 1e-5
 ``` 
 
 where you replace the paths to reference and current with actual folders you
