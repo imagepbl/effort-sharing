@@ -36,6 +36,9 @@ Repository = "https://github.com/imagepbl/effort-sharing"
 Issues = "https://github.com/imagepbl/effort-sharing/issues"
 Explorer = "https://www.carbonbudgetexplorer.eu"
 
+[project.scripts]
+effortsharing = "effortsharing.cli:main"
+
 [tool.ruff]
 line-length = 100
 
