@@ -2,6 +2,8 @@
 
 import argparse
 import logging
+import sys
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +14,8 @@ from effortsharing.config import Config
 from effortsharing.input.policyscens import policy_scenarios
 from effortsharing.pathways.global_pathways import global_pathways
 
+logger = logging.getLogger(__name__)
+
 
 def use_rich_logger(level: str | int = "INFO"):
     """Set up logging with RichHandler.
@@ -20,6 +24,27 @@ def use_rich_logger(level: str | int = "INFO"):
         level: The logging level to set.
     """
     logging.basicConfig(level=level, format="%(message)s", handlers=[RichHandler(show_time=False)])
+
+
+def generate_config(dest: Path = Path("config.yml")):
+    """Generate a configuration file by downloading the default one from GitHub."""
+    branch = "main"
+    url = f"https://github.com/imagepbl/effort-sharing/raw/refs/heads/{branch}/config.default.yml"
+    try:
+        urllib.request.urlretrieve(url, dest)
+        logging.info(f"Downloaded config from {url} to {dest}")
+    except Exception as e:
+        logging.error(f"Failed to download config from {url}: {e}")
+
+
+def get_input_data():
+    """Placeholder for the 'get-input-data' command."""
+    # TODO implement by fetching from Zenodo with pooch
+    logger.error(
+        "The 'get-input-data' command is not implemented yet. "
+        "Please contact Mark (mark.dekker@pbl.nl) for download instructions."
+    )
+    sys.exit(1)
 
 
 def add_gas_and_lulucf_args(parser: argparse.ArgumentParser):
@@ -53,6 +78,11 @@ def main():
         help="Set the logging level",
     )
     subparsers = parser.add_subparsers(dest="command", required=True, help="Sub-command to run")
+    subparsers.add_parser(
+        "generate-config",
+        help="Generate a configuration file by downloading the default one from GitHub.",
+    )
+    subparsers.add_parser("get-input-data", help="Download input data files")
     subparsers.add_parser("global-pathways", help="Generate global pathways data")
     subparsers.add_parser("policy-scenarios", help="Generate policy scenarios data")
     allocate_parser = subparsers.add_parser("allocate", help="Allocate emissions to regions")
@@ -66,8 +96,14 @@ def main():
 
     use_rich_logger(args.log_level)
 
+    if args.command == "generate-config":
+        generate_config()
+        return
+
     config = Config.from_file(args.config)
-    if args.command == "global-pathways":
+    if args.command == "get-input-data":
+        get_input_data()
+    elif args.command == "global-pathways":
         global_pathways(config)
     elif args.command == "policy-scenarios":
         policy_scenarios(config)
