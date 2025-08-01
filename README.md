@@ -179,7 +179,3 @@ Output data is publicly available on Zenodo:
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
-
-## TODO <!-- omit in toc -->
-- TODO: flip switch in zenodo and add CFF for citation info
-- Update python version also in github action
