@@ -167,8 +167,3 @@ def aggregate(
     config_obj = Config.from_file(config)
     regions_iso = np.load(config_obj.paths.output / "all_regions.npy", allow_pickle=True)
     allocations_for_year(year=year, config=config_obj, regions=regions_iso, gas=gas, lulucf=lulucf)
-
-
-def main():
-    """Main entry point for the Effort Sharing CLI tool."""
-    app()
