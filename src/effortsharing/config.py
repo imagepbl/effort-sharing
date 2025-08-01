@@ -61,8 +61,13 @@ class Config:
     @classmethod
     def from_file(cls, config_file: Path | str) -> "Config":
         # Open file
-        with open(config_file) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
+        config_file = Path(config_file)
+        if not config_file.exists():
+            raise FileNotFoundError(
+                f"Config file {config_file} does not exist. "
+                "Please generate with `effortsharing generate-config` command."
+            )
+        config = yaml.load(config_file.read_text(), Loader=yaml.FullLoader)
 
         # Convert strings to Path
         paths = {k: Path(v) for k, v in config.get("paths").items()}
