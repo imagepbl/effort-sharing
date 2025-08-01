@@ -35,11 +35,8 @@ def ecpc(config: Config, region, gas: Gas = "GHG", lulucf: LULUCF = "incl") -> x
 
     hist_var = config2hist_var(gas, lulucf)
     emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
     global_emissions_future = load_future_emissions(
-        config=config,
-        emission_data=emission_data,
-        scenarios=scenarios,
+        config,
         lulucf="incl",
         gas="GHG",
     ).sel(Time=analysis_timeframe)

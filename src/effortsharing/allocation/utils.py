@@ -4,8 +4,6 @@ import xarray as xr
 
 from effortsharing.config import Config
 from effortsharing.pathways.co2_trajectories import determine_global_co2_trajectories
-from effortsharing.pathways.global_budgets import determine_global_budgets
-from effortsharing.pathways.nonco2 import determine_global_nonco2_trajectories, nonco2variation
 
 Gas = Literal["CO2", "GHG"]
 LULUCF = Literal["incl", "excl"]
@@ -64,30 +62,8 @@ def config2globe_var(
     raise InvalidAssumptionSetError(gas, lulucf)
 
 
-def load_global_co2_trajectories(config: Config, emission_data, scenarios):
-    xr_temperatures, xr_nonco2warming_wrt_start = nonco2variation(config)
-    xr_traj_nonco2 = determine_global_nonco2_trajectories(
-        config, emission_data, scenarios, xr_temperatures
-    )
-    xr_co2_budgets = determine_global_budgets(
-        config, emission_data, xr_temperatures, xr_nonco2warming_wrt_start
-    )
-    # determine_global_co2_trajectories is expensive when config has lots of dimensions
-    # TODO cache or make more efficient
-    all_projected_gases = determine_global_co2_trajectories(
-        config=config,
-        emissions=emission_data,
-        scenarios=scenarios,
-        xr_temperatures=xr_temperatures,
-        xr_co2_budgets=xr_co2_budgets,
-        xr_traj_nonco2=xr_traj_nonco2,
-    )
-
-    return all_projected_gases
-
-
-def load_future_emissions(config: Config, emission_data, scenarios, gas: Gas, lulucf: LULUCF):
-    all_projected_gases = load_global_co2_trajectories(config, emission_data, scenarios)
+def load_future_emissions(config: Config, gas: Gas, lulucf: LULUCF):
+    all_projected_gases = determine_global_co2_trajectories(config)
     globe_var = config2globe_var(gas, lulucf)
     return all_projected_gases[globe_var]
 

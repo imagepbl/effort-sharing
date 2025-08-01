@@ -9,11 +9,11 @@ from effortsharing.allocation.utils import (
     config2hist_var,
     load_dataread,
     load_future_emissions,
-    load_global_co2_trajectories,
     load_population,
 )
 from effortsharing.config import Config
-from effortsharing.input.emissions import load_emissions, read_modelscenarios
+from effortsharing.input.emissions import load_emissions
+from effortsharing.pathways.co2_trajectories import determine_global_co2_trajectories
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,7 @@ def pcb(
     pop_fraction = (pop_region / pop_earth).mean(dim="Scenario")
 
     emission_data = load_emissions(config)
-    scenarios = read_modelscenarios(config)
-    emis_fut = load_future_emissions(config, emission_data, scenarios, gas, lulucf)
+    emis_fut = load_future_emissions(config, gas, lulucf)
     globalpath = emis_fut
 
     hist_var_co2 = config2hist_var(gas="CO2", lulucf=lulucf)
@@ -116,9 +115,7 @@ def pcb(
         ].sel(Time=start_year)
 
         nonco2_fraction = nonco2_current / nonco2_current.sel(Region="EARTH")
-        nonco2_globe = load_global_co2_trajectories(
-            config=config, emission_data=emission_data, scenarios=scenarios
-        ).NonCO2_globe
+        nonco2_globe = determine_global_co2_trajectories(config).NonCO2_globe
         nonco2_part_gf = nonco2_fraction * nonco2_globe
 
         pc_fraction = pop_region / pop_earth
