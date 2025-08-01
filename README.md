@@ -1,26 +1,22 @@
 # Effort Sharing
 
-Compute fair national emissions allocations using transparent, reproducible workflows. Designed by and for researchers.
+Compute fair national emissions allocations using transparent, reproducible workflows. Designed by researchers for researchers.
 
-## Table of Contents
 
-- [Effort Sharing](#effort-sharing)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Installation Instructions](#installation-instructions)
-  - [Obtaining Input Data](#obtaining-input-data)
-  - [Usage Overview](#usage-overview)
-    - [Command Line Interface (CLI)](#command-line-interface-cli)
-    - [Scripts](#scripts)
-    - [Interactive Notebooks \& API](#interactive-notebooks--api)
+- [Introduction](#introduction)
+- [Installation Instructions](#installation-instructions)
+- [Obtaining Input Data](#obtaining-input-data)
+- [Usage Overview](#usage-overview)
+  - [Command Line Interface (CLI)](#command-line-interface-cli)
+  - [Scripts](#scripts)
+  - [Interactive Notebooks \& API](#interactive-notebooks--api)
   - [Configuration File](#configuration-file)
-  - [Developer Instructions](#developer-instructions)
-    - [Source Installation](#source-installation)
+- [Developer Instructions](#developer-instructions)
+  - [Source Installation](#source-installation)
   - [Code Style / Formatting](#code-style--formatting)
   - [Documentation](#documentation)
   - [Making a Release](#making-a-release)
-  - [Referencing this Repository](#referencing-this-repository)
-- [TODO](#todo)
+- [Referencing this Repository](#referencing-this-repository)
 
 ## Introduction
 
@@ -31,10 +27,6 @@ This package combines a variety of data sources to compute fair national emissio
 - Calculate allocations for countries/regions using various effort-sharing rules
 - Compare allocations, NDCs, and cost-optimal scenarios
 - Conduct variance decomposition (Sobol analysis)
-
-Output data is publicly available on Zenodo:
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
 ## Installation Instructions
 
@@ -92,7 +84,7 @@ The internal structure of the effortsharing package is documented in [apidocs.md
 See the `notebooks` folder for examples.  
 Note: Notebooks may be outdated as the package evolves, but dedicated releases ensure reproducibility for published results.
 
-## Configuration File
+### Configuration File
 
 Many commands require a configuration file.  
 Generate a default config:
@@ -134,7 +126,7 @@ conda-lock install --name effortsharing_env
 pip install -e .[dev]  # conda-lock doesn't install local libraries
 ```
 
-## Code Style / Formatting
+### Code Style / Formatting
 
 We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting.  
 Configuration is in `pyproject.toml`.
@@ -147,7 +139,7 @@ ruff format src
 
 VS Code users: install the ruff plugin for in-editor feedback.
 
-## Documentation
+### Documentation
 
 API docs are generated from docstrings using [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/):
 
@@ -155,7 +147,7 @@ API docs are generated from docstrings using [pydoc-markdown](https://niklasrose
 pydoc-markdown -I src --render-toc > apidocs.md
 ```
 
-## Making a Release
+### Making a Release
 
 We release at least when publishing new results (e.g. journal, Carbon Budget Explorer).  
 Date versioning is used (e.g. 2025.8.1 for August 1, 2025).
@@ -163,10 +155,13 @@ Date versioning is used (e.g. 2025.8.1 for August 1, 2025).
 Release checklist:
 
 - [ ] Update version in `pyproject.toml`
-- [ ] Update Python version in `pyproject.toml` and `environment.yaml` if needed
-- [ ] Add new dependencies:
-  - [ ] `src` dependencies → `pyproject.toml`
-  - [ ] `scripts`/`notebooks` dependencies → `environment.yaml`
+- [ ] Update Python version (if needed) in:
+  - [ ] `pyproject.toml` 
+  - [ ] `environment.yaml`
+  - [ ] `.github/workflows/pypi.yaml`
+- [ ] Make sure dependencies are up to date:
+  - [ ] Imports in `src` should be added to `pyproject.toml`
+  - [ ] Imports in `scripts`/`notebooks` should be added to → `environment.yaml`
   - [ ] Regenerate conda lock file
 - [ ] Run tests
 - [ ] Check all scripts, CLI arguments, and notebooks
@@ -178,8 +173,13 @@ Release checklist:
 
 ## Referencing this Repository
 
-...
+Cite the code: ...
 
-# TODO
+Output data is publicly available on Zenodo:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
+
+
+## TODO <!-- omit in toc -->
 - TODO: flip switch in zenodo and add CFF for citation info
 - Update python version also in github action
