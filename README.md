@@ -54,7 +54,9 @@ This simple command line interface allows you to quickly run part of the full wo
 
 The high-level functions used by the command line scripts, as well as some of the lower level functions, can also be imported in an interactive Python session. This is especially convenient for analyzing results, generating visualizations, documenting workflows for publications, et cetera.
 
-All functions that can be imported are documented [here](...). Additionally, the `notebooks` folder in the root of the repository contains various analyses that we've conducted in the past. Please note that the package was developed in tandemw with these notebooks, and we do not intend to maintain the notebooks as the package evolves further. So, while the notebooks may serve as a starting point for exploration, most of them will usually be outdated. We *do* intend to make a dedicated release whenever we publish results generated from these notebooks. In that case, the results are reproducible by rewinding to the version that was associated with this publication.
+The internal structure of the effortsharing package is documented in [apidocs.md](apidocs.md). While unpolished, it may serve as a starting point when diving into the internals of the code. 
+
+Additionally, the `notebooks` folder in the root of the repository contains various analyses that we've conducted in the past. Please note that the package was developed in tandem with these notebooks, and we do not intend to maintain the notebooks as the package evolves further. So, while the notebooks may serve as a starting point for exploration, most of them will usually be outdated. We *do* intend to make a dedicated release whenever we publish results generated from these notebooks. In that case, the results are reproducible by rewinding to the version that was associated with this publication.
 
 ### Config file
 
@@ -113,6 +115,14 @@ ruff format src
 
 We highly recommend using the ruff plugin in VS Code. It will automatically warn you about code style issues and help you solve them from within your editor.
 
+### Documentation
+
+Besides this readme, we provide API documentation based on the docstrings in the python code. This documentation lives in `apidocs.md` and generated with [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/). To update the documentation, run:
+
+```
+pydoc-markdown -I src --render-toc > apidocs.md
+```
+
 ### Making a release
 
 In general, we intend to make new releases at least when we publish results based on updated data (e.g. in a journal or on the Carbon Budget Explorer website). Additional releases can be made as we see fit. 
@@ -133,7 +143,7 @@ correspond to the first release in August 2025. To make a new release:
 - [ ] Create a release on GitHub and wait for the GitHub actions workflow to finish
 - [ ] Verify that the release is available on PyPI, and that you can install it (`pip install effort-sharing`)
 - [ ] Verify that the release is available on Zenodo
-- [ ] 
+- [ ] Make sure the documentation is up to date
 
 ## Referencing this repository
 

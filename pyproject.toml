@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff"]
+dev = ["ruff", "pydoc-markdown"]
 
 [project.urls] 
 Source = "https://github.com/imagepbl/effort-sharing"
