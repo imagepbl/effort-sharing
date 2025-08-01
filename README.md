@@ -1,39 +1,61 @@
+# Effort Sharing
+
+Compute fair national emissions allocations using transparent, reproducible workflows. Designed by and for researchers.
+
+## Table of Contents
+
+- [Effort Sharing](#effort-sharing)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Installation Instructions](#installation-instructions)
+  - [Obtaining Input Data](#obtaining-input-data)
+  - [Usage Overview](#usage-overview)
+    - [Command Line Interface (CLI)](#command-line-interface-cli)
+    - [Scripts](#scripts)
+    - [Interactive Notebooks \& API](#interactive-notebooks--api)
+  - [Configuration File](#configuration-file)
+  - [Developer Instructions](#developer-instructions)
+    - [Source Installation](#source-installation)
+  - [Code Style / Formatting](#code-style--formatting)
+  - [Documentation](#documentation)
+  - [Making a Release](#making-a-release)
+  - [Referencing this Repository](#referencing-this-repository)
+- [TODO](#todo)
+
 ## Introduction
 
-This code combines a variety of data sources to compute fair national emissions allocations, studies variability in these allocations and compares them with NDC estimates and cost-optimal scenario projections. 
+This package combines a variety of data sources to compute fair national emissions allocations, study variability, and compare results with NDC estimates and cost-optimal scenario projections.
 
-* Gather data from external sources such as population, GDP, historical emissions, etc. on a country level
-* Compute global future emission pathways based on configurable emission reduction scenarios
-* Calculate corresponding allocations for individual countries/regions based on various effort-sharing rules
-* Combine allocations for all regions for a given target year
-* Load cost-optimal scenarios and NDCs in the same format for easy comparison
-* Conduct variance decomposition (Sobol analysis)
+- Gather country-level data (population, GDP, historical emissions, etc.)
+- Compute global future emission pathways based on configurable scenarios
+- Calculate allocations for countries/regions using various effort-sharing rules
+- Compare allocations, NDCs, and cost-optimal scenarios
+- Conduct variance decomposition (Sobol analysis)
 
-The output data of this code is publicly available on Zenodo:
+Output data is publicly available on Zenodo:
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
-## Installation instructions
+## Installation Instructions
 
-The effort-sharing package is available on PyPI and can be installed with pip:
+If you want to use some of the existing functionality, simply install from PyPI:
 
 ```shell
 pip install effort-sharing
 ```
 
-If you are planning to actively develop the code in this repository (e.g. add or modify notebooks, or modifying the core algorithms), you should install the package from source. See the [developer instructions](#developer-instructions) below.
+If you plan to develop the code or modify notebooks/scripts, install from source
+(see [Developer Instructions](#developer-instructions)).
 
-## Obtaining input data
+## Obtaining Input Data
 
-The effortsharing package combines data from various sources. We are currently exploring whether we can re-share the input data as a complete package, or provide direct access to (most of) the original sources. In the meantime, if you want to quickly get started, please reach out to <mailto:mark.dekker@pbl.nl>.
+We're working to provide input data directly or via original sources. For now, contact <mailto:mark.dekker@pbl.nl> for quick access.
 
-## Using the package
+## Usage Overview
 
-Currently, the code is optimized for running end-to-end workflows for producing data / figures for publications and the [Carbon Budget Explorer](https://www.carbonbudgetexplorer.eu). These workflows are available in the `scripts` and `notebooks` folder. Recently, we've been working to make the code more flexible to facilitate more interactive workflows as well. Consequently, we briefly document the following use cases:
+### Command Line Interface (CLI)
 
-### (Interactive) exploration via the command line
-
-The end-to-end workflows combine a number of high level steps. The effort-sharing package exposes a simple command line interface to run these steps independently. After installing the package, they are available as effortsharing:
+Run step-by-step workflows using the CLI:
 
 ```shell
 effortsharing --help
@@ -43,130 +65,121 @@ effortsharing global-pathways
 effortsharing policy-scenarios
 effortsharing allocate NLD
 effortsharing aggregate 2040
-# You can also overwrite defaults 
+# Overwrite defaults:
 effortsharing --config config.yml --log-level WARNING allocate NLD --gas CO2 --lulucf excl
 ```
 
-This simple command line interface allows you to quickly run a complete workflow step by step. Moreover, it allows you to e.g. find the allocations for a given country of interest instead of for every region on the planet. Especially the first step (global_pathways) is useful, as this takes quite long, and all other functionality depend on it.
+The CLI lets you quickly run complete workflows or focus on specific countries/years.
 
-### Running complete workflows as script
+### Scripts
 
-For completely automated and reproducible workflow, the simplest option is to build a script that combines all steps you want to do and some configuration. 
-For example, `scripts/cabe_export.py` loads all input data, calculates global pathways, calculates allocations for all countries and aggregations for 2030 and 2040, collects policy scenarios, and writes all output to a dedicated folder. Adapt the parameters at teh top of the script as you see fit, then invoke with `python cabe_export.py` or run it from within your favourite editor. Scripts are stored in the folder `scripts` in the root of the repo. They are not part of the "package" that's installed from PyPI.
+Automate workflows using scripts in the `scripts` folder.  
+Example: `scripts/cabe_export.py` loads data, calculates pathways/allocations, aggregates results, and exports everything.  
+Edit parameters at the top of the script, then run with:
 
-### Interactive exploration in a notebook or (I)Python shell
+```shell
+python scripts/cabe_export.py
+```
 
-The high-level functions used by the command line scripts, as well as some of the lower level functions, can also be imported in an interactive Python session. This is especially convenient for analyzing results, generating visualizations, documenting workflows for publications, et cetera. Typically, it would be useful to first generate some intermediate/output data through the CLI, then explore it in a notebook.
+Scripts are not included in the PyPI package.
+
+### Interactive Notebooks & API
+
+Import high-level and low-level functions in Python or Jupyter notebooks for custom analysis and visualization.  
 
 The internal structure of the effortsharing package is documented in [apidocs.md](apidocs.md). While unpolished, it may serve as a starting point when diving into the internals of the code. 
 
-Additionally, the `notebooks` folder in the root of the repository contains various analyses that we've conducted in the past. Please note that the package was developed in tandem with these notebooks, and we do not intend to maintain the notebooks as the package evolves further. So, while the notebooks may serve as a starting point for exploration, most of them will usually be outdated. We *do* intend to make a dedicated release whenever we publish results generated from these notebooks. In that case, the results are reproducible by rewinding to the version that was associated with this publication.
+See the `notebooks` folder for examples.  
+Note: Notebooks may be outdated as the package evolves, but dedicated releases ensure reproducibility for published results.
 
-### Config file
+## Configuration File
 
-The package uses a configuration file to store some important settings. A default config file can be obtained through the cli command `effortsharing generate-config`. The configuration file contains
-
-- data paths: speaks for itself
-- load/save intermediate: control whether you want to (re)compute all data or try to reload it from a previous run
-- params: settings for an experiment (TODO: explain each option?)
-- dimension_ranges: default 'ticks' for pathway parameters. Defaults should be fine. It can be faster to use shorter ranges (or just one value per range) to get a quicker allocations, but note that you might need more than one value per parameter to calculate the pathways.
-
-## Developer instructions
-
-If your name is Mark Dekker and/or you are planning to actively contribute to this package or the scripts/notebooks, please take note of the following contribution guidelines and respect the [code of conduct](CODE_OF_CONDUCT.md).
-
-### Source installation
-
-To run the code as you develop it, you will want to follow a slightly different installation procedure, cloning the repo and installing inside a (conda) virtual environment. The specification in `environment.yml` contains a relatively complete set of dependencies including things like Jupyter Lab and matplotlib, that are needed for running the notebooks. For best performance in PBL werkomgeving, we recommend working from the K:/ drive.
+Many commands require a configuration file.  
+Generate a default config:
 
 ```shell
-# Clone the repo 
+effortsharing generate-config
+```
+
+The config file controls:
+
+- Data paths
+- Whether to load/save intermediate results
+- Experiment parameters
+- Dimension ranges for pathway parameters (shorter ranges = faster runs, but less variability)
+
+See comments in the generated config for details.
+
+## Developer Instructions
+
+If you plan to contribute, please follow these guidelines and respect the [code of conduct](CODE_OF_CONDUCT.md).
+
+### Source Installation
+
+Clone the repo and set up a (conda) environment:
+
+```shell
 git clone https://github.com/imagepbl/effort-sharing
 cd effort-sharing
-
-# Create the environment
 conda env create --file environment.yml
-
-# Activate the environment
 conda activate effortsharing_env
-
-# To update the existing environment with any changes in environment.yml
 conda env update -f environment.yml
 ```
 
-For full reproducibility across platforms, we also maintain a conda-lock file. When adding new dependencies, make sure to add re-generate the lockfile:
+For reproducibility, use the conda-lock file:
 
 ```shell
-# Use conda-lock to export to/install from a reproducible package list
 conda-lock lock
-
-# Install from lock file
-conda-lock install name effortsharing_env
-pip install -e .[dev]  # conda-lock doesn't install local **libraries**
+conda-lock install --name effortsharing_env
+pip install -e .[dev]  # conda-lock doesn't install local libraries
 ```
 
-### Code style / formatting
+## Code Style / Formatting
 
-We try to maintain a consistent code style, using [ruff](https://docs.astral.sh/ruff/) as our go-to linter and formatter. Ruff configuration is defined in the `ruff` section of `pyproject.toml`. To check / fix the code you can run:
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting.  
+Configuration is in `pyproject.toml`.
 
 ```shell
-# Lint all files in the src directory
 ruff check src
-
-# Try to apply automatic fixes for found issues
 ruff check --fix src
-
-# Format the code according to guidelines
 ruff format src
 ```
 
-We highly recommend using the ruff plugin in VS Code. It will automatically warn you about code style issues and help you solve them from within your editor.
+VS Code users: install the ruff plugin for in-editor feedback.
 
-### Documentation
+## Documentation
 
-Besides this readme, we provide API documentation based on the docstrings in the python code. This documentation lives in `apidocs.md` and generated with [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/). To update the documentation, run:
+API docs are generated from docstrings using [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/):
 
-```
+```shell
 pydoc-markdown -I src --render-toc > apidocs.md
 ```
 
-### Making a release
+## Making a Release
 
-In general, we intend to make new releases at least when we publish results based on updated data (e.g. in a journal or on the Carbon Budget Explorer website). Additional releases can be made as we see fit. 
+We release at least when publishing new results (e.g. journal, Carbon Budget Explorer).  
+Date versioning is used (e.g. 2025.8.1 for August 1, 2025).
 
-As of August 2025, we will use date versioning as in xarray, e.g. 2025.8.1 would
-correspond to the first release in August 2025. To make a new release:
+Release checklist:
 
-- [ ] Update version in pyproject.toml 
-- [ ] Make sure min python version in pyproject.toml is still (reasonably) up to date; update if needed.
-- [ ] Make sure python version in environment.yaml is (reasonably) up to date; update if needed.
-- [ ] Make sure any newly introduced dependencies have been added
-  - [ ] Dependencies in `src` folder should be in `pyproject.toml`
-  - [ ] Additional dependencies in `scripts` and `notebooks` folders should be in `environment.yaml`
-  - [ ] Regenerate the conda lock file
-- [ ] Run the tests (if any)
-- [ ] Make sure all scripts, command lines arguments, and relevant notebooks (still) run without problems
-- [ ] If there are new contributors, make sure to add them to CITATION.CFF
-- [ ] Create a release on GitHub and wait for the GitHub actions workflow to finish
-- [ ] Verify that the release is available on PyPI, and that you can install it (`pip install effort-sharing`)
-- [ ] Verify that the release is available on Zenodo
-- [ ] Make sure the documentation is up to date
+- [ ] Update version in `pyproject.toml`
+- [ ] Update Python version in `pyproject.toml` and `environment.yaml` if needed
+- [ ] Add new dependencies:
+  - [ ] `src` dependencies → `pyproject.toml`
+  - [ ] `scripts`/`notebooks` dependencies → `environment.yaml`
+  - [ ] Regenerate conda lock file
+- [ ] Run tests
+- [ ] Check all scripts, CLI arguments, and notebooks
+- [ ] Add new contributors to `CITATION.CFF`
+- [ ] Create GitHub release and wait for workflow
+- [ ] Verify release on PyPI (`pip install effort-sharing`)
+- [ ] Verify release on Zenodo
+- [ ] Update documentation
 
-## Referencing this repository
+## Referencing this Repository
 
 ...
 
-
 # TODO
-- move config.yml to root of repo?
-- check cli commands 
-  - now they're grouped under effortsharing, do we really want this?
-  - do we want to add things like help, version
-  - do we want to add the CLI for policy scenarios et cetera that I've now included
-  - do we want separate CLI commands for allocate_region and allocate_all?
-- generate API docs and insert link.
-- document the config file and insert link/inline docs
 - TODO: flip switch in zenodo and add CFF for citation info
-
-
-Update python version also in github action
+- Update python version also in github action
