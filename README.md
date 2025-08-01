@@ -15,6 +15,7 @@ Compute fair national emissions allocations using transparent, reproducible work
   - [Source Installation](#source-installation)
   - [Code Style / Formatting](#code-style--formatting)
   - [Documentation](#documentation)
+  - [Testing](#testing)
   - [Making a Release](#making-a-release)
 - [Referencing this Repository](#referencing-this-repository)
 
@@ -147,29 +148,46 @@ API docs are generated from docstrings using [pydoc-markdown](https://niklasrose
 pydoc-markdown -I src --render-toc > apidocs.md
 ```
 
+### Testing
+
+A test script is included to quickly check if / how the results have been affected since a previous run. Use it as such:
+
+```shell
+python scripts/compare_dirs.py data/reference data/current
+``` 
+
+where you replace the paths to reference and current with actual folders you
+want to compare.
+
 ### Making a Release
 
-We release at least when publishing new results (e.g. journal, Carbon Budget Explorer).  
-Date versioning is used (e.g. 2025.8.1 for August 1, 2025).
+We release at least when publishing new results (e.g. journal, Carbon Budget Explorer). 
 
 Release checklist:
 
-- [ ] Update version in `pyproject.toml`
-- [ ] Update Python version (if needed) in:
+- [ ] Update version in `pyproject.toml`. Use date versioning (e.g. 2025.8.1 for August 1, 2025)
+- [ ] Make sure Python version is [reasonably up to date](https://pyreadiness.org/) in:
   - [ ] `pyproject.toml` 
   - [ ] `environment.yaml`
   - [ ] `.github/workflows/pypi.yaml`
 - [ ] Make sure dependencies are up to date:
   - [ ] Imports in `src` should be added to `pyproject.toml`
-  - [ ] Imports in `scripts`/`notebooks` should be added to → `environment.yaml`
-  - [ ] Regenerate conda lock file
-- [ ] Run tests
-- [ ] Check all scripts, CLI arguments, and notebooks
+  - [ ] Imports in `scripts`/`notebooks` should be added to `environment.yaml`
+  - [ ] Regenerate conda lock file if dependencies are added
+- [ ] Regenerate the API documentation (see [Documentation](#documentation))
+- [ ] Regenerate output
+  - [ ] Save it in a timestamped / versioned directory 
+  - [ ] Use [test script](#testing) to verify new output has no unexpected changes
+  - [ ] Upload to Zenodo
+  - [ ] Upload to CABE
+- [ ] Check:
+  - [ ] CLI commands still work
+  - [ ] Recent notebooks still work
+  - [ ] Scripts still work
 - [ ] Add new contributors to `CITATION.CFF`
 - [ ] Create GitHub release and wait for workflow
 - [ ] Verify release on PyPI (`pip install effort-sharing`)
 - [ ] Verify release on Zenodo
-- [ ] Update documentation
 
 ## Referencing this Repository
 
