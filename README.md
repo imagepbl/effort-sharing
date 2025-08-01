@@ -31,10 +31,6 @@ The effortsharing package combines data from various sources. We are currently e
 
 Currently, the code is optimized for running end-to-end workflows for producing data / figures for publications and the [Carbon Budget Explorer](https://www.carbonbudgetexplorer.eu). These workflows are available in the `scripts` and `notebooks` folder. Recently, we've been working to make the code more flexible to facilitate more interactive workflows as well. Consequently, we briefly document the following use cases:
 
-### Running complete workflows as script
-
-For example, `scripts/cabe_export.py` loads all input data, calculates global pathways, calculates allocations for all countries and aggregations for 2030 and 2040, collects policy scenarios, and writes all output to a dedicated folder. Adapt the parameters at teh top of the script as you see fit, then invoke with `python cabe_export.py` or run it from within your favourite editor. Scripts are stored in the folder `scripts` in the root of the repo. They are not part of the "package" that's installed from PyPI.
-
 ### (Interactive) exploration via the command line
 
 The end-to-end workflows combine a number of high level steps. The effort-sharing package exposes a simple command line interface to run these steps independently. After installing the package, they are available as effortsharing:
@@ -48,11 +44,16 @@ effortsharing allocate config.yml
 effortsharing aggregate config.yml
 ```
 
-This simple command line interface allows you to quickly run part of the full workflow, e.g. to find the allocations for a given country of interest. Especially the first step (global_pathways) is useful, as this takes quite long, and all other functionality depend on it.
+This simple command line interface allows you to quickly run a complete workflow step by step. Moreover, it allows you to e.g. find the allocations for a given country of interest instead of for every region on the planet. Especially the first step (global_pathways) is useful, as this takes quite long, and all other functionality depend on it.
+
+### Running complete workflows as script
+
+For completely automated and reproducible workflow, the simplest option is to build a script that combines all steps you want to do and some configuration. 
+For example, `scripts/cabe_export.py` loads all input data, calculates global pathways, calculates allocations for all countries and aggregations for 2030 and 2040, collects policy scenarios, and writes all output to a dedicated folder. Adapt the parameters at teh top of the script as you see fit, then invoke with `python cabe_export.py` or run it from within your favourite editor. Scripts are stored in the folder `scripts` in the root of the repo. They are not part of the "package" that's installed from PyPI.
 
 ### Interactive exploration in a notebook or (I)Python shell
 
-The high-level functions used by the command line scripts, as well as some of the lower level functions, can also be imported in an interactive Python session. This is especially convenient for analyzing results, generating visualizations, documenting workflows for publications, et cetera.
+The high-level functions used by the command line scripts, as well as some of the lower level functions, can also be imported in an interactive Python session. This is especially convenient for analyzing results, generating visualizations, documenting workflows for publications, et cetera. Typically, it would be useful to first generate some intermediate/output data through the CLI, then explore it in a notebook.
 
 The internal structure of the effortsharing package is documented in [apidocs.md](apidocs.md). While unpolished, it may serve as a starting point when diving into the internals of the code. 
 
@@ -60,9 +61,12 @@ Additionally, the `notebooks` folder in the root of the repository contains vari
 
 ### Config file
 
-The package uses a configuration file to store some important settings. 
+The package uses a configuration file to store some important settings. A default config file can be obtained through the cli command `effortsharing generate-config`. The configuration file contains
 
-TODO: insert documentation.
+- data paths: speaks for itself
+- load/save intermediate: control whether you want to (re)compute all data or try to reload it from a previous run
+- params: settings for an experiment (TODO: explain each option?)
+- dimension_ranges: default 'ticks' for pathway parameters. Defaults should be fine. It can be faster to use shorter ranges (or just one value per range) to get a quicker allocations, but note that you might need more than one value per parameter to calculate the pathways.
 
 ## Developer instructions
 
