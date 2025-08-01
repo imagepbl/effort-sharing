@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "uv"]
+dev = ["ruff", "uv", "pytest"]
 
 [project.urls] 
 Source = "https://github.com/imagepbl/effort-sharing"
