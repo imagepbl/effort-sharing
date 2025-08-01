@@ -207,7 +207,7 @@ def add_country_groups(config: Config, regions, xr_total):
     return new_total, new_regions
 
 
-def main(config: Config):
+def global_pathways(config: Config):
     import effortsharing as es
 
     countries, regions = es.input.socioeconomics.read_general(config)
@@ -247,6 +247,7 @@ def main(config: Config):
     xr_version = new_total.sel(Temperature=save_temp)
     save_regions(config, new_regions, countries)
     save_total(config, xr_version)
+    # TODO move todo to own high level function
     save_rbw(config, xr_version, countries)
     load_rci(config)
 
@@ -269,4 +270,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = Config.from_file(args.config)
-    main(config)
+    global_pathways(config)
