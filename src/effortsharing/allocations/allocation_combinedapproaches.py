@@ -27,14 +27,14 @@ class allocation_comb:
         self.current_dir = Path.cwd()
 
         # Read in Input YAML file
-        with open(self.current_dir / "input.yml") as file:
+        with open(self.current_dir / "config.yml") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(
-            self.settings["paths"]["data"]["datadrive"] + "all_countries.npy", allow_pickle=True
+            self.settings["paths"]["output"] + "/all_countries.npy", allow_pickle=True
         )
         self.savepath = (
-            self.settings["paths"]["data"]["datadrive"]
-            + "startyear_"
+            self.settings["paths"]["output"]
+            + "/startyear_"
             + str(self.settings["params"]["start_year_analysis"])
             + "/"
         )
