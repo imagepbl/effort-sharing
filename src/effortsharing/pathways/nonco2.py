@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from effortsharing.cache import intermediate_file
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions, read_modelscenarios
 
@@ -201,6 +202,7 @@ def read_nonco2_lamboll(config):
     return df
 
 
+@intermediate_file("global_nonco2_trajectories.nc")
 def determine_global_nonco2_trajectories(
     config: Config, emissions=None, scenarios=None, temperatures=None
 ):

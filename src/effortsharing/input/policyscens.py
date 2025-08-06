@@ -11,7 +11,8 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
-import yaml
+
+from effortsharing.config import Config
 
 # =========================================================== #
 # CLASS OBJECT
@@ -22,16 +23,15 @@ class policyscenadding:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self, startyear=2021, input_file="input.yml"):
+    def __init__(self, config: Config):
         print("# ==================================== #")
         print("# Initializing policyscenadding class  #")
         print("# ==================================== #")
 
         # Read in Input YAML file
-        with open(input_file) as file:
-            self.settings = yaml.load(file, Loader=yaml.FullLoader)
+        self.config = config
         self.xr_total = xr.open_dataset(
-            self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
+            self.config.paths.output / f'startyear_{config.params.start_year_analysis}' / "xr_dataread.nc"
         )
 
     # =========================================================== #
@@ -40,8 +40,7 @@ class policyscenadding:
     def read_engage_data(self):
         print("- Read ENGAGE scenarios and change region namings")
         df_eng_raw = pd.read_csv(
-            self.settings["paths"]["data"]["external"]
-            + "ENGAGE/PolicyScenarios/ENGAGE_internal_2610_onlyemis.csv"
+            self.config.paths.input / 'ENGAGE_internal_2610_onlyemis.csv'
         )
 
         df_eng = df_eng_raw[df_eng_raw.Variable == "Emissions|Kyoto Gases"]
@@ -165,7 +164,7 @@ class policyscenadding:
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
         xr_total_onlyalloc = self.xr_total[["NDC", "CurPol", "NetZero"]]
         xr_total_onlyalloc.to_netcdf(
-            self.settings["paths"]["data"]["datadrive"] + "xr_policyscen.nc"
+            self.config.paths.output / "xr_policyscen.nc"
         )
 
         # CO2 version
@@ -176,7 +175,13 @@ class policyscenadding:
         self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
         xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
         xr_total_onlyalloc_co2.to_netcdf(
-            self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
+             self.config.paths.output / "xr_policyscen_co2.nc"
         )
 
         self.xr_total.close()
+
+def policy_scenarios(config: Config):
+    policyscenner = policyscenadding(config)
+    policyscenner.read_engage_data()
+    policyscenner.filter_and_convert()
+    policyscenner.add_to_xr()

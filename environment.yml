@@ -3,25 +3,13 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - conda-lock
-  - h5netcdf  # optional dependency of xarray
+  - conda-lock  
   - jupyterlab
   - matplotlib
-  - netcdf4  # optional dependency of xarray
-  - numpy
-  - openpyxl  # optional dependency of pandas
-  - pandas
   - pip
   - plotly
-  - python-kaleido
-  - python=3.11
-  - pyyaml
-  - rich
-  - ruff
+  - python=3.12
   - scipy
-  - tqdm
   - webcolors
-  - xarray
   - pip:
-      - SALib  # not available via conda
-      - -e .  # local library code contained in src/efforthsharing
+      - -e .[dev]  # local library code contained in src/effortsharing with its dependencies in pyproject.toml

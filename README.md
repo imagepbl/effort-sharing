@@ -1,54 +1,180 @@
+# Effort Sharing
+
+Compute fair national emissions allocations using transparent, reproducible workflows. Designed by researchers for researchers.
+
+
+- [Introduction](#introduction)
+- [Installation Instructions](#installation-instructions)
+- [Obtaining Input Data](#obtaining-input-data)
+- [Usage Overview](#usage-overview)
+  - [Command Line Interface (CLI)](#command-line-interface-cli)
+  - [Scripts](#scripts)
+  - [Interactive Notebooks \& API](#interactive-notebooks--api)
+  - [Configuration File](#configuration-file)
+- [Developer Instructions](#developer-instructions)
+  - [Source Installation](#source-installation)
+  - [Code Style / Formatting](#code-style--formatting)
+  - [Documentation](#documentation)
+  - [Testing](#testing)
+  - [Making a Release](#making-a-release)
+- [Referencing this Repository](#referencing-this-repository)
+
 ## Introduction
-This code combines a variety of data sources to compute fair national emissions allocations, studies variability in these allocations and compares them with NDC estimates and cost-optimal scenario projections. We plan to make the code more accessible in terms of commenting and cleaning up old code over time. The output data of this code is publicly available on Zenodo:
+
+This package combines a variety of data sources to compute fair national emissions allocations, study variability, and compare results with NDC estimates and cost-optimal scenario projections.
+
+- Gather country-level data (population, GDP, historical emissions, etc.)
+- Compute global future emission pathways based on configurable scenarios
+- Calculate allocations for countries/regions using various effort-sharing rules
+- Compare allocations, NDCs, and cost-optimal scenarios
+- Conduct variance decomposition (Sobol analysis)
+
+## Installation Instructions
+
+If you want to use some of the existing functionality, simply install from PyPI:
+
+```shell
+pip install effort-sharing
+```
+
+If you plan to develop the code or modify notebooks/scripts, install from source
+(see [Developer Instructions](#developer-instructions)).
+
+## Obtaining Input Data
+
+We're working to provide input data directly or via original sources. For now, contact <mailto:mark.dekker@pbl.nl> for quick access.
+
+## Usage Overview
+
+### Command Line Interface (CLI)
+
+Run step-by-step workflows using the CLI:
+
+```shell
+effortsharing --help
+effortsharing generate-config
+effortsharing get-input-data
+effortsharing global-pathways
+effortsharing policy-scenarios
+effortsharing allocate NLD
+effortsharing aggregate 2040
+# You can also overwrite defaults 
+effortsharing allocate NLD --config config.yml --log-level WARNING --gas CO2 --lulucf excl
+
+# Or ask for help to see all options:
+effortsharing aggregate --help
+```
+
+The CLI lets you quickly run complete workflows or focus on specific countries/years.
+
+### Scripts
+
+Automate workflows using scripts in the `scripts` folder.  
+Example: `scripts/cabe_export.py` loads data, calculates pathways/allocations, aggregates results, and exports everything.  
+Edit parameters at the top of the script, then run with:
+
+```shell
+python scripts/cabe_export.py
+```
+
+Scripts are not included in the PyPI package.
+
+### Interactive Notebooks & API
+
+Import high-level and low-level functions in Python or Jupyter notebooks for custom analysis and visualization.  
+
+The internal structure of the effortsharing package is documented in [apidocs.md](apidocs.md). While unpolished, it may serve as a starting point when diving into the internals of the code. 
+
+See the `notebooks` folder for examples.  
+Note: Notebooks may be outdated as the package evolves, but dedicated releases ensure reproducibility for published results.
+
+### Configuration File
+
+Many commands require a configuration file.  
+Generate a default config:
+
+```shell
+effortsharing generate-config
+```
+
+The config file controls:
+
+- Data paths
+- Whether to load/save intermediate results
+- Experiment parameters
+- Dimension ranges for pathway parameters (shorter ranges = faster runs, but less variability)
+
+See comments in the generated config for details.
+
+## Developer Instructions
+
+If you plan to contribute, please follow these guidelines and respect the [code of conduct](CODE_OF_CONDUCT.md).
+
+### Source Installation
+
+Clone the repo and set up a (conda) environment:
+
+```shell
+git clone https://github.com/imagepbl/effort-sharing
+cd effort-sharing
+conda env create --file environment.yml
+conda activate effortsharing_env
+conda env update -f environment.yml
+```
+
+For reproducibility, use the conda-lock file:
+
+```shell
+conda-lock lock
+conda-lock install --name effortsharing_env
+pip install -e .[dev]  # conda-lock doesn't install local libraries
+```
+
+### Code Style / Formatting
+
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting.  
+Configuration is in `pyproject.toml`.
+
+```shell
+ruff check src
+ruff check --fix src
+ruff format src
+```
+
+VS Code users: install the ruff plugin for in-editor feedback.
+
+### Documentation
+
+API docs are generated from docstrings using [pydoc-markdown](https://niklasrosenstein.github.io/pydoc-markdown/):
+
+```shell
+uvx pydoc-markdown -I src --render-toc > apidocs.md
+```
+
+### Testing
+
+A test script is included to quickly check if / how the results have been affected since a previous run. Use it as such:
+
+```shell
+pytest -v --confcutdir=$PWD/scripts/compare_dirs \
+    scripts/compare_dirs/test.py \
+    --reference-dir data/reference \
+    --current-dir data/current \
+    --atol 1e-9 --rtol 1e-5
+``` 
+
+where you replace the paths to reference and current with actual folders you
+want to compare.
+
+### Making a Release
+
+We release at least when publishing new results (e.g. journal, Carbon Budget Explorer). To generate a new release, open a [new issue using the `release` template](https://github.com/imagepbl/effort-sharing/issues/new?template=01_release.md) and follow the steps in the checklist.
+
+## Referencing this Repository
+
+Cite the code: ...
+
+Output data is publicly available on Zenodo:
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
-## Main features
-The main notebook you will be using is `Main.ipynb` in the main directory. Each cell in that notebook loads in a particular class and then goes through all of its methods.
-- The first one being called is the class in the file `class_datareading.py`. This class gathers all data from external sources, such as population, GDP, historical emissions, etc. on a country level, but also computes global pathways into the future. It does not do any effort sharing. The output is a file called `xr_dataread.nc`, which is your friend in case you need any country-specific data for debugging, for example. The main uncertainties / work from our side is around generating those future pathways under various circumstances (peak temperature, risk, non-CO2 assumptions, etc.).
-- The second class being called is the one from `class_allocation.py`. That one does all the effort-sharing. It loads in `xr_dataread.nc` and its methods are named after the allocation rule being computed. The class requires an input: the region (ISO3) that is focused on (called `self.FocusRegion` in `class_allocation.py`). So in `Main.ipynb`, you see that there is a loop over all countries and even some country groups (e.g., G20) in the world. The output are files in the form of `xr_alloc_XYZ.nc` where XYZ is the ISO3 code for a country, and they are saved to K:/ECEMF/T5.2/Allocations/.
-- The third and fourth classes (`class_allocation_combinedapproaches` and `class_tempalign`) are for future research.
-- The fifth class (`class_policyscens`) is for reading cost-optimal scenarios and NDCs
-- The final class (`class_variancedecomp`) conducts the variance decomposition (Sobol analysis)
-
-One final important notebook is `Aggregator.ipynb`. This script aggregates the country-individual files `xr_alloc_XYZ.nc`. One output is the aggregation of those files into a single file for a single year, for example `xr_alloc_2030.nc`. Useful for analysis purposes. Input variables can be changed in `input.yml`.
-
-
-## Setting up the environment (currently aimed at direct colleagues)
-
-We use conda for managing project dependencies. A portable (minimal) environment
-specification is contained in environment.yml. For full reproducibility across
-platforms, we also maintain a conda-lock file. When adding new dependencies,
-make sure to add them to `environment.yml` and re-generate the lockfile. 
-
-For best performance in PBL werkomgeving, we recommend working from the K:/ drive.
-
-```shell
-# Clone the repo 
-git clone https://github.com/imagepbl/effort-sharing
-cd effort-sharing
-
-# Create the environment
-conda env create --file environment.yml
-
-# Activate the environment
-conda activate effortsharing_env
-
-# To update the existing environment with any changes in environment.yml
-conda env update -f environment.yml
-
-# Use conda-lock to export to/install from a reproducible package list
-conda-lock lock
-conda-lock install name effortsharing_env
-pip install -e .  # conda-lock doesn't install local libraries
-```
-
-## Setting up required folder structure
-
-You will need to make a folder+subfolder in the K:/ drive as follows: `K:/Data/Data_effortsharing/DataUpdate_ongoing`. There all the data files will appear. Most output files that are generated here are in `netcdf` (or `xarray`) format.
-
-```shell
-cd K:
-mkdir Data\Data_effortsharing\DataUpdate_ongoing\Allocations
-mkdir Data\Data_effortsharing\DataUpdate_ongoing\Allocations_CO2_excl
-```
