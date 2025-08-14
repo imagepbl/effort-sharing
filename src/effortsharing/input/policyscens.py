@@ -25,9 +25,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-coco_logger = coco.logging.getLogger()
-coco_logger.setLevel(logging.CRITICAL)
-
 # =========================================================== #
 # CLASS OBJECT
 # =========================================================== #
