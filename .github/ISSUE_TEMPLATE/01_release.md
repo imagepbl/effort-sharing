@@ -17,10 +17,10 @@ assignees: ''
   - [ ] Imports in `src` should be added to `pyproject.toml`
   - [ ] Imports in `scripts`/`notebooks` should be added to `environment.yaml`
   - [ ] Regenerate conda lock file if dependencies are added
-- [ ] Regenerate the API documentation (see [Documentation](#documentation))
+- [ ] Regenerate the API documentation (see [Documentation](https://github.com/pbl-nl/website-carbon-budget-explorer/blob/main/README.md#documentation))
 - [ ] Regenerate output
   - [ ] Save it in a timestamped / versioned directory 
-  - [ ] Use [test script](#testing) to verify new output has no unexpected changes
+  - [ ] Use [test script](https://github.com/pbl-nl/website-carbon-budget-explorer/blob/main/README.md#testing) to verify new output has no unexpected changes
   - [ ] Upload to Zenodo
   - [ ] Upload to CABE
 - [ ] Check:
