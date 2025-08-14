@@ -8,12 +8,16 @@
 # =========================================================== #
 
 from pathlib import Path
+import logging
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
 from tqdm import tqdm
+
+# Configure the logger
+logger = logging.getLogger(__name__)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -25,9 +29,7 @@ class tempaligning:
     # =========================================================== #
 
     def __init__(self):
-        print("# ==================================== #")
-        print("# Initializing tempaligning class        #")
-        print("# ==================================== #")
+        logger.info("Initializing tempaligning class")
 
         self.current_dir = Path.cwd()
 
@@ -45,7 +47,7 @@ class tempaligning:
     # =========================================================== #
 
     def get_relation_2030emis_temp(self):
-        print("- Determine relation between 2030-emissions and temperature outcome")
+        logger.info("- Determine relation between 2030-emissions and temperature outcome")
         df_ar6_2 = pd.read_csv(
             self.settings["paths"]["data"]["external"]
             + "IPCC/AR6_Scenarios_Database_World_v1.1.csv"
@@ -90,7 +92,7 @@ class tempaligning:
     # =========================================================== #
 
     def determine_tempoutcomes(self):
-        print("- Determine temperature metric")
+        logger.info("- Determine temperature metric")
         xr_alloc_2030 = xr.open_dataset(
             self.settings["paths"]["data"]["datadrive"] + "xr_alloc_2030.nc"
         )
@@ -124,5 +126,12 @@ class tempaligning:
     # =========================================================== #
 
     def save(self):
-        print("- Save")
+        logger.info("- Save")
         self.xr_temps.to_netcdf(self.settings["paths"]["data"]["datadrive"] + "xr_temps.nc")
+
+
+if __name__ == "__main__":
+    from rich.logging import RichHandler
+
+    # Set up logging
+    logging.basicConfig(level="INFO", format="%(message)s", handlers=[RichHandler(show_time=False)])

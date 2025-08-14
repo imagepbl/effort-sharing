@@ -15,7 +15,8 @@ import numpy as np
 import pandas as pd
 import pooch
 import xarray as xr
-import yaml
+
+from effortsharing.config import Config
 
 # Configure the logger
 logging.basicConfig(
@@ -40,7 +41,7 @@ class policyscenadding(object):
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self):
+    def __init__(self, config: Config):
         logger.info("Initializing policyscenadding class")
 
         self.current_dir = Path.cwd()
@@ -56,10 +57,9 @@ class policyscenadding(object):
         }
 
         # Read in Input YAML file
-        with open(self.current_dir / "notebooks/input.yml", encoding="utf-8") as file:
-            self.settings = yaml.load(file, Loader=yaml.FullLoader)
+        self.config = config
         self.xr_total = xr.open_dataset(
-            self.settings["paths"]["data"]["datadrive"] + "/startyear_2021/xr_dataread.nc"
+            self.config.paths.output / f'startyear_{config.params.start_year_analysis}' / "xr_dataread.nc"
         )
 
     # =========================================================== #
@@ -313,7 +313,7 @@ class policyscenadding(object):
         self.xr_total = xr_total.interpolate_na(dim="Time", method="linear")
         xr_total_onlyalloc = self.xr_total[["NDC", "CurPol", "NetZero"]]
         xr_total_onlyalloc.to_netcdf(
-            self.settings["paths"]["data"]["datadrive"] + "xr_policyscen.nc"
+            self.config.paths.output / "xr_policyscen.nc"
         )
 
         # CO2 version (not all datasets have CO2 data)
@@ -325,20 +325,18 @@ class policyscenadding(object):
             self.xr_total_co2 = xr_total2.interpolate_na(dim="Time", method="linear")
             xr_total_onlyalloc_co2 = self.xr_total_co2[["NDC", "CurPol", "NetZero"]]
             xr_total_onlyalloc_co2.to_netcdf(
-                self.settings["paths"]["data"]["datadrive"] + "xr_policyscen_co2.nc"
+                self.config.paths.output / "xr_policyscen_co2.nc"
             )
 
         self.xr_total.close()
 
         return xr_total, xr_total_onlyalloc
 
-if __name__ == "__main__":
-    # Create an instance of the class
-    policyscen = policyscenadding()
-
-    # Call the methods in the class
+def policy_scenarios(config: Config):
+    policyscen = policyscenadding(config)
     df_filtered = policyscen.read_filter_scenario_data()
     df_renamed = policyscen.rename_and_preprocess(df_filtered)
     df_deduplicated = policyscen.deduplicate_regions(df_renamed)
     xr_kyoto, xr_co2 = policyscen.filter_and_convert(df_deduplicated)
     xr_total, xr_total_onlyalloc = policyscen.add_to_xr(xr_kyoto, xr_co2)
+    return xr_total, xr_total_onlyalloc, policyscen.xr_total_co2

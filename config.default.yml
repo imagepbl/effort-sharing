@@ -1,18 +1,10 @@
-# ============================================== #
-# PATHS
-# ============================================== #
-paths:
-  data:
-    external: X:/user/dekkerm/Data/
-    baseline: X:/user/heerdenvr/Downscaling/Mark/23_02_2024/
-    internal: Data/
-    datadrive: K:/Data/Data_effortsharing/DataUpdate_ongoing/
-    export: K:/Data/Data_effortsharing/EffortSharingExports/
-    lambollrepo: K:/Code/AR6CarbonBudgetCalc/
+load_intermediate_files: true
+save_intermediate_files: true
 
-# ============================================== #
-# PARAMS
-# ============================================== #
+paths:
+  input: ./data/input
+  intermediate: ./data/intermediate
+  output: ./data/output
 
 params:
   convergence_year_gdr: 2100

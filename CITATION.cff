@@ -1,0 +1,56 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Effort sharing
+message: >-
+  Python package to compute fair national emissions
+  allocations using transparent, reproducible workflows.
+type: software
+authors:
+  - given-names: Mark
+    family-names: Dekker
+    email: mark.dekker@pbl.nl
+    affiliation: Netherlands Environmental Assessment Agency
+    orcid: 'https://orcid.org/0000-0002-3543-6889'
+  - given-names: Chantal 
+    family-names: Würschinger
+    affiliation: Netherlands Environmental Assessment Agency
+    orcid: 'https://orcid.org/0009-0001-3380-9581'
+  - given-names: Peter
+    family-names: Kalverla
+    email: p.kalverla@esciencecenter.nl
+    affiliation: Netherlands eScience Center
+    orcid: 'https://orcid.org/0000-0002-5025-7862'
+  - given-names: Stefan
+    family-names: Verhoeven
+    email: s.verhoeven@esciencecenter.nl
+    affiliation: Netherlands eScience Center
+    orcid: 'https://orcid.org/0000-0002-5821-2060'
+repository-code: 'https://github.com/imagepbl/effort-sharing'
+url: 'https://github.com/imagepbl/effort-sharing'
+abstract: >-
+  This package combines a variety of data sources to compute
+  fair national emissions allocations, study variability,
+  and compare results with NDC estimates and cost-optimal
+  scenario projections.
+
+  - Gather country-level data (population, GDP, historical
+  emissions, etc.) 
+
+  - Compute global future emission pathways based on
+  configurable scenarios 
+
+  - Calculate allocations for countries/regions using
+  various effort-sharing rules 
+
+  - Compare allocations, NDCs, and cost-optimal scenarios 
+
+  - Conduct variance decomposition (Sobol analysis)
+keywords:
+  - fair shares
+  - carbon budget
+  - emission allocations
+  - effort sharing
+  - climate policy
+license: MIT

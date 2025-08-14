@@ -7,6 +7,7 @@
 # Put in packages that we need
 # =========================================================== #
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,9 @@ import pandas as pd
 import xarray as xr
 import yaml
 from tqdm import tqdm
+
+# Configure the logger
+logger = logging.getLogger(__name__)
 
 # =========================================================== #
 # CLASS OBJECT
@@ -25,14 +29,13 @@ class dataexportcl:
     # =========================================================== #
 
     def __init__(self):
-        print("# ==================================== #")
-        print("# DATAREADING class                    #")
+        logger.info("Data exporting class")
         self.current_dir = Path.cwd()
 
         # Read in export settings YAML file and Input YAML file
-        with open(self.current_dir / "export_settings.yml") as file:
+        with open(self.current_dir / "notebooks" / "DataExporters" / "export_settings.yml") as file:
             self.export_settings = yaml.load(file, Loader=yaml.FullLoader)
-        with open(self.current_dir / "../input.yml") as file:
+        with open(self.current_dir / "notebooks" / "input.yml") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
 
         # Set up main data objects
@@ -52,8 +55,7 @@ class dataexportcl:
         self.countries_iso = np.load(
             self.settings["paths"]["data"]["datadrive"] + "all_countries.npy", allow_pickle=True
         )
-        print("# startyear: ", self.settings["params"]["start_year_analysis"])
-        print("# ==================================== #")
+        logger.info(f"# startyear: {self.settings['params']['start_year_analysis']}")
 
     # ====================================================================================================================== #
     # GLOBAL EMISSION PATHWAYS EXPORTS
@@ -63,6 +65,8 @@ class dataexportcl:
         """
         Export default 1.5(6) and 2.0 pathways that roughly match the IPCC pathways
         """
+        logger.info("Exporting global default pathways")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
             **self.export_settings["dimensions_global"],
@@ -84,6 +88,8 @@ class dataexportcl:
         """
         Export negative emissions pathways
         """
+        logger.info("Exporting negative non LULUCF emissions pathways")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
             **self.export_settings["dimensions_global"],
@@ -99,6 +105,8 @@ class dataexportcl:
         """
         Export a large set of pathways (still a subset)
         """
+        logger.info("Exporting large subset of global pathways")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
         )[["GHG_globe", "CO2_globe", "GHG_globe_excl", "CO2_globe_excl"]].to_dataframe()
@@ -121,6 +129,8 @@ class dataexportcl:
         """
         Export NDC data
         """
+        logger.info("Exporting NDC data")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
         )[["GHG_ndc"]].to_dataframe()
@@ -135,6 +145,8 @@ class dataexportcl:
         """
         Export SSP data
         """
+        logger.info("Exporting SSP data")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101),
         )[["Population", "GDP"]].to_dataframe()
@@ -151,6 +163,8 @@ class dataexportcl:
         """
         Export historical emission data
         """
+        logger.info("Exporting historical emission data")
+
         dataframe = self.xr_dataread.sel(
             Time=np.arange(1850, 1 + self.settings["params"]["start_year_analysis"]),
         )[["GHG_hist", "GHG_hist_excl", "CO2_hist", "CH4_hist", "N2O_hist"]].to_dataframe()
@@ -174,6 +188,8 @@ class dataexportcl:
         """
         Get reduced-form country files, omitting some parameter settings that users won't use and reducing the file size through compression
         """
+        logger.info("Exporting reduced-form country files")
+
         path_toread = (
             self.savepath + "../../DataUpdate_ongoing/startyear_2021/Allocations_GHG_incl/"
         )
@@ -214,6 +230,8 @@ class dataexportcl:
         """
         Export default emission allocations and reductions
         """
+        logger.info("Exporting default emission allocations and reductions")
+
         path_toread = self.savepath + "Allocations_GHG_incl_reduced/"
 
         for default_i in range(2):
@@ -308,6 +326,8 @@ class dataexportcl:
         Specify several key variables for the computation of budgets
         Note that budgets are only in CO2, not in GHG (while most of the alloations are in GHG)
         """
+        logger.info("Exporting key variables for budgets computation")
+
         self.xr_dataread_forbudgets = self.xr_dataread.sel(
             **self.export_settings["dimensions_global"]
         )
@@ -353,6 +373,8 @@ class dataexportcl:
         """
         CO2 budgets AP
         """
+        logger.info("Exporting CO2 budgets AP")
+
         xrt = self.xr_dataread_forbudgets.sel(
             Time=np.arange(self.settings["params"]["start_year_analysis"], 2101)
         )
@@ -409,6 +431,8 @@ class dataexportcl:
         """
         CO2 budgets PC
         """
+        logger.info("Exporting CO2 budgets PC")
+
         pop_region = self.xr_dataread_forbudgets.sel(
             Time=self.settings["params"]["start_year_analysis"]
         ).Population
@@ -425,6 +449,8 @@ class dataexportcl:
         """
         CO2 budgets ECPC
         """
+        logger.info("Exporting CO2 budgets ECPC")
+
         hist_emissions_startyears = self.settings["dimension_ranges"]["hist_emissions_startyears"]
         discount_rates = self.settings["dimension_ranges"]["discount_rates"]
         xrs = []
@@ -486,6 +512,8 @@ class dataexportcl:
         """
         CO2 budgets ECPC, AP and PC
         """
+        logger.info("Exporting CO2 budgets ECPC, AP and PC")
+
         self.xr_budgets = xr.merge([self.xr_pc, self.xr_ecpc, self.xr_ap])
         self.xr_budgets = xr.merge(
             [
@@ -518,6 +546,8 @@ class dataexportcl:
         """
         Export files for COMMITTED
         """
+        logger.info("Exporting COMMITTED files")
+
         # Pathways
         df = pd.read_csv(
             "K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_15overshoot.csv"
@@ -552,6 +582,8 @@ class dataexportcl:
         """
         Export files for DGIS
         """
+        logger.info("Exporting DGIS files")
+
         df = pd.read_csv(
             "K:/Data/Data_effortsharing/EffortSharingExports/allocations_default_15overshoot.csv"
         )
@@ -575,6 +607,8 @@ class dataexportcl:
         """
         Convert .nc to .csv for a specific country
         """
+        logger.info(f"Converting .nc to .csv for {cty}")
+
         ds = xr.open_dataset(
             self.settings["paths"]["data"]["datadrive"]
             + "/Allocations_"
@@ -613,5 +647,28 @@ class dataexportcl:
 
 
 if __name__ == "__main__":
-    region = input("Choose a focus country or region: ")
-    dataexporter = dataexportcl(region)
+    from rich.logging import RichHandler
+    # Set up logging
+    logging.basicConfig(
+        level="INFO",
+        format="%(message)s",
+        handlers=[RichHandler(show_time=False)],
+    )
+
+    dataexporter = dataexportcl()
+    dataexporter.global_default()
+    dataexporter.negative_nonlulucf_emissions()
+    dataexporter.global_all()
+    dataexporter.ndcdata()
+    dataexporter.sspdata()
+    dataexporter.emisdata()
+    # dataexporter.allocations_default()
+    # dataexporter.reduce_country_files()
+    # dataexporter.budgets_key_variables(lulucf="incl")
+    # dataexporter.co2_budgets_ap()
+    # dataexporter.co2_budgets_pc()
+    # dataexporter.co2_budgets_ecpc()
+    # dataexporter.concat_co2budgets(lulucf="incl")
+    # dataexporter.project_COMMITTED()
+    # dataexporter.project_DGIS()
+    # dataexporter.countr_to_csv("USA", adapt="_adapted", lulucf="incl", gas="GHG")

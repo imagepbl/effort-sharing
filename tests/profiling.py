@@ -1,29 +1,19 @@
 import cProfile
-import os
 import pstats
-import sys
 
-# Add the parent directory to sys.path
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, parent_dir)
-
-from class_allocation import allocation
+import effortsharing as es
+from effortsharing.allocation import determine_allocations, save_allocations
 
 
 def profile_allocation():
     """
     This function profiles the allocation class to identify the slowest functions
     """
+    # Load configuration
+    config = es.Config.from_file("config.yml")
     region = input("Choose a focus country or region: ")
-    allocator = allocation(region)
-    allocator.gf()
-    allocator.pc()
-    allocator.pcc()
-    allocator.pcb()
-    allocator.ecpc()
-    allocator.ap()
-    allocator.gdr()
-    allocator.save()
+    allocations = determine_allocations(config, region)
+    save_allocations(config, region, allocations)
 
 
 cProfile.run("profile_allocation()", "profile_output")
