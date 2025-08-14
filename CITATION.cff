@@ -54,3 +54,7 @@ keywords:
   - effort sharing
   - climate policy
 license: MIT
+identifiers:
+  - description: Latest version of software
+    type: doi
+    value: https://doi.org/10.5281/zenodo.13640303
