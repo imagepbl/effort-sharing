@@ -5,7 +5,7 @@ import pandas as pd
 import xarray as xr
 
 from effortsharing.allocation.ap import ap
-from effortsharing.allocation.utils import LULUCF, Gas, config2base_var, load_future_emissions
+from effortsharing.allocation.utils import LULUCF, Gas, config2base_var, load_dataread, load_future_emissions
 from effortsharing.config import Config
 from effortsharing.input.emissions import load_emissions, read_modelscenarios
 from effortsharing.save import load_rci
@@ -33,7 +33,9 @@ def gdr(
     if ap_da is None:
         ap_da = ap(config, region, gas, lulucf)
 
-    xr_rci = load_rci(config)
+
+    xr_version = load_dataread(config)
+    xr_rci = load_rci(config, region_dim=xr_version.Region)
     yearfracs = xr.Dataset(
         data_vars={
             "Value": (
