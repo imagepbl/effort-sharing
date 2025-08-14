@@ -243,7 +243,7 @@ def global_pathways(config: Config):
     save_total(config, xr_version)
     # TODO move below to own high level function, above is for making xr_dataread.nc
     save_rbw(config, xr_version, countries)
-    load_rci(config)
+    load_rci(config, region_dim=xr_version.Region)
 
     # Country-specific data readers
     datareader_netherlands(config, new_total)
