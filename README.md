@@ -1,5 +1,7 @@
 # Effort Sharing
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13640303.svg)](https://doi.org/10.5281/zenodo.13640303)
+
 Compute fair national emissions allocations using transparent, reproducible workflows. Designed by researchers for researchers.
 
 
