@@ -111,7 +111,7 @@ def save_rbw(config: Config, xr_version, countries):
 
 
 @intermediate_file("xr_rci.nc")
-def load_rci(config: Config) -> xr.Dataset:
+def load_rci(config: Config, region_dim) -> xr.Dataset:
     """Load responsibility capability index (RCI) data from netcdf file."""
 
     # GDR RCI indices
@@ -145,4 +145,5 @@ def load_rci(config: Config) -> xr.Dataset:
     dfdummy = fulldf.set_index(
         ["Region", "Time", "Historical_startyear", "Capability_threshold", "RCI_weight"]
     )
-    return xr.Dataset.from_dataframe(dfdummy)
+
+    return xr.Dataset.from_dataframe(dfdummy).reindex({"Region": region_dim})

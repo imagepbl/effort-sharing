@@ -43,8 +43,12 @@ regions_iso = np.load(config.paths.output / "all_regions.npy", allow_pickle=True
 # uncomment below for testing only run on a few regions
 # regions_iso = list(regions_iso)[:4]
 for cty in tqdm(regions_iso, desc="Allocations for region", unit="region"):
-    dss = allocations_for_region(region=cty, config=config, gas=gas, lulucf=lulucf)
-    save_allocations(dss=dss, region=cty, config=config, gas=gas, lulucf=lulucf)
+    # TODO: skip if file already exists
+    try:
+        dss = allocations_for_region(region=cty, config=config, gas=gas, lulucf=lulucf)
+        save_allocations(dss=dss, region=cty, config=config, gas=gas, lulucf=lulucf)
+    except Exception as e:
+        print(f"@@@@@@@@@@@@@@@@@@@ Error processing region {cty}: {e}")
 
 # Create {CABE_START_YEAR} / {CABE_ASSUMPTIONSET} / "Aggregated_files" / "xr_alloc_{YEAR}.nc"
 for year in aggregated_years:
