@@ -1,7 +1,5 @@
 # Effort Sharing
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13640303.svg)](https://doi.org/10.5281/zenodo.13640303)
-
 Compute fair national emissions allocations using transparent, reproducible workflows. Designed by researchers for researchers.
 
 
@@ -174,9 +172,9 @@ We release at least when publishing new results (e.g. journal, Carbon Budget Exp
 
 ## Referencing this Repository
 
-Cite the code: ...
+* Code: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13640303.svg)](https://doi.org/10.5281/zenodo.13640303) 
+* Output data: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
 
-Output data is publicly available on Zenodo:
+If you use this code in your work, please cite it using the following reference:
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12188104.svg)](https://doi.org/10.5281/zenodo.12188104)
-
+> Dekker, M., Würschinger, C., Kalverla, P., & Verhoeven, S. Effort sharing [Computer software]. https://github.com/imagepbl/effort-sharing
