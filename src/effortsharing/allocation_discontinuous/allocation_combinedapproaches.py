@@ -25,21 +25,23 @@ class allocation_comb:
 
     def __init__(self, dataread_file="xr_dataread.nc"):
         self.current_dir = Path.cwd()
+        self.main_dir = self.current_dir / "../../.."
 
         # Read in Input YAML file
-        with open(self.current_dir / "config.yml") as file:
+        with open(self.main_dir / "config.yml") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
         self.countries_iso = np.load(
-            self.settings["paths"]["output"] + "/all_countries.npy", allow_pickle=True
+            self.main_dir / self.settings["paths"]["output"] / "all_countries.npy", allow_pickle=True
         )
         self.savepath = (
-            self.settings["paths"]["output"]
+            self.main_dir / 
+            (self.settings["paths"]["output"]
             + "/startyear_"
             + str(self.settings["params"]["start_year_analysis"])
-            + "/"
+            + "/")
         )
         self.xr_dataread = (
-            xr.open_dataset(self.savepath + dataread_file)
+            xr.open_dataset(self.savepath / dataread_file)
             .load()
             .sel(
                 Temperature=[1.6, 2.0],
@@ -60,7 +62,7 @@ class allocation_comb:
         self.emis_fut = self.xr_dataread.GHG_excl_C - self.xr_dataread.CO2_bunkers_C
         self.varhist = "GHG_hist_excl"
         self.CO2_neg = self.xr_dataread.CO2_neg_C
-        self.rbw = xr.open_dataset(self.savepath + "xr_rbw_GHG_excl.nc").load()
+        self.rbw = xr.open_dataset(self.savepath / "xr_rbw_GHG_excl.nc").load()
         self.all_future_years = np.arange(self.settings["params"]["start_year_analysis"], 2101)
         self.start_year_analysis = self.settings["params"]["start_year_analysis"]
 
@@ -216,6 +218,8 @@ class allocation_comb:
         app1_gdp_pos_total = self.xr_ecpc.ECPC.sum(dim="Time") + app1_gdp_neg.sum(dim="Time")
         app1_gdp_pos = app1_gdp_pos_total / app1_gdp_pos_total.sel(Region="EARTH") * yearly_pos
         self.COMB1g = app1_gdp_pos - app1_gdp_neg
+        self.A1_pos = app1_gdp_pos
+        self.A1_neg = app1_gdp_neg
 
     # =========================================================== #
     # =========================================================== #
@@ -324,6 +328,7 @@ class allocation_comb:
         app2_nets = []
         app2_negs = []
         app2_poss = []
+        app2_debts = []
         for y_i, y in enumerate(self.all_future_years):
             neg = (
                 yearly_neg.sel(Time=y) * (app2_current_debt / app2_current_debt.sel(Region="EARTH"))
@@ -331,9 +336,13 @@ class allocation_comb:
             pos = (yearly_pos.sel(Time=y) * app2_pos_shares.sel(Time=y)).drop_vars(["Time"])
             app2_nets.append((pos - neg).expand_dims(Time=[y]))
             app2_current_debt = app2_current_debt + pos - neg
+            app2_debts.append(app2_current_debt.expand_dims(Time=[y]))
             app2_negs.append(neg.expand_dims(Time=[y]))
             app2_poss.append(pos.expand_dims(Time=[y]))
         self.COMB2 = xr.concat(app2_nets, dim="Time")
+        self.A2_pos = xr.concat(app2_poss, dim="Time")
+        self.A2_neg = xr.concat(app2_negs, dim="Time")
+        self.A2_debts = xr.concat(app2_debts, dim="Time")
 
     # =========================================================== #
     # =========================================================== #
@@ -385,7 +394,7 @@ class allocation_comb:
         ).expand_dims(Convergence_year=[self.convergence_moment])
 
         """ Add country groups """
-        path_ctygroups = "X:/user/dekkerm/Data/" + "UNFCCC_Parties_Groups_noeu.xlsx"
+        path_ctygroups = self.main_dir / self.settings["paths"]["input"] / "UNFCCC_Parties_Groups_noeu.xlsx"
         df = pd.read_excel(path_ctygroups, sheet_name="Country groups")
         countries_iso = np.array(df["Country ISO Code"])
         list_of_regions = list(np.array(self.xr_dataread.Region).copy())
@@ -563,6 +572,6 @@ class allocation_comb:
     # =========================================================== #
 
     def save(self):
-        self.xr_combs.to_netcdf(self.savepath + "xr_comb.nc", format="NETCDF4")
-        self.xr_temps.to_netcdf(self.savepath + "xr_combtemps.nc", format="NETCDF4")
-        self.xr_temps_c12.to_netcdf(self.savepath + "xr_combtemps_c12.nc", format="NETCDF4")
+        self.xr_combs.to_netcdf(self.savepath / "xr_comb.nc", format="NETCDF4")
+        self.xr_temps.to_netcdf(self.savepath / "xr_combtemps.nc", format="NETCDF4")
+        self.xr_temps_c12.to_netcdf(self.savepath / "xr_combtemps_c12.nc", format="NETCDF4")

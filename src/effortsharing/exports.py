@@ -28,19 +28,19 @@ class dataexportcl:
     # =========================================================== #
     # =========================================================== #
 
-    def __init__(self):
+    def __init__(self, local_path):
         logger.info("Data exporting class")
         self.current_dir = Path.cwd()
 
         # Read in export settings YAML file and Input YAML file
-        with open(self.current_dir / "notebooks" / "DataExporters" / "export_settings.yml") as file:
+        with open(self.current_dir / "../" / "DataExporters" / "export_settings.yml") as file:
             self.export_settings = yaml.load(file, Loader=yaml.FullLoader)
-        with open(self.current_dir / "notebooks" / "input.yml") as file:
+        with open(self.current_dir / "../../" / "config.default.yml") as file:
             self.settings = yaml.load(file, Loader=yaml.FullLoader)
 
         # Set up main data objects
         self.savepath = (
-            self.settings["paths"]["data"]["export"]
+            local_path
             + "startyear_"
             + str(self.settings["params"]["start_year_analysis"])
             + "/"

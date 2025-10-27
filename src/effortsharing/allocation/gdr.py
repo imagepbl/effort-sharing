@@ -45,14 +45,18 @@ def gdr(
     )
 
     # Get the regional RCI values
-    # If region is EU, we have to sum over the EU countries
-    if focus_region != "EU":
+    # If region is not a country (but for example EU or G20), we have to sum over the EU countries
+    if focus_region == 'VAT': # VAT is missing, so selecting NaNs for this -> GDR is not defined.
+        rci_reg = xr_rci.rci.sel(Region='USA')*np.nan
+    elif focus_region not in ['EU', 'G20', 'G7',
+                            'SIDS', 'LDC', 'Northern America',
+                            'Australasia', 'African Group', 'Umbrella']:
         rci_reg = xr_rci.rci.sel(Region=focus_region)
     else:
         fn = config.paths.input / "UNFCCC_Parties_Groups_noeu.xlsx"
         df = pd.read_excel(fn, sheet_name="Country groups")
         countries_iso = np.array(df["Country ISO Code"])
-        group_eu = countries_iso[np.array(df["EU"]) == 1]
+        group_eu = countries_iso[np.array(df[focus_region]) == 1]
         rci_reg = xr_rci.rci.sel(Region=group_eu).sum(dim="Region")
 
     # Compute GDR until 2030

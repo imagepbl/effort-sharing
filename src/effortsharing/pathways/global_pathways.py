@@ -91,7 +91,7 @@ def add_country_groups(config: Config, regions, xr_total):
 
     df = pd.read_excel(data_root / filename, sheet_name="Country groups")
     countries_iso = np.array(df["Country ISO Code"])
-    list_of_regions = list(np.array(regions_iso).copy())
+    list_of_regions = list(np.array(countries_iso).copy()) + ['EU', 'EARTH']
     reg_iso = regions_iso.copy()
     reg_name = regions_name.copy()
     new_total = xr_total.copy()
@@ -106,7 +106,7 @@ def add_country_groups(config: Config, regions, xr_total):
         "African Group",
         "Umbrella",
     ]:
-        if group_of_choice != "EU":
+        if group_of_choice != 'EU':
             list_of_regions = list_of_regions + [group_of_choice]
         group_indices = countries_iso[np.array(df[group_of_choice]) == 1]
         country_to_eu = {}
@@ -178,9 +178,20 @@ def add_country_groups(config: Config, regions, xr_total):
 
         new_total = xr.merge([dummy, xr_eu2])
         new_total = new_total.reindex(Region=list_of_regions)
-        if group_of_choice not in ["EU", "EARTH"]:
-            reg_iso.append(group_of_choice)
-            reg_name.append(group_of_choice)
+        # if group_of_choice not in [
+        #         "G20",
+        #         "EU",
+        #         "EARTH"
+        #         "G7",
+        #         "SIDS",
+        #         "LDC",
+        #         "Northern America",
+        #         "Australasia",
+        #         "African Group",
+        #         "Umbrella",
+        #     ]:
+        #     reg_iso.append(group_of_choice)
+        #     reg_name.append(group_of_choice)
 
     new_total = new_total
     new_total["GHG_base_incl"][np.where(new_total.Region == "EU")[0], np.array([3, 4])] = (
@@ -239,7 +250,7 @@ def global_pathways(config: Config):
     # Save the data
     save_temp = np.array(config.dimension_ranges.peak_temperature_saved).astype(float).round(2)
     xr_version = new_total.sel(Temperature=save_temp)
-    save_regions(config, new_regions, countries)
+    save_regions(config, countries, new_regions)
     save_total(config, xr_version)
     # TODO move below to own high level function, above is for making xr_dataread.nc
     save_rbw(config, xr_version, countries)

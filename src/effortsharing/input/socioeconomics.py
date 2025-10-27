@@ -47,7 +47,17 @@ def read_general(config: Config):
     )
 
     # Extend countries with non-country regions
-    regions = {**countries, "European Union": "EU", "Earth": "EARTH"}
+    regions = {**countries,
+               "European Union": "EU",
+               "Earth": "EARTH",
+               'G20': "G20",
+               'G7': "G7",
+               'SIDS': "SIDS",
+               'LDC': "LDC",
+               'Northern America': "NA",
+               'Australasia': "Australasia",
+               'African Group': "AG",
+               'Umbrella': "UMB"}
 
     return countries, regions
 

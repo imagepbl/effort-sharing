@@ -102,7 +102,7 @@ def intermediate_file(filename, loader=None, saver=None):
 
             # Try to load if requested
             if config.load_intermediate_files and path.exists():
-                logger.info(f"Loading intermediate data from {path}")
+                logger.debug(f"Loading intermediate data from {path}")
                 return load_fn(path)
 
             # Compute result
