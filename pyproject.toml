@@ -26,6 +26,7 @@ dependencies = [
     "SALib",
     "tqdm",
     "xarray",
+    "country-converter",
 ]
 
 [project.optional-dependencies]
