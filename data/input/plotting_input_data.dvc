@@ -1,0 +1,6 @@
+outs:
+- md5: e03490f850bdd4e3762a32766a2b11e3.dir
+  size: 39330630
+  nfiles: 4
+  hash: md5
+  path: plotting_input_data

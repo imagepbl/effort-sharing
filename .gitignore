@@ -4,7 +4,8 @@
 
 # Own files
 Dash_CarbonBudget/*
-Data/*
+data/intermediate/*
+data/output/*
 Figures/*
 __pycache__/
 
@@ -139,3 +140,4 @@ dmypy.json
 
 #VS Code
 .vscode/
+.dvc/config
